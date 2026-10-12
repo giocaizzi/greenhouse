@@ -168,7 +168,7 @@ async def _settle(pilot: Pilot[None], tui: App[None], limit_s: float = 10.0) -> 
     deadline = loop.time() + limit_s
     idle_passes = 0
     while idle_passes < _IDLE_PASSES_REQUIRED:
-        await pilot.pause()
+        await pilot.pause(0)
         with contextlib.suppress(WorkerCancelled):
             await tui.workers.wait_for_complete()
         busy = any(w.is_running for w in tui.workers)
@@ -176,7 +176,7 @@ async def _settle(pilot: Pilot[None], tui: App[None], limit_s: float = 10.0) -> 
         if loop.time() > deadline:
             msg = f"workers still running after {limit_s}s: {list(tui.workers)}"
             raise AssertionError(msg)
-    await pilot.pause()
+    await pilot.pause(0)
 
 
 def _run(coro: Coroutine[object, object, None]) -> None:
@@ -404,7 +404,7 @@ class TestDashboard:
                 await _settle(pilot, tui)
                 assert isinstance(tui.screen, ClusterScreen)
                 await pilot.press("escape")
-                await pilot.pause()
+                await pilot.pause(0)
                 assert isinstance(tui.screen, DashboardScreen)
 
         _run(scenario())
@@ -440,13 +440,13 @@ class TestDashboard:
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("X")
-                await pilot.pause()
+                await pilot.pause(0)
                 assert isinstance(tui.screen, ConfirmScreen)
                 await pilot.press("n")
                 await _settle(pilot, tui)
                 assert not [c for c in wiring.irrigator.calls if c[0] == "stop"]
                 await pilot.press("X")
-                await pilot.pause()
+                await pilot.pause(0)
                 await pilot.press("y")
                 await _settle(pilot, tui)
                 assert len([c for c in wiring.irrigator.calls if c[0] == "stop"]) == SEEDED_PUMPS
@@ -514,7 +514,7 @@ class TestClusterScreen:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             screen.query_one("TabbedContent", TabbedContent).active = "tab-charts"
-            await pilot.pause()
+            await pilot.pause(0)
             await pilot.press("m")
             await _settle(pilot, tui)
             assert screen.metric == "temperature"
@@ -535,7 +535,7 @@ class TestClusterScreen:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, _screen: ClusterScreen) -> None:
             await pilot.press("i")
-            await pilot.pause()
+            await pilot.pause(0)
             assert isinstance(tui.screen, IrrigateScreen)
             assert tui.screen.query_one("#dry-run", Checkbox).value is True
             await pilot.click("#run")
@@ -552,7 +552,7 @@ class TestClusterScreen:
             assert screen.summary is not None
             irrigator_id = screen.summary.irrigator_id
             await pilot.press("w")
-            await pilot.pause()
+            await pilot.pause(0)
             assert isinstance(tui.screen, WaterNowScreen)
             tui.screen.query_one("#minutes", Input).value = "2"
             await pilot.click("#start")
@@ -560,7 +560,7 @@ class TestClusterScreen:
             assert ("start", irrigator_id, 2) in wiring.irrigator.calls
 
             await pilot.press("x")
-            await pilot.pause()
+            await pilot.pause(0)
             assert isinstance(tui.screen, ConfirmScreen)
             await pilot.click("#confirm")
             await _settle(pilot, tui)
@@ -578,7 +578,7 @@ class TestClusterScreen:
             assert screen.summary is not None
             assert screen.summary.irrigator_id is None
             await pilot.press("w")
-            await pilot.pause()
+            await pilot.pause(0)
             assert isinstance(tui.screen, ClusterScreen)
             assert not wiring.irrigator.calls
 
@@ -750,7 +750,7 @@ def test_tui_reaches_every_client_capability() -> None:
 async def _add_ficus(pilot: Pilot[None], tui: GreenhouseApp, http: TestClient) -> dict[str, object]:
     """Add a Ficus through the plants tab's new-plant form; return it as the API lists it."""
     await pilot.press("n")
-    await pilot.pause()
+    await pilot.pause(0)
     await _submit_form(pilot, tui, species="Ficus lyrata", category="tropical", water_needs="medium")
     plants = http.get("/api/v1/clusters/1/plants").json()
     ficus: dict[str, object] = next(p for p in plants if p["species"] == "Ficus lyrata")
@@ -836,10 +836,10 @@ class TestForms:
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("n")
-                await pilot.pause()
+                await pilot.pause(0)
                 _fill(tui.screen, name="")
                 await pilot.click("#submit")
-                await pilot.pause()
+                await pilot.pause(0)
                 assert isinstance(tui.screen, FormScreen)
                 assert "Name is required" in str(tui.screen.query_one("#form-error").render())
 
@@ -874,7 +874,7 @@ class TestClusterCrud:
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("n")
-                await pilot.pause()
+                await pilot.pause(0)
                 await _submit_form(pilot, tui, name="Kitchen", location="sill", environment="indoor")
                 assert "Kitchen" in [c["name"] for c in http.get("/api/v1/clusters").json()]
                 assert len(tui.screen.query(ClusterCard)) == SEEDED_CLUSTERS + 1
@@ -890,7 +890,7 @@ class TestClusterCrud:
             table = screen.query_one("#plants-table", DataTable)
             table.move_cursor(row=table.get_row_index(str(ficus["id"])))
             await pilot.press("u")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, notes="by the window")
             assert http.get(f"/api/v1/plants/{ficus['id']}").json()["notes"] == "by the window"
 
@@ -904,7 +904,7 @@ class TestClusterCrud:
             assert first_key is not None
             first = int(first_key)
             await pilot.press("delete")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert http.get(f"/api/v1/plants/{first}").status_code == HTTPStatus.NOT_FOUND
 
@@ -931,7 +931,7 @@ class TestClusterCrud:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(
                 pilot, tui, tuya_device_id="fake_tuya_device_aabbccdd", name="Spare probe", type="tuya.tr301z"
             )
@@ -940,11 +940,11 @@ class TestClusterCrud:
             table = screen.query_one("#sensors-table", DataTable)
             table.move_cursor(row=table.get_row_index(str(spare["id"])))
             await pilot.press("u")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, name="Renamed probe")
             assert http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").json()["name"] == "Renamed probe"
             await pilot.press("delete")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").status_code == HTTPStatus.NOT_FOUND
 
@@ -956,17 +956,17 @@ class TestClusterCrud:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, start_hour="6", end_hour="9", label="morning")
             windows = http.get("/api/v1/clusters/1/windows").json()["windows"]
             assert [(w["start_hour"], w["end_hour"], w["weekday_mask"]) for w in windows] == [(6, 9, 127)]
             assert screen.query_one("#windows-table", DataTable).row_count == 1
             await pilot.press("u")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, end_hour="10")
             assert http.get("/api/v1/clusters/1/windows").json()["windows"][0]["end_hour"] == EDITED_WINDOW_END_HOUR
             await pilot.press("delete")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert http.get("/api/v1/clusters/1/windows").json()["windows"] == []
 
@@ -978,7 +978,7 @@ class TestClusterCrud:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             await pilot.press("u")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, duration_minutes="7", quiet_start_hour="22", quiet_end_hour="6")
             config = http.get("/api/v1/clusters/1/config").json()
             assert (config["duration_minutes"], config["quiet_start_hour"], config["quiet_end_hour"]) == (7, 22, 6)
@@ -993,20 +993,20 @@ class TestClusterCrud:
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             assert screen.summary is not None
             await pilot.press("u")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, reservoir_l="12.5", config='{"version": "3.5"}')
             irrigator = http.get("/api/v1/clusters/1/irrigator").json()
             assert irrigator["reservoir_l"] == EDITED_RESERVOIR_L
             assert irrigator["config"] == {"version": "3.5"}
 
             await pilot.press("delete")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert http.get("/api/v1/clusters/1/irrigator").status_code == HTTPStatus.NOT_FOUND
             assert screen.summary.irrigator_id is None
 
             await pilot.press("n")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(
                 pilot, tui, tuya_device_id="fake_tuya_device_00112233", name="New pump", type="rainpoint.ik10pw"
             )
@@ -1021,7 +1021,7 @@ class TestClusterCrud:
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             before = screen.query_one("#history-table", DataTable).row_count
             await pilot.press("L")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, minutes="4", notes="watering can")
             assert screen.query_one("#history-table", DataTable).row_count == before + 1
             assert not [c for c in wiring.irrigator.calls if c[0] == "start"]  # logging never actuates
@@ -1034,11 +1034,11 @@ class TestClusterCrud:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, _screen: ClusterScreen) -> None:
             await pilot.press("e")
-            await pilot.pause()
+            await pilot.pause(0)
             await _submit_form(pilot, tui, name="Desk (office)")
             assert http.get("/api/v1/clusters/3").json()["name"] == "Desk (office)"
             await pilot.press("D")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert http.get("/api/v1/clusters/3").status_code == HTTPStatus.NOT_FOUND
             assert isinstance(tui.screen, DashboardScreen)
@@ -1090,14 +1090,14 @@ class TestClusterCrud:
 async def _edit_preferences_and_global_config(pilot: Pilot[None], tui: GreenhouseApp, http: TestClient) -> None:
     """Edit the preferences (``p``) and the global config (``g``) from the settings screen."""
     await pilot.press("p")
-    await pilot.pause()
+    await pilot.pause(0)
     await _submit_form(pilot, tui, timezone="Europe/Rome", dry_run_global=True)
     prefs = http.get("/api/v1/preferences").json()
     assert prefs["timezone"] == "Europe/Rome"
     assert prefs["dry_run_global"] is True
 
     await pilot.press("g")
-    await pilot.pause()
+    await pilot.pause(0)
     await _submit_form(pilot, tui, interval_hours="18")
     assert http.get("/api/v1/config/global").json()["interval_hours"] == EDITED_GLOBAL_INTERVAL_HOURS
 
@@ -1105,7 +1105,7 @@ async def _edit_preferences_and_global_config(pilot: Pilot[None], tui: Greenhous
 async def _vacation_add_edit_delete(pilot: Pilot[None], tui: GreenhouseApp, http: TestClient) -> None:
     """Add, edit and delete a vacation window from the settings screen."""
     await pilot.press("n")
-    await pilot.pause()
+    await pilot.pause(0)
     await _submit_form(pilot, tui, starts_at="2030-07-01 08:00", ends_at="2030-07-15 20:00", notes="sea")
     items = http.get("/api/v1/vacation").json()["items"]
     assert [v["notes"] for v in items] == ["sea"]
@@ -1113,12 +1113,12 @@ async def _vacation_add_edit_delete(pilot: Pilot[None], tui: GreenhouseApp, http
     assert table.row_count == 1
 
     await pilot.press("u")
-    await pilot.pause()
+    await pilot.pause(0)
     await _submit_form(pilot, tui, contact_email="neighbour@example.com")
     assert http.get("/api/v1/vacation").json()["items"][0]["contact_email"] == "neighbour@example.com"
 
     await pilot.press("delete")
-    await pilot.pause()
+    await pilot.pause(0)
     await _confirm(pilot, tui)
     assert http.get("/api/v1/vacation").json()["items"] == []
 
@@ -1166,12 +1166,12 @@ async def _pause_then_resume_scheduler(pilot: Pilot[None], tui: GreenhouseApp, h
     screen = tui.screen
     assert isinstance(screen, SystemScreen), screen
     await pilot.press("p")
-    await pilot.pause()
+    await pilot.pause(0)
     await _confirm(pilot, tui)
     assert http.get("/api/v1/preferences").json()["scheduler_paused"] is True
     assert screen.paused is True
     await pilot.press("p")  # resume asks too: automatic irrigation restarts
-    await pilot.pause()
+    await pilot.pause(0)
     await _confirm(pilot, tui)
     assert http.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
@@ -1202,7 +1202,7 @@ async def _delete_builtin_job_is_refused(
     """``delete`` on a built-in job is refused client-side: no dialog, no request, an explanatory toast."""
     table.move_cursor(row=table.get_row_index("sensor_sync"))
     await pilot.press("delete")
-    await pilot.pause()
+    await pilot.pause(0)
     assert not isinstance(tui.screen, ConfirmScreen)
     assert not [r for r in seen if r[0] == "DELETE"]
     assert any("built-in job" in n.message for n in tui._notifications)  # noqa: SLF001 — Textual keeps shown toasts only in App._notifications
@@ -1220,7 +1220,7 @@ class TestSearchAndSystem:
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("slash")
-                await pilot.pause()
+                await pilot.pause(0)
                 assert isinstance(tui.screen, SearchScreen)
                 await pilot.press(*"citrus")
                 await pilot.pause(0.4)
@@ -1252,7 +1252,7 @@ class TestSearchAndSystem:
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
                 await pilot.press("slash")
-                await pilot.pause()
+                await pilot.pause(0)
                 table = tui.screen.query_one(DataTable)
                 await pilot.press(*"lo")
                 await pilot.pause(0.4)
@@ -1284,7 +1284,7 @@ class TestSearchAndSystem:
                 await pilot.press("H")
                 await _settle(pilot, tui)
                 await pilot.press("P")  # plant-DB sync asks first; sensor sync (S) runs on the key press
-                await pilot.pause()
+                await pilot.pause(0)
                 await _confirm(pilot, tui)
                 await pilot.press("S")
                 await _settle(pilot, tui)
@@ -1328,7 +1328,7 @@ class TestSearchAndSystem:
                 # Ad-hoc job: confirm → DELETE.
                 table.move_cursor(row=table.get_row_index("pump_watch_3"))
                 await pilot.press("delete")
-                await pilot.pause()
+                await pilot.pause(0)
                 await _confirm(pilot, tui)
                 assert ("DELETE", "/api/v1/scheduler/jobs/pump_watch_3") in seen
 
@@ -1405,7 +1405,7 @@ class TestTableColumnWidths:
             async with app.run_test(size=(80, 10)) as pilot:
                 table = app.query_one(TuiDataTable)
                 table.add_columns("ID", "Title", "Cluster")
-                await pilot.pause()
+                await pilot.pause(0)
                 refill(table, [("1", ["1", self.TITLE, "2"])])
                 assert table._new_rows, "the row must still be unmeasured for this paint to race the measurement"  # noqa: SLF001 — DataTable's pending-measurement state is private
                 # What the screen's update timer does when it fires before the table's idle (a busy CPU).
@@ -1486,7 +1486,7 @@ class TestExactRequests:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, _screen: ClusterScreen) -> None:
             await pilot.press("i")
-            await pilot.pause()
+            await pilot.pause(0)
             tui.screen.query_one("#dry-run", Checkbox).value = False
             tui.screen.query_one("#force", Checkbox).value = True
             await pilot.click("#run")
@@ -1507,7 +1507,7 @@ class TestExactRequests:
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             assert screen.summary is not None
             await pilot.press("w")
-            await pilot.pause()
+            await pilot.pause(0)
             await pilot.click("#start")
             await _settle(pilot, tui)
             assert writes(log)[0] == (
@@ -1532,7 +1532,7 @@ class TestExactRequests:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             await pilot.press(key)
-            await pilot.pause()
+            await pilot.pause(0)
             assert tui.screen is not screen  # a dialog opened
             await pilot.press("escape")
             await _settle(pilot, tui)
@@ -1549,7 +1549,7 @@ class TestExactRequests:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, _screen: ClusterScreen) -> None:
             await pilot.press("c")
-            await pilot.pause()
+            await pilot.pause(0)
             await _confirm(pilot, tui)
             assert writes(log) == [("POST", "/api/v1/clusters/1/check", None)]
 
@@ -1566,7 +1566,7 @@ class TestExactRequests:
                 await _settle(pilot, tui)
                 for key in ("n", "u", "delete"):
                     await pilot.press(key)
-                    await pilot.pause()
+                    await pilot.pause(0)
                     assert tui.screen is screen, (tab, key)
             assert writes(log) == []
 
@@ -1579,7 +1579,7 @@ class TestExactRequests:
 
         async def body(pilot: Pilot[None], tui: GreenhouseApp, screen: ClusterScreen) -> None:
             await pilot.press("n")  # Overview tab, cluster already has a pump
-            await pilot.pause()
+            await pilot.pause(0)
             assert tui.screen is screen
             assert writes(log) == []
 
@@ -1621,7 +1621,7 @@ class TestExactRequests:
                 await _settle(pilot, tui)
                 log.clear()
                 await pilot.press("c")
-                await pilot.pause()
+                await pilot.pause(0)
                 await _confirm(pilot, tui)
                 await pilot.press("S")
                 await _settle(pilot, tui)
