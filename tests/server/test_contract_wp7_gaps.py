@@ -1034,7 +1034,7 @@ def test_job_skip_guards_log_at_debug(p: Pipeline, caplog: pytest.LogCaptureFixt
 
 @pytest.mark.parametrize("outcome", ["completed", "interrupted", "boom"])
 def test_watcher_job_session_commit_rollback_close_order(
-    watcher_env: WatcherEnv, monkeypatch: pytest.MonkeyPatch, outcome: str
+    watcher_env: WatcherEnv, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, outcome: str
 ) -> None:
     """Mutation survivor: the watcher job rolls back on failure, commits only after an interrupt, always closes."""
     log: list[str] = []
@@ -1060,7 +1060,8 @@ def test_watcher_job_session_commit_rollback_close_order(
         pump_watcher_jobs_mod, "handle_watcher_interrupted", lambda *_a, **_kw: log.append("interrupted")
     )
     schedule_pump_watcher(watcher_env.irrigator_id, 2, FROZEN_TS, triggered_by=TriggeredBy.MANUAL)
-    watcher_env.scheduler.jobs[0]["func"]()
+    with caplog.at_level(logging.ERROR, logger=IRRIGATION_LOGGER):
+        watcher_env.scheduler.jobs[0]["func"]()  # must not raise
     assert (
         log
         == {
@@ -1069,6 +1070,8 @@ def test_watcher_job_session_commit_rollback_close_order(
             "boom": ["open", "rollback", "close"],
         }[outcome]
     )
+    failed = [f"Pump watcher job failed for irrigator {watcher_env.irrigator_id}"]
+    assert caplog.messages == (failed if outcome == "boom" else [])
 
 
 def test_leak_check_done_sees_a_marker_behind_many_newer_leak_rows(db: IrrigationRepository) -> None:
