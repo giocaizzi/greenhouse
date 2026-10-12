@@ -490,7 +490,7 @@ def _log_record(row: DecisionLog, decision_dump: dict[str, Any] | None) -> dict[
     }
 
 
-def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic) -> dict[str, object]:
+def run_case(case: Case, *, engine_factory: Callable[..., Any] = IrrigationLogic) -> dict[str, Any]:
     """Evaluate ``case`` and return its JSON-able golden record."""
     with time_machine.travel(case.at, tick=False), fresh_repository() as repo:
         cluster_id = _seed(repo, case)
