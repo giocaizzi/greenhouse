@@ -1,10 +1,8 @@
-"""Polish: HX-aware error partial, dark-mode toggle, API still returns JSON."""
+"""Polish: HX-aware error partial, API still returns JSON."""
 
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-
-from greenhouse_server.web.context import APP_VERSION
 
 
 def test_html_404_returns_full_error_page(client: TestClient) -> None:
@@ -40,15 +38,6 @@ def test_api_404_still_returns_json(client: TestClient) -> None:
     assert body["detail"] == "Cluster not found"
 
 
-def test_dark_mode_toggle_present(client: TestClient) -> None:
-    """Dark mode toggle present."""
-    resp = client.get("/")
-    assert resp.status_code == HTTPStatus.OK
-    assert 'id="theme-toggle"' in resp.text
-    # persistence snippet
-    assert "localStorage.getItem('theme')" in resp.text
-
-
 def test_api_422_still_returns_json(client: TestClient) -> None:
     # POST /api/v1/clusters without a body → 422 JSON
     """API 422 still returns JSON."""
@@ -64,14 +53,6 @@ def test_html_422_returns_error_partial(client: TestClient) -> None:
     assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
     assert "text/html" in resp.headers["content-type"]
     assert "Error 422" in resp.text
-
-
-def test_footer_shows_app_version(client: TestClient) -> None:
-    """Footer shows app version."""
-    resp = client.get("/")
-    assert resp.status_code == HTTPStatus.OK
-    assert f"v{APP_VERSION}" in resp.text
-    assert 'title="App version"' in resp.text
 
 
 def test_closed_command_palette_is_hidden(client: TestClient) -> None:

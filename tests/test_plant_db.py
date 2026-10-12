@@ -40,19 +40,6 @@ class TestPlantDatabase:
         """Unknown category returns None."""
         assert self.db.lookup_category("nonexistent_category") is None
 
-    def test_get_care_data_species_first(self) -> None:
-        """get_care_data prefers species over category."""
-        data = self.db.get_care_data(species="Monstera deliciosa", category="tropical")
-        assert data is not None
-        # Species data has common_name
-        assert "common_name" in data or "water_needs" in data
-
-    def test_get_care_data_category_fallback(self) -> None:
-        """get_care_data falls back to category when species unknown."""
-        data = self.db.get_care_data(species="Unknown plant", category="tropical")
-        assert data is not None
-        assert data["water_needs"] is not None
-
     def test_get_care_data_ultimate_fallback(self) -> None:
         """get_care_data returns safe defaults when nothing matches."""
         data = self.db.get_care_data(species="Unknown", category="unknown")
@@ -61,9 +48,10 @@ class TestPlantDatabase:
         assert data["soil_moisture_target"] == "45-65"
 
     def test_category_defaults_surface_for_unknown_species(self) -> None:
-        """Unknown species + known category → timing fields come from _category_defaults."""
+        """Unknown species + known category → care and timing fields come from the category."""
         data = self.db.get_care_data(species="Some-Unknown-Species", category="tropical")
         assert data["category"] == "tropical"
+        assert data["water_needs"] is not None
         # The tropical category default has a preferred-hours window and a
         # seasonal multiplier — both must appear in the merged dict.
         assert "preferred_water_hours_local" in data

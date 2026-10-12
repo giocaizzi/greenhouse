@@ -192,9 +192,6 @@ class TestStats:
         data = resp.json()
         assert data["cluster_name"] == "Test Cluster"
         assert "total_events" in data
-
-    def test_stats_custom_days(self, seeded_client: TestClient) -> None:
-        """Stats custom days."""
         resp = seeded_client.get("/api/v1/clusters/1/stats?days=30")
         assert resp.status_code == HTTPStatus.OK
 

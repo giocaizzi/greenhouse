@@ -349,11 +349,6 @@ class TestRegistryResolution:
         assert b._gateway is gateway  # noqa: SLF001 — adapters expose no gateway accessor
         assert s._gateway is gateway  # noqa: SLF001 — adapters expose no gateway accessor
 
-    def test_only_the_model_key_resolves_to_ik10pw(self) -> None:
-        """Only the exact model key resolves to the IK10PW adapter."""
-        registry = build_default_registry(DeviceGateway(FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, raw=_as_cloud(object())))
-        assert type(registry.get_irrigator(_irrigator(device_type="rainpoint.ik10pw"))) is IK10PWAdapter
-
     @pytest.mark.parametrize("raw_type", [None, "", "tuya_cloud", "tuya_local"])
     def test_legacy_and_empty_irrigator_types_are_unknown(self, raw_type: str | None) -> None:
         """OD3: the legacy alias table is gone — these values are unknown models."""

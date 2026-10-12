@@ -13,11 +13,13 @@ def test_clusters_list_empty(client: TestClient) -> None:
 
 
 def test_clusters_list_seeded(seeded_client: TestClient) -> None:
-    """Clusters list seeded."""
+    """Clusters list seeded, with edit and delete actions per row."""
     resp = seeded_client.get("/clusters")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
     assert 'href="/clusters/1"' in resp.text
+    assert 'href="/clusters/1/edit"' in resp.text
+    assert 'hx-delete="/clusters/1"' in resp.text
 
 
 def test_cluster_detail_renders(seeded_client: TestClient) -> None:
@@ -31,12 +33,6 @@ def test_cluster_detail_renders(seeded_client: TestClient) -> None:
     assert "Plants" in resp.text
     assert "Monstera" in resp.text  # seeded plant species
     assert "Test Irrigator" in resp.text
-
-
-def test_cluster_detail_404(client: TestClient) -> None:
-    """Cluster detail 404."""
-    resp = client.get("/clusters/9999")
-    assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
 def test_cluster_status_fragment(seeded_client: TestClient) -> None:

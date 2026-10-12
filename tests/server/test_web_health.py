@@ -18,11 +18,7 @@ class TestHealthPage:
         assert resp.status_code == HTTPStatus.OK
         assert "text/html" in resp.headers["content-type"]
         assert "System Health" in resp.text
-
-    def test_shows_status_badge(self, client: TestClient) -> None:
-        """Shows status badge."""
-        resp = client.get("/health")
-        assert resp.status_code == HTTPStatus.OK
+        assert "Scheduler" in resp.text
         # Empty system → status "down"
         assert "down" in resp.text
 
