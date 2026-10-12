@@ -22,6 +22,7 @@ cadences and a persisted timezone + pause (the legacy interval scenario left wit
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, TypedDict
 
 import pytest
 from sqlalchemy import create_engine
@@ -32,6 +33,12 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server import scheduler as sched_mod
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
+
+if TYPE_CHECKING:
+    from apscheduler.job import Job
+    from apscheduler.triggers.base import BaseTrigger
+    from fastapi import FastAPI
+    from sqlalchemy import Engine
 
 # sensor_sync, check_all, plant_health_snapshot, sensor_anomaly, device_health_monitor
 BUILT_IN_JOB_COUNT = 5
@@ -45,18 +52,26 @@ _BASE = {
     "auth_admin_password": "test-admin-pw-123",
 }
 
-SCENARIOS = {
+
+class Scenario(TypedDict):
+    """One registry scenario: Settings overrides and the preferences persisted before a restart."""
+
+    settings: dict[str, object]
+    prefs: dict[str, object] | None
+
+
+SCENARIOS: dict[str, Scenario] = {
     "default": {"settings": {}, "prefs": None},
     "custom_cadence": {"settings": {"sync_interval_minutes": 30, "check_cron_hours": "0,6,12,18"}, "prefs": None},
     "persisted_tz_and_pause": {"settings": {}, "prefs": {"timezone": "Europe/Rome", "scheduler_paused": True}},
 }
 
 
-def _engine():
+def _engine() -> Engine:
     return create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
 
 
-def _build(settings_override: dict, prefs: dict | None):
+def _build(settings_override: dict[str, object], prefs: dict[str, object] | None) -> tuple[FastAPI, Engine]:
     """Build the app like ``_make_stubbed_app``; with ``prefs``, persist them and rebuild."""
     engine = _engine()
     settings = Settings(_env_file=None, **{**_BASE, **settings_override})
@@ -74,8 +89,8 @@ def _build(settings_override: dict, prefs: dict | None):
     return app, engine
 
 
-def _trigger(trigger) -> dict:
-    out = {
+def _trigger(trigger: BaseTrigger) -> dict[str, object]:
+    out: dict[str, object] = {
         "type": type(trigger).__name__,
         "str": str(trigger),
         "repr": repr(trigger),
@@ -93,7 +108,7 @@ def _trigger(trigger) -> dict:
     return out
 
 
-def _pending_job(job) -> dict:
+def _pending_job(job: Job) -> dict[str, object]:
     return {
         "id": job.id,
         "name": job.name,
@@ -106,7 +121,7 @@ def _pending_job(job) -> dict:
     }
 
 
-def _stored_job(job) -> dict:
+def _stored_job(job: Job) -> dict[str, object]:
     return {
         "id": job.id,
         "func_ref": job.func_ref,
@@ -119,10 +134,10 @@ def _stored_job(job) -> dict:
     }
 
 
-def _snapshot() -> dict:
+def _snapshot() -> dict[str, object]:
     scheduler = sched_mod.scheduler
     assert not scheduler.running
-    snap = {
+    snap: dict[str, object] = {
         "scheduler": {
             "class": type(scheduler).__name__,
             "timezone": str(scheduler.timezone),
@@ -144,9 +159,9 @@ def _snapshot() -> dict:
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-def test_scheduler_registry_matches_golden():
+def test_scheduler_registry_matches_golden() -> None:
     """Every scenario's pending + started registry equals ``contracts/scheduler_jobs.json``."""
-    observed = {}
+    observed: dict[str, object] = {}
     for scenario, spec in SCENARIOS.items():
         _app, engine = _build(spec["settings"], spec["prefs"])
         try:
@@ -157,7 +172,7 @@ def test_scheduler_registry_matches_golden():
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-def test_registration_order_and_identity():
+def test_registration_order_and_identity() -> None:
     """The five core jobs, in ``init_scheduler`` registration order, bound to the app."""
     app, engine = _build({}, None)
     try:
@@ -182,7 +197,7 @@ def test_registration_order_and_identity():
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-def test_rebuilding_the_app_does_not_duplicate_jobs():
+def test_rebuilding_the_app_does_not_duplicate_jobs() -> None:
     """Rebuilding the app does not duplicate jobs."""
     _app1, engine1 = _build({}, None)
     sync_minutes = 45
@@ -207,7 +222,7 @@ class _ListHandler(logging.Handler):
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-def test_registry_ignores_the_removed_check_interval_hours():
+def test_registry_ignores_the_removed_check_interval_hours() -> None:
     """OD3: an old ``IRRIGATION_CHECK_INTERVAL_HOURS`` setting no longer becomes ``*/N`` and logs nothing."""
     # Attach directly to the module logger: ``init_db`` runs Alembic's ``fileConfig``,
     # which replaces the root handlers (and with them pytest's caplog handler).

@@ -24,6 +24,7 @@ import asyncio
 import hashlib
 import json
 from http import HTTPStatus
+from typing import TYPE_CHECKING, Any
 
 import mcp.types as mcp_types
 import pytest
@@ -31,6 +32,12 @@ from fastapi.testclient import TestClient
 
 from golden import assert_golden, install_offline_weather
 from server.conftest import TEST_MCP_TOKEN, _make_stubbed_app
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from fastapi import FastAPI
 
 # sha256 of the name-sorted, key-sorted ``exclude_none`` tool dump, first recorded at the
 # original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
@@ -45,7 +52,7 @@ MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
 
 
 @pytest.fixture
-def mcp_app(clean_env):
+def mcp_app(clean_env: Path) -> Iterator[FastAPI]:
     """An app with real auth and offline weather, for inspecting its MCP surface."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
@@ -54,11 +61,11 @@ def mcp_app(clean_env):
     engine.dispose()
 
 
-def _tool_dumps(tools) -> list[dict]:
+def _tool_dumps(tools: list[mcp_types.Tool]) -> list[dict[str, Any]]:
     return [t.model_dump(mode="json", exclude_none=True) for t in tools]
 
 
-def _surface(app) -> dict:
+def _surface(app: FastAPI) -> dict[str, object]:
     mcp = app.state.mcp
     return {
         "server": {
@@ -79,20 +86,20 @@ def _surface(app) -> dict:
     }
 
 
-def test_mcp_surface_matches_golden(mcp_app):
+def test_mcp_surface_matches_golden(mcp_app: FastAPI) -> None:
     """Server metadata, every tool (name/description/inputSchema) and the dispatch map."""
     text = json.dumps(_surface(mcp_app), indent=1, ensure_ascii=False) + "\n"
     assert_golden("contracts/mcp_tools.json", text)
 
 
-def test_mcp_tools_match_phase0_baseline_fingerprint(mcp_app):
+def test_mcp_tools_match_phase0_baseline_fingerprint(mcp_app: FastAPI) -> None:
     """MCP tools match phase0 baseline fingerprint."""
     tools = sorted(_tool_dumps(mcp_app.state.mcp.tools), key=lambda t: t["name"])
     blob = json.dumps(tools, sort_keys=True, indent=1)
     assert hashlib.sha256(blob.encode()).hexdigest() == PHASE0_MCP_TOOLS_SHA256
 
 
-def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app):
+def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app: FastAPI) -> None:
     """The protocol-level ``tools/list`` answer is the same list, same order."""
     mcp = mcp_app.state.mcp
     handler = mcp.server.request_handlers[mcp_types.ListToolsRequest]
@@ -101,7 +108,7 @@ def test_tools_list_handler_returns_exactly_mcp_tools(mcp_app):
     assert len(result.root.tools) == MCP_TOOL_COUNT
 
 
-def test_tool_names_are_operation_ids_one_to_one(mcp_app):
+def test_tool_names_are_operation_ids_one_to_one(mcp_app: FastAPI) -> None:
     """Tool names are operation IDs one to one."""
     mcp = mcp_app.state.mcp
     op_ids = [op["operationId"] for item in mcp_app.openapi()["paths"].values() for op in item.values()]
@@ -113,7 +120,7 @@ def test_tool_names_are_operation_ids_one_to_one(mcp_app):
 
 
 @pytest.fixture
-def gated_client(clean_env):
+def gated_client(clean_env: Path) -> Iterator[TestClient]:
     """A client on an app whose MCP endpoint requires the contract token."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=_TOKEN)
@@ -123,7 +130,7 @@ def gated_client(clean_env):
 
 
 @pytest.fixture
-def unconfigured_client(clean_env):
+def unconfigured_client(clean_env: Path) -> Iterator[TestClient]:
     """A client on an app with no MCP token configured (the endpoint fails closed)."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=True, mcp_token=None)
@@ -132,7 +139,7 @@ def unconfigured_client(clean_env):
     engine.dispose()
 
 
-_BAD_HEADERS = {
+_BAD_HEADERS: dict[str, dict[str, str]] = {
     "missing": {},
     "wrong-token": {"Authorization": "Bearer not-the-token"},
     "basic-scheme": {"Authorization": f"Basic {_TOKEN}"},
@@ -142,7 +149,7 @@ _BAD_HEADERS = {
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("header_case", sorted(_BAD_HEADERS))
-def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_case):
+def test_mcp_401_carries_www_authenticate_header(gated_client: TestClient, method: str, header_case: str) -> None:
     """An MCP 401 carries ``WWW-Authenticate: Bearer`` through to the client.
 
     ``require_mcp_token`` raises 401 with ``WWW-Authenticate: Bearer`` and the JSON branch
@@ -157,7 +164,9 @@ def test_mcp_401_carries_www_authenticate_header(gated_client, method, header_ca
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize("headers", [{}, {"Authorization": f"Bearer {_TOKEN}"}])
-def test_mcp_503_body_when_token_unset_on_every_method(unconfigured_client, method, headers):
+def test_mcp_503_body_when_token_unset_on_every_method(
+    unconfigured_client: TestClient, method: str, headers: dict[str, str]
+) -> None:
     """MCP 503 body when token unset on every method."""
     resp = unconfigured_client.request(method, "/mcp", headers=headers)
     assert resp.status_code == HTTPStatus.SERVICE_UNAVAILABLE

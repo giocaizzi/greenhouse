@@ -17,12 +17,14 @@ There are no PUT routes in the web router. Nothing is normalized but the package
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy import inspect, text
+from fastapi import FastAPI
+from sqlalchemy import Engine, inspect, text
 
 from golden import assert_golden_json
 from greenhouse_core.repository import IrrigationRepository
@@ -48,16 +50,23 @@ from server.test_contract_web_html import (
     VACATION_PAST,
     VACATION_UPCOMING,
     WINDOW,
+    MakeClient,
     T,
+    _methods,
     normalize,
     pinned_headers,
     web_routes,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    import httpx
+    from fastapi.testclient import TestClient
 
 ADHOC_JOB = "adhoc_contract_job"
+# A per-case hook run against the fresh app's database before the request.
+SetupHook = Callable[[FastAPI, IrrigationRepository], None]
+# ``{table: {primary key (as text): row dict}}``
+Snapshot = dict[str, dict[str, dict[str, Any]]]
 
 # Shared fixtures (pytest collects fixtures bound to module attributes).
 make_client = _web.make_client
@@ -67,28 +76,28 @@ web_env = _web.web_env
 # ── Per-case setup hooks (run against the fresh app before the "before" snapshot) ──────────────
 
 
-def _cap_indoor_to_one_event(_app, repo: IrrigationRepository) -> None:
+def _cap_indoor_to_one_event(_app: FastAPI, repo: IrrigationRepository) -> None:
     repo.set_irrigation_config(cluster_id=INDOOR, max_events_per_day=1)
 
 
-def _device_start_fails(app, _repo) -> None:
+def _device_start_fails(app: FastAPI, _repo: IrrigationRepository) -> None:
     app.state.fake_devices.irrigator.start_result = (False, "fake start failed")
 
 
-def _device_stop_fails(app, _repo) -> None:
+def _device_stop_fails(app: FastAPI, _repo: IrrigationRepository) -> None:
     app.state.fake_devices.irrigator.stop_result = (False, "fake stop failed")
 
 
-def _no_device_registry(app, _repo) -> None:
+def _no_device_registry(app: FastAPI, _repo: IrrigationRepository) -> None:
     app.dependency_overrides[get_device_registry] = lambda: None
 
 
-def _quiet_hours_now(_app, repo) -> None:
+def _quiet_hours_now(_app: FastAPI, repo: IrrigationRepository) -> None:
     # Frozen clock is 10:00 UTC; make 09-12 quiet for the indoor cluster.
     repo.set_irrigation_config(cluster_id=INDOOR, quiet_start_hour=9, quiet_end_hour=12)
 
 
-def _unregister_check_all(_app, _repo) -> None:
+def _unregister_check_all(_app: FastAPI, _repo: IrrigationRepository) -> None:
     scheduler.remove_job(CHECK_ALL_JOB_ID)
 
 
@@ -105,7 +114,7 @@ class Mut:
     url: str
     form: dict[str, Any] | None = None
     headers: dict[str, str] = field(default_factory=dict)
-    setup: Callable | None = None
+    setup: SetupHook | None = None
     app_kwargs: dict[str, Any] = field(default_factory=dict)
     running_scheduler: bool = False  # start the process scheduler (paused) + register an ad-hoc job
 
@@ -569,15 +578,15 @@ MUTATIONS: tuple[Mut, ...] = (
 # ── DB diff helpers ───────────────────────────────────────────────────────────────────────────
 
 
-def db_snapshot(engine) -> dict[str, dict[str, dict]]:
+def db_snapshot(engine: Engine) -> Snapshot:
     """``{table: {primary key (as text): row dict}}`` for every table."""
-    snap: dict[str, dict[str, dict]] = {}
+    snap: Snapshot = {}
     insp = inspect(engine)
     with engine.connect() as conn:
         for table in sorted(insp.get_table_names()):
             pk_cols = insp.get_pk_constraint(table)["constrained_columns"] or []
             rows = conn.execute(text(f'SELECT * FROM "{table}"')).mappings().all()  # noqa: S608 — inspector names
-            keyed = {}
+            keyed: dict[str, dict[str, Any]] = {}
             for row in rows:
                 key_cols = pk_cols or list(row.keys())
                 keyed["/".join(str(row[c]) for c in key_cols)] = dict(row)
@@ -585,42 +594,44 @@ def db_snapshot(engine) -> dict[str, dict[str, dict]]:
     return snap
 
 
-def db_effect(before: dict, after: dict) -> dict[str, dict]:
+def db_effect(before: Snapshot, after: Snapshot) -> dict[str, dict[str, object]]:
     """Rows added (full), removed (keys only) and changed (``col: [before, after]``) per table."""
-    effect: dict[str, dict] = {}
+    effect: dict[str, dict[str, object]] = {}
     for table in sorted(set(before) | set(after)):
         old, new = before.get(table, {}), after.get(table, {})
         added = [new[k] for k in sorted(set(new) - set(old), key=_natural)]
         removed = sorted(set(old) - set(new), key=_natural)
-        changed = {}
+        changed: dict[str, dict[str, list[Any]]] = {}
         for key in sorted(set(old) & set(new), key=_natural):
             delta = {c: [old[key][c], new[key][c]] for c in old[key] if old[key][c] != new[key].get(c)}
             if delta:
                 changed[key] = delta
-        entry = {name: value for name, value in (("added", added), ("removed", removed), ("changed", changed)) if value}
+        entry: dict[str, object] = {
+            name: value for name, value in (("added", added), ("removed", removed), ("changed", changed)) if value
+        }
         if entry:
             effect[table] = entry
     return effect
 
 
-def _natural(key: str) -> tuple:
+def _natural(key: str) -> tuple[int | str, ...]:
     return tuple(int(p) if p.isdigit() else p for p in key.split("/"))
 
 
 # ── The test ──────────────────────────────────────────────────────────────────────────────────
 
 
-def test_mutation_cases_are_unique_and_cover_every_web_write_route():
+def test_mutation_cases_are_unique_and_cover_every_web_write_route() -> None:
     """Every non-GET web route has at least one case; case names are unique."""
     names = [m.name for m in MUTATIONS]
     assert len(names) == len(set(names))
     for route in web_routes(web_router.routes):
-        for method in route.methods - {"GET", "HEAD"}:
+        for method in _methods(route) - {"GET", "HEAD"}:
             pattern = "^" + re.sub(r"\{[^}]+\}", "[^/]+", route.path) + "$"
             assert any(m.method == method and re.match(pattern, m.url) for m in MUTATIONS), (method, route.path)
 
 
-def _apply_setup(app, setup: Callable | None) -> None:
+def _apply_setup(app: FastAPI, setup: SetupHook | None) -> None:
     """Run a per-case setup hook against the fresh app's database (committed)."""
     if setup is None:
         return
@@ -632,7 +643,7 @@ def _apply_setup(app, setup: Callable | None) -> None:
         session.close()
 
 
-def _send(case: Mut, client, engine) -> tuple[dict, object, dict, list[str]]:
+def _send(case: Mut, client: TestClient, engine: Engine) -> tuple[Snapshot, httpx.Response, Snapshot, list[str]]:
     """Send ``case``'s request (inside a paused running scheduler when it asks for one).
 
     Returns the DB snapshot before, the response, the snapshot after and the job ids after.
@@ -652,7 +663,7 @@ def _send(case: Mut, client, engine) -> tuple[dict, object, dict, list[str]]:
 
 
 @pytest.mark.parametrize("case", MUTATIONS, ids=lambda m: m.name)
-def test_web_mutation_golden(case, make_client, monkeypatch):
+def test_web_mutation_golden(case: Mut, make_client: MakeClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """Status, headers, body, templates, DB effect and fake-device calls of one write on a fresh app."""
     app, client = make_client(**case.app_kwargs)
     spy = _web.TemplateSpy()
@@ -679,7 +690,13 @@ def test_web_mutation_golden(case, make_client, monkeypatch):
 # ── Observed bugs (pinned, not fixed) ─────────────────────────────────────────────────────────
 
 
-def _run(make_client, method: str, url: str, form: dict | None = None, setup: Callable | None = None):
+def _run(
+    make_client: MakeClient,
+    method: str,
+    url: str,
+    form: dict[str, Any] | None = None,
+    setup: SetupHook | None = None,
+) -> tuple[FastAPI, httpx.Response, dict[str, dict[str, object]]]:
     app, client = make_client()
     _apply_setup(app, setup)
     engine = app.state.session_factory.kw["bind"]
@@ -688,7 +705,7 @@ def _run(make_client, method: str, url: str, form: dict | None = None, setup: Ca
     return app, resp, db_effect(before, db_snapshot(engine))
 
 
-def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
+def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client: MakeClient) -> None:
     """Emergency stop reports ``adapter.stop()``'s ``(False, msg)`` as a failure.
 
     A device that refuses the stop may still be running: it is not counted as stopped, gets
@@ -705,7 +722,7 @@ def test_bulk_stop_all_reports_a_device_that_refuses_the_stop(make_client):
 
 
 @pytest.mark.parametrize("action", ["ack", "resolve"])
-def test_alert_action_on_missing_alert_is_404(action, make_client):
+def test_alert_action_on_missing_alert_is_404(action: str, make_client: MakeClient) -> None:
     """Ack/resolve of a missing alert is a 404 "Alert not found", like the JSON API.
 
     ``web/routes/alerts.py`` used to skip the lookup: the row partial rendered empty and
@@ -731,7 +748,7 @@ def test_alert_action_on_missing_alert_is_404(action, make_client):
         ("/plants/sync", {"cluster_id": "first"}),
     ],
 )
-def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
+def test_non_numeric_form_value_is_a_400_error_page(url: str, form: dict[str, str], make_client: MakeClient) -> None:
     """A non-numeric form value is a 400 HTML error page naming the problem, and nothing is written.
 
     Bare ``int()``/``float()`` used to let the ``ValueError`` escape as a plain-text 500; every
@@ -744,7 +761,7 @@ def test_non_numeric_form_value_is_a_400_error_page(url, form, make_client):
     assert effect == {}
 
 
-def test_irrigate_missing_cluster_is_404(make_client):
+def test_irrigate_missing_cluster_is_404(make_client: MakeClient) -> None:
     """Irrigating an unknown cluster is a 404 "Cluster not found" page, like the JSON API.
 
     The route used to hand the pipeline's ``{"action": "error", …}`` dict to
@@ -757,7 +774,7 @@ def test_irrigate_missing_cluster_is_404(make_client):
     assert app.state.fake_devices.irrigator.calls == []
 
 
-def test_delete_cluster_leaves_no_orphan_rows(make_client):
+def test_delete_cluster_leaves_no_orphan_rows(make_client: MakeClient) -> None:
     """Deleting a populated cluster also removes the rows that point at it.
 
     Besides the ORM cascade (plants, sensors + readings, irrigator + events, config),

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from http import HTTPStatus
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, NoReturn, Self, Unpack, cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,7 +23,7 @@ from engine_grid import plant_database
 from golden import FROZEN_TS, install_offline_weather
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState
-from greenhouse_core.models import Alert
+from greenhouse_core.models import SOURCE_LEAK, Alert, EntityType, EventAction, TriggeredBy
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server import scheduler as scheduler_module
@@ -47,17 +48,35 @@ from greenhouse_server.web.filters import (
 
 from .conftest import _make_stubbed_app
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+    from pathlib import Path
+
+    import time_machine
+    from fastapi import FastAPI
+
+    from greenhouse_core.devices.irrigators.base import AbstractIrrigatorAdapter
+    from greenhouse_core.models import ActivityEvent, Irrigator
+    from greenhouse_core.repository import IrrigationConfigPatch
+    from greenhouse_server.services.irrigation import CheckResult
+    from greenhouse_server.services.pump_watcher import WatchOutcome
+    from greenhouse_server.services.weather import WeatherClient
+
 MCP_TOKEN = "gap-mcp-token-0123456789abcdef0123"  # noqa: S105 — fake; its value is in the pinned test ids
+# The code paths under test never read the weather, which IrrigationService types as required.
+NO_WEATHER = cast("WeatherClient", None)
 
 
 @pytest.fixture
-def db(tmp_db, frozen_clock, clean_env):
+def db(tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller, clean_env: Path) -> IrrigationRepository:
     """The in-memory repository, with a clean environment and a frozen clock."""
     del frozen_clock, clean_env  # requested only for their side effects
     return tmp_db
 
 
-def _cluster_with_sensors(db, n: int, *, irrigator: bool = False):
+def _cluster_with_sensors(
+    db: IrrigationRepository, n: int, *, irrigator: bool = False
+) -> tuple[int, list[int], int | None]:
     cid = db.add_cluster("Gap Cluster")
     sensors = [
         db.add_sensor(
@@ -85,7 +104,7 @@ def _cluster_with_sensors(db, n: int, *, irrigator: bool = False):
 # ── services/sync.py ────────────────────────────────────────────────────────
 
 
-def _snapshot_case(db):
+def _snapshot_case(db: IrrigationRepository) -> int:
     cid, (s1, s2), _ = _cluster_with_sensors(db, 2)
     db.add_sensor_reading(
         sensor_id=s1, timestamp=FROZEN_TS - 600, soil_moisture=30.0, temperature=20.0, light=100, env_humidity=40.0
@@ -96,7 +115,7 @@ def _snapshot_case(db):
     return cid
 
 
-def test_cluster_snapshot_soil_is_min_light_is_max(db):
+def test_cluster_snapshot_soil_is_min_light_is_max(db: IrrigationRepository) -> None:
     """svcsync-04: the pipeline snapshot takes the BRIGHTEST sensor's light and the DRIEST soil."""
     cid = _snapshot_case(db)
     snap = SyncService(db, None, None).ensure_fresh_and_read(cid)
@@ -110,7 +129,7 @@ def test_cluster_snapshot_soil_is_min_light_is_max(db):
     ("soil", "status"),
     [(29.5, "very_dry"), (30.0, "dry"), (33.0, "dry"), (44.9, "dry"), (60.0, "ok"), (70.0, "ok"), (70.5, "wet")],
 )
-def test_monitor_status_bands_around_the_plant_target(db, soil, status):
+def test_monitor_status_bands_around_the_plant_target(db: IrrigationRepository, soil: float, status: str) -> None:
     """irrigation-15 / irrigation-16: monitor bands for a 45-60 % plant.
 
     ``very_dry`` < target_min - 15, ``dry`` < target_min, ``wet`` > target_max + 10, else ``ok``.
@@ -126,7 +145,7 @@ def test_monitor_status_bands_around_the_plant_target(db, soil, status):
         plant_id=pid,
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=soil)
-    svc = IrrigationService(db, None, SyncService(db, None, None), None, plant_database())
+    svc = IrrigationService(db, None, SyncService(db, None, None), NO_WEATHER, plant_database())
     (row,) = svc.monitor_cluster(cid)["sensors"]
     assert (row["target_min"], row["target_max"], row["status"]) == (45.0, 60.0, status)
 
@@ -135,22 +154,26 @@ class _FakeScheduler:
     running = True
 
     def __init__(self) -> None:
-        self.jobs: list[dict] = []
+        self.jobs: list[dict[str, Any]] = []  # add_job's keyword arguments, as APScheduler takes them
 
-    def add_job(self, func, trigger, **kwargs):
+    def add_job(self, func: Callable[[], object], trigger: object, **kwargs: object) -> None:
         self.jobs.append({"func": func, "trigger": trigger, **kwargs})
 
 
-def test_scheduled_pump_watcher_watches_for_the_duration_in_seconds(db, monkeypatch):
+def test_scheduled_pump_watcher_watches_for_the_duration_in_seconds(
+    db: IrrigationRepository, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """irrigation-27: the watcher job watches ``duration_minutes * 60`` seconds."""
     _, _, irr_id = _cluster_with_sensors(db, 0, irrigator=True)
-    watched: list[tuple] = []
+    watched: list[tuple[int, int, int | None]] = []
 
     class RecordingWatcher:
-        def __init__(self, repo, registry, **kwargs):
+        def __init__(self, repo: IrrigationRepository, registry: DeviceRegistry, **kwargs: object) -> None:
             pass
 
-        def watch(self, irrigator, duration_seconds, *, started_at=None):
+        def watch(
+            self, irrigator: Irrigator, duration_seconds: int, *, started_at: int | None = None
+        ) -> dict[str, str]:
             watched.append((irrigator.id, duration_seconds, started_at))
             return {"outcome": "completed"}
 
@@ -166,13 +189,14 @@ def test_scheduled_pump_watcher_watches_for_the_duration_in_seconds(db, monkeypa
     monkeypatch.setattr(scheduler_module, "scheduler", fake)
     monkeypatch.setattr(scheduler_module, "_app", app)
     monkeypatch.setattr(pump_watcher_module, "PumpWatcherService", RecordingWatcher)
+    assert irr_id is not None
     assert schedule_pump_watcher(irr_id, 3, FROZEN_TS) is True
     (job,) = fake.jobs
     job["func"]()
     assert watched == [(irr_id, 180, FROZEN_TS)]
 
 
-def test_monitor_reads_the_cleaned_view(db):
+def test_monitor_reads_the_cleaned_view(db: IrrigationRepository) -> None:
     """irrigation-33: the monitor reports the latest in-range reading.
 
     irrigation-33: monitor uses ``clean_readings_desc`` — an out-of-range latest value (150 %) is
@@ -181,7 +205,7 @@ def test_monitor_reads_the_cleaned_view(db):
     cid, (sid,), _ = _cluster_with_sensors(db, 1)
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 1800, soil_moisture=50.0)
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=150.0)
-    svc = IrrigationService(db, None, SyncService(db, None, None), None, plant_database())
+    svc = IrrigationService(db, None, SyncService(db, None, None), NO_WEATHER, plant_database())
     (row,) = svc.monitor_cluster(cid)["sensors"]
     assert (row["soil_moisture"], row["status"]) == (50.0, "ok")
 
@@ -189,10 +213,10 @@ def test_monitor_reads_the_cleaned_view(db):
 class _Weather:
     """Offline-style weather stub with a fixed current reading and no forecast."""
 
-    def get_current(self):
+    def get_current(self) -> dict[str, float]:
         return {"feels_like": 25.0}
 
-    def get_forecast(self, hours: int = 6):
+    def get_forecast(self, hours: int = 6) -> None:
         del hours  # the engine passes it by keyword; this stub has no forecast
 
 
@@ -200,7 +224,9 @@ class _Weather:
     ("environment", "temp", "source"),
     [("indoor", 15.0, "sensor"), ("greenhouse", 15.0, "sensor"), ("outdoor", 25.0, "open-meteo")],
 )
-def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, temp, source):
+def test_temperature_source_only_outdoor_prefers_the_weather(
+    db: IrrigationRepository, environment: str, temp: float, source: str
+) -> None:
     """irrigation-34: only outdoor clusters prefer the weather feels-like temperature.
 
     irrigation-34: only ``environment == "outdoor"`` prefers the weather feels-like (the engine's
@@ -216,13 +242,13 @@ def test_temperature_source_only_outdoor_prefers_the_weather(db, environment, te
         config={},
     )
     db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=50.0, temperature=15.0)
-    svc = IrrigationService(db, None, SyncService(db, None, None), _Weather(), plant_database())
+    svc = IrrigationService(db, None, SyncService(db, None, None), cast("WeatherClient", _Weather()), plant_database())
     result = svc.run_irrigation_pipeline(cid, dry_run=True)
     assert (result["temperature"], result["temperature_source"]) == (temp, source)
 
 
 @pytest.fixture
-def api(clean_env, frozen_clock):
+def api(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[tuple[TestClient, FastAPI]]:
     """A client and app with auth bypassed and offline weather."""
     del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=True)
@@ -231,7 +257,7 @@ def api(clean_env, frozen_clock):
     engine.dispose()
 
 
-def test_check_all_has_alerts_counts_thirsty_plants(api):
+def test_check_all_has_alerts_counts_thirsty_plants(api: tuple[TestClient, FastAPI]) -> None:
     """web-13: ``POST /check`` sets ``has_alerts`` when a monitored cluster has plants needing water."""
     client, app = api
     session = app.state.session_factory()
@@ -263,7 +289,9 @@ def test_check_all_has_alerts_counts_thirsty_plants(api):
     ("patch", "status"),
     [({"ends_at": FROZEN_TS + 3600}, 400), ({"ends_at": 0}, 400), ({"ends_at": FROZEN_TS + 3601}, 200)],
 )
-def test_vacation_update_requires_start_strictly_before_end(api, patch, status):
+def test_vacation_update_requires_start_strictly_before_end(
+    api: tuple[TestClient, FastAPI], patch: dict[str, int], status: int
+) -> None:
     """web-15 / web-16: a vacation update must leave ``starts_at < ends_at``.
 
     web-15 / web-16: the effective window must satisfy ``starts_at < ends_at``; an explicit
@@ -275,7 +303,7 @@ def test_vacation_update_requires_start_strictly_before_end(api, patch, status):
     assert resp.status_code == status
 
 
-def test_deleting_a_core_scheduler_job_is_409(api):
+def test_deleting_a_core_scheduler_job_is_409(api: tuple[TestClient, FastAPI]) -> None:
     """web-17: ``DELETE /scheduler/jobs/{core}`` answers 409 with the pause hint."""
     client, _ = api
     resp = client.delete("/api/v1/scheduler/jobs/check_all")
@@ -293,7 +321,9 @@ def test_deleting_a_core_scheduler_job_is_409(api):
         ("yes", "auto", "quiet_hours"),
     ],
 )
-def test_web_irrigate_force_flag_spellings(api, force, triggered_by, code):
+def test_web_irrigate_force_flag_spellings(
+    api: tuple[TestClient, FastAPI], force: str, triggered_by: str, code: str
+) -> None:
     """web-19: the web irrigate form treats ``true`` / ``on`` / ``1`` (any case) as force; anything else is not."""
     client, app = api
     session = app.state.session_factory()
@@ -322,7 +352,9 @@ def test_web_irrigate_force_flag_spellings(api, force, triggered_by, code):
 @pytest.mark.parametrize(
     ("alerts", "badge"), [([{"severity": "warning", "type": "x", "message": "m"}], True), ([], False)]
 )
-def test_web_check_all_badge_follows_cluster_alerts(api, monkeypatch, alerts, badge):
+def test_web_check_all_badge_follows_cluster_alerts(
+    api: tuple[TestClient, FastAPI], monkeypatch: pytest.MonkeyPatch, alerts: list[dict[str, str]], *, badge: bool
+) -> None:
     """web-20: the web ``POST /check`` partial shows the "alerts" badge iff some result carries alerts."""
     client, _ = api
     result = {"cluster_id": 1, "cluster_name": "Badge", "action": "monitored", "alerts": alerts, "maintenance": []}
@@ -332,11 +364,13 @@ def test_web_check_all_badge_follows_cluster_alerts(api, monkeypatch, alerts, ba
 
 
 @pytest.mark.parametrize("verb", ["pause", "resume"])
-def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeypatch, verb):
+def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(
+    api: tuple[TestClient, FastAPI], monkeypatch: pytest.MonkeyPatch, verb: str
+) -> None:
     """web-18: an unexpected scheduler error maps to 500 ``Failed to <pause|resume> job: …``."""
     client, _ = api
 
-    def boom(_repo, *, paused):
+    def boom(_repo: IrrigationRepository, *, paused: bool) -> NoReturn:
         del paused  # the stub fails whatever the requested state
         msg = "jobstore down"
         raise RuntimeError(msg)
@@ -350,10 +384,15 @@ def test_scheduler_toggle_unexpected_failure_is_500_naming_the_verb(api, monkeyp
 
 
 @pytest.mark.usefixtures("db")
-def test_sync_job_backfills_six_hours_and_commits(monkeypatch):
+def test_sync_job_backfills_six_hours_and_commits(monkeypatch: pytest.MonkeyPatch) -> None:
     """scheduler-10: the background sync job asks for a 6 h log window and commits."""
     calls: list[int] = []
-    monkeypatch.setattr(SyncService, "sync_all_sensors", lambda _self, hours=24: calls.append(hours) or {})
+
+    def sync_all_sensors(_self: SyncService, hours: int = 24) -> dict[str, object]:
+        calls.append(hours)
+        return {}
+
+    monkeypatch.setattr(SyncService, "sync_all_sensors", sync_all_sensors)
     commits: list[int] = []
     session = SimpleNamespace(commit=lambda: commits.append(1), rollback=lambda: None, close=lambda: None)
     app = SimpleNamespace(
@@ -368,7 +407,7 @@ def test_sync_job_backfills_six_hours_and_commits(monkeypatch):
 
 
 @pytest.fixture
-def mcp_client(clean_env, frozen_clock):
+def mcp_client(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[TestClient]:
     """A client on an app with real auth and the gap MCP token configured."""
     del clean_env, frozen_clock  # requested only for their side effects
     app, engine = _make_stubbed_app(bypass_auth=False, mcp_token=MCP_TOKEN)
@@ -381,7 +420,7 @@ def mcp_client(clean_env, frozen_clock):
     ("token", "status"),
     [(MCP_TOKEN, 200), (MCP_TOKEN + "x", 401), (MCP_TOKEN[:-1], 401)],
 )
-def test_mcp_token_on_api_must_match_exactly(mcp_client, token, status):
+def test_mcp_token_on_api_must_match_exactly(mcp_client: TestClient, token: str, status: int) -> None:
     """auth-12: the MCP bearer is accepted on ``/api/v1`` only on an exact match (not a prefix)."""
     resp = mcp_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == status
@@ -392,7 +431,7 @@ def test_mcp_token_on_api_must_match_exactly(mcp_client, token, status):
 LEAK_START = FROZEN_TS - 3600  # the check runs 30 min later; every sample is in the past
 
 
-def _leak_check(db, before: list[float], after: list[float]):
+def _leak_check(db: IrrigationRepository, before: list[float], after: list[float]) -> tuple[int, int, list[Alert]]:
     """Seed one sensor with ``before`` (-50 min…) and ``after`` (+5 min, every 5 min) and run the check."""
     cid, (sid,), _ = _cluster_with_sensors(db, 1, irrigator=True)
     for i, soil in enumerate(before):
@@ -401,6 +440,12 @@ def _leak_check(db, before: list[float], after: list[float]):
         db.add_sensor_reading(sensor_id=sid, timestamp=LEAK_START + 300 * (i + 1), soil_moisture=soil)
     alerts = LeakDetectionService(db, plant_database()).check_after_irrigation(cid, LEAK_START)
     return cid, sid, alerts
+
+
+def _payload(row: Alert | ActivityEvent) -> dict[str, Any]:
+    assert row.payload_json is not None
+    payload: dict[str, Any] = json.loads(row.payload_json)
+    return payload
 
 
 @pytest.mark.parametrize(
@@ -425,7 +470,9 @@ def _leak_check(db, before: list[float], after: list[float]):
         ("settled", [40.0, 40.0], [60.0, 55.0, 50.0], None),
     ],
 )
-def test_leak_verdict_table(db, case, before, after, reason):
+def test_leak_verdict_table(
+    db: IrrigationRepository, case: str, before: list[float], after: list[float], reason: str | None
+) -> None:
     """leak-01…09: the stuck-valve rules at their exact thresholds.
 
     min 3 after / 2 before samples; pinned = every one of the last 2 samples > 95 %;
@@ -433,27 +480,27 @@ def test_leak_verdict_table(db, case, before, after, reason):
     ≥ median(before) + 30 %.
     """
     _, sid, alerts = _leak_check(db, before, after)
-    assert [json.loads(a.payload_json)["reason"] for a in alerts] == ([reason] if reason else []), case
+    assert [_payload(a)["reason"] for a in alerts] == ([reason] if reason else []), case
     if reason:
         (alert,) = alerts
         assert (alert.severity, alert.entity_id, alert.code) == ("critical", sid, "leak_or_stuck_valve")
 
 
-def test_leak_hold_activity_and_message(db):
+def test_leak_hold_activity_and_message(db: IrrigationRepository) -> None:
     """leak-14 / leak-15 / leak-16: one ``leak_hold`` activity per confirmed check (24 h horizon), none otherwise."""
     cid, sid, alerts = _leak_check(db, [40.0, 40.0], [50.0, 60.0, 70.0])
     (alert,) = alerts
     assert alert.message == "Gap Probe 0: soil moisture still rising after irrigation (latest=70.0%)"
     (activity,) = db.list_activity_events(entity_type="cluster", entity_id=cid, source="leak", limit=10)
     assert activity.code == "leak_hold"
-    assert json.loads(activity.payload_json) == {
+    assert _payload(activity) == {
         "started_at": LEAK_START,
         "hold_until": FROZEN_TS + 24 * 3600,
         "sensor_ids": [sid],
     }
 
 
-def test_settled_sensor_releases_only_its_own_open_leak_alert(db):
+def test_settled_sensor_releases_only_its_own_open_leak_alert(db: IrrigationRepository) -> None:
     """leak-10 / leak-12 / leak-13: a settled verdict resolves the open leak alert of THAT sensor only.
 
     Sensor A settles → its open alert is resolved (at the frozen now); A's already-resolved
@@ -462,15 +509,15 @@ def test_settled_sensor_releases_only_its_own_open_leak_alert(db):
     """
     cid, (a, b), _ = _cluster_with_sensors(db, 2, irrigator=True)
 
-    def leak_alert(key, sensor_id):
+    def leak_alert(key: str, sensor_id: int) -> Alert:
         return db.upsert_alert(
             key,
-            "leak",
+            SOURCE_LEAK,
             "leak_or_stuck_valve",
             "Possible leak",
             "m",
             severity="critical",
-            entity_type="sensor",
+            entity_type=EntityType.SENSOR,
             entity_id=sensor_id,
             cluster_id=cid,
             seen_at=FROZEN_TS - 7200,
@@ -490,7 +537,7 @@ def test_settled_sensor_releases_only_its_own_open_leak_alert(db):
     assert (open_b.status, open_b.resolved_at) == ("open", None)
 
 
-def test_leak_check_without_findings_writes_no_activity(db):
+def test_leak_check_without_findings_writes_no_activity(db: IrrigationRepository) -> None:
     """leak-15: a settled check records no ``leak_hold`` activity."""
     cid, _, alerts = _leak_check(db, [40.0, 40.0], [60.0, 55.0, 50.0])
     assert alerts == []
@@ -502,7 +549,7 @@ def test_leak_check_without_findings_writes_no_activity(db):
 
 @pytest.mark.usefixtures("frozen_clock")
 @pytest.mark.parametrize(("age", "text"), [(59, "59s ago"), (60, "1m ago"), (3599, "59m ago"), (3600, "1h ago")])
-def test_age_seconds_unit_boundaries(age, text):
+def test_age_seconds_unit_boundaries(age: int, text: str) -> None:
     """web-01: the age formatter switches unit at exactly 60 s / 3600 s (lower bound inclusive).
 
     D18: ``age_seconds`` takes the age itself; ``time_ago`` takes the timestamp.
@@ -511,7 +558,7 @@ def test_age_seconds_unit_boundaries(age, text):
     assert time_ago(FROZEN_TS - age) == text
 
 
-def test_template_filters_current_behavior():
+def test_template_filters_current_behavior() -> None:
     """web-03 / web-05 / web-06 / web-07: pure Jinja filters at their edges."""
     assert strip_emoji("soil dry ;  temp ok;light low") == "soil dry; temp ok; light low"
     assert [moisture_badge(v, 45.0, 60.0) for v in (44.9, 45.0, 60.0, 60.1)] == ["low", "ok", "ok", "high"]
@@ -522,7 +569,7 @@ def test_template_filters_current_behavior():
 # ── services/health_monitor.py ──────────────────────────────────────────────
 
 
-def test_backfill_never_raises_sensor_fault_from_water_warning(db):
+def test_backfill_never_raises_sensor_fault_from_water_warning(db: IrrigationRepository) -> None:
     """B-10: a full window of water_warning rows back-fills nothing (DP 111 is the soil-dry alert)."""
     _, (sid,), _ = _cluster_with_sensors(db, 1)
     for i in range(5):
@@ -543,17 +590,20 @@ class _ScriptedAdapter:
         self.flags = list(offline_flags)
         self.reads = 0
 
-    def read_health(self, _irrigator):
+    def read_health(self, _irrigator: Irrigator) -> DeviceHealthState:
         offline = self.flags[self.reads] if self.reads < len(self.flags) else False
         self.reads += 1
         return DeviceHealthState(observed_at=FROZEN_TS, offline=offline, alarms=frozenset(), raw={"source": "local"})
 
 
-def _watch(db, offline_flags: list[bool], *, seconds: int = 60, max_failures: int = 3):
+def _watch(
+    db: IrrigationRepository, offline_flags: list[bool], *, seconds: int = 60, max_failures: int = 3
+) -> tuple[WatchOutcome, _ScriptedAdapter]:
     _, _, irr_id = _cluster_with_sensors(db, 0, irrigator=True)
     adapter = _ScriptedAdapter(offline_flags)
     registry = DeviceRegistry()
-    registry.register_irrigator("rainpoint.ik10pw", lambda: adapter)
+    # duck-typed adapter: the watcher only calls read_health
+    registry.register_irrigator("rainpoint.ik10pw", lambda: cast("AbstractIrrigatorAdapter", adapter))
     clock = {"t": 0.0}
 
     def _sleep(seconds_: float) -> None:
@@ -568,17 +618,20 @@ def _watch(db, offline_flags: list[bool], *, seconds: int = 60, max_failures: in
         clock=lambda: clock["t"],
         sleep=_sleep,
     )
-    return watcher.watch(db.get_irrigator(irr_id), seconds, started_at=FROZEN_TS), adapter
+    assert irr_id is not None
+    irrigator = db.get_irrigator(irr_id)
+    assert irrigator is not None
+    return watcher.watch(irrigator, seconds, started_at=FROZEN_TS), adapter
 
 
-def test_pump_watcher_counts_offline_reads_as_failures(db):
+def test_pump_watcher_counts_offline_reads_as_failures(db: IrrigationRepository) -> None:
     """pump-04: an ``offline`` state (no error text) counts toward the read-failure budget → abandoned."""
     result, adapter = _watch(db, [True] * 10)
     assert (result["outcome"], result["polls"], result["read_failures"]) == ("abandoned", 3, 3)
     assert adapter.reads == result["polls"]
 
 
-def test_pump_watcher_failure_budget_counts_consecutive_failures_only(db):
+def test_pump_watcher_failure_budget_counts_consecutive_failures_only(db: IrrigationRepository) -> None:
     """pump-09: a healthy read resets the failure counter — alternating failures never abandon."""
     result, adapter = _watch(db, [True, False, True, False, True, False, True], seconds=10)
     assert (result["outcome"], result["polls"], result["read_failures"]) == ("completed", 10, 0)
@@ -589,53 +642,67 @@ def test_pump_watcher_failure_budget_counts_consecutive_failures_only(db):
 
 
 class _StartingAdapter:
-    def start(self, _irrigator, _minutes=None):
+    def start(self, _irrigator: Irrigator, _minutes: int | None = None) -> tuple[bool, str]:
         return True, "started"
 
 
-def _manual_world(db, **caps):
+def _manual_world(
+    db: IrrigationRepository, **caps: Unpack[IrrigationConfigPatch]
+) -> tuple[int, Irrigator, DeviceRegistry]:
     cid, _, irr_id = _cluster_with_sensors(db, 0, irrigator=True)
     if caps:
         db.set_irrigation_config(cid, **caps)
     db.session.commit()
     registry = DeviceRegistry()
-    registry.register_irrigator("rainpoint.ik10pw", _StartingAdapter)
-    return cid, db.get_irrigator(irr_id), registry
+    # duck-typed adapter (a fresh one per lookup): manual_start only calls start
+    registry.register_irrigator("rainpoint.ik10pw", lambda: cast("AbstractIrrigatorAdapter", _StartingAdapter()))
+    assert irr_id is not None
+    irrigator = db.get_irrigator(irr_id)
+    assert irrigator is not None
+    return cid, irrigator, registry
 
 
-def test_daily_cap_counts_only_start_minutes(db):
+def test_daily_cap_counts_only_start_minutes(db: IrrigationRepository) -> None:
     """manual-03 / manual-11: the daily minute cap counts ``start`` events only.
 
     manual-03 / manual-11: the per-irrigator minute cap sums ``start`` events only (an ``off`` row's
     minutes don't count), and an open-ended start (``minutes=None``) requests 0 minutes.
     """
     cid, irr, _ = _manual_world(db, daily_cap_minutes=5)
-    db.add_irrigation_event(irrigator_id=irr.id, action="off", triggered_by="manual", duration_minutes=10)
-    db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
+    db.add_irrigation_event(
+        irrigator_id=irr.id, action=cast("EventAction", "off"), triggered_by=TriggeredBy.MANUAL, duration_minutes=10
+    )
+    db.add_irrigation_event(
+        irrigator_id=irr.id, action=EventAction.START, triggered_by=TriggeredBy.MANUAL, duration_minutes=2
+    )
     check_rate_limits(db, cid, irr.id, 3)  # 2 + 3 == 5 → allowed
-    db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=3)
+    db.add_irrigation_event(
+        irrigator_id=irr.id, action=EventAction.START, triggered_by=TriggeredBy.MANUAL, duration_minutes=3
+    )
     check_rate_limits(db, cid, irr.id, None)  # 5 used + 0 requested == 5 → allowed
     with pytest.raises(ManualActionError) as exc:
         check_rate_limits(db, cid, irr.id, 1)
     assert (exc.value.status_code, exc.value.detail) == (409, "irrigator daily cap reached")
 
 
-def test_manual_start_checks_registry_before_caps(db):
+def test_manual_start_checks_registry_before_caps(db: IrrigationRepository) -> None:
     """manual-04: with no device registry a start is 503 even when the caps would also refuse it."""
     _cid, irr, _ = _manual_world(db, max_events_per_day=1)
-    db.add_irrigation_event(irrigator_id=irr.id, action="start", triggered_by="manual", duration_minutes=2)
+    db.add_irrigation_event(
+        irrigator_id=irr.id, action=EventAction.START, triggered_by=TriggeredBy.MANUAL, duration_minutes=2
+    )
     with pytest.raises(ManualActionError) as exc:
         manual_start(db, None, None, irr, ManualStart(3, via="API"))
     assert exc.value.status_code == HTTPStatus.SERVICE_UNAVAILABLE
 
 
-def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
+def test_manual_start_schedules_a_manual_watcher(db: IrrigationRepository, monkeypatch: pytest.MonkeyPatch) -> None:
     """manual-06: a timed manual start schedules a manual dry-run watcher.
 
     manual-06: a timed manual start schedules the dry-run watcher as ``triggered_by="manual"``
     (so shutdown leaves it on the device timer) — and none without a duration.
     """
-    calls: list[tuple] = []
+    calls: list[tuple[object, ...]] = []
     monkeypatch.setattr(
         manual_control_module,
         "schedule_pump_watcher",
@@ -650,16 +717,16 @@ def test_manual_start_schedules_a_manual_watcher(db, monkeypatch):
 # ── scheduler.py (jobs / timezone) ──────────────────────────────────────────
 
 
-def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch):
+def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch: pytest.MonkeyPatch) -> None:
     """scheduler-20: the health job polls through a monitor view on its own session's repo, then commits (S6)."""
-    events: list = []
+    events: list[tuple[object, ...]] = []
 
     class Monitor:
-        def for_repo(self, repo):
+        def for_repo(self, repo: IrrigationRepository) -> Self:
             events.append(("bind", repo.session))
             return self
 
-        def poll_all(self):
+        def poll_all(self) -> None:
             events.append(("poll",))
 
     session = SimpleNamespace(
@@ -671,16 +738,20 @@ def test_health_monitor_job_binds_the_job_repo_before_polling(monkeypatch):
     assert events == [("bind", session), ("poll",), ("commit",)]
 
 
-def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch):
+def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch: pytest.MonkeyPatch) -> None:
     """scheduler-23: the check job takes a health-monitor view on its session's repo before checking (S6)."""
-    events: list = []
+    events: list[tuple[object, ...]] = []
 
     class Monitor:
-        def for_repo(self, repo):
+        def for_repo(self, repo: IrrigationRepository) -> Self:
             events.append(("bind", repo.session))
             return self
 
-    monkeypatch.setattr(IrrigationService, "check_all_clusters", lambda _self: events.append(("check",)) or [])
+    def check_all_clusters(_self: IrrigationService) -> list[CheckResult]:
+        events.append(("check",))
+        return []
+
+    monkeypatch.setattr(IrrigationService, "check_all_clusters", check_all_clusters)
     session = SimpleNamespace(
         commit=lambda: events.append(("commit",)), rollback=lambda: events.append(("rollback",)), close=lambda: None
     )
@@ -700,18 +771,19 @@ def test_check_job_binds_the_health_monitor_then_checks_and_commits(monkeypatch)
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_unchanged_timezone_preference_is_a_no_op():
+def test_unchanged_timezone_preference_is_a_no_op() -> None:
     """scheduler-22: re-saving the current display timezone does not rebuild jobs or the weather client."""
     set_display_timezone("UTC")
     sentinel = object()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(settings=None, weather_client=sentinel)))
-    scheduler_module.apply_timezone_preference(request, "UTC")
-    scheduler_module.apply_timezone_preference(request, None)
+    stub = cast("Request", request)  # duck-typed: only request.app.state is read
+    scheduler_module.apply_timezone_preference(stub, "UTC")
+    scheduler_module.apply_timezone_preference(stub, None)
     assert request.app.state.weather_client is sentinel
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_scheduler_unknown_timezone_falls_back_to_utc():
+def test_scheduler_unknown_timezone_falls_back_to_utc() -> None:
     """scheduler-19: an unknown preference timezone binds the scheduler to UTC (not any other zone)."""
     app, engine = _make_stubbed_app(bypass_auth=True)
     try:
@@ -725,7 +797,7 @@ def test_scheduler_unknown_timezone_falls_back_to_utc():
 # ── web/context.py ──────────────────────────────────────────────────────────
 
 
-def test_blank_theme_preference_renders_auto(api):
+def test_blank_theme_preference_renders_auto(api: tuple[TestClient, FastAPI]) -> None:
     """web-22: an empty stored theme falls back to ``auto`` in the server-rendered ``data-theme``."""
     client, _ = api
     assert client.put("/api/v1/preferences", json={"theme": ""}).status_code == HTTPStatus.OK
@@ -733,7 +805,7 @@ def test_blank_theme_preference_renders_auto(api):
 
 
 @pytest.mark.parametrize(("value", "expected"), [("true", True), ("TRUE", True), ("false", False), ("", False)])
-def test_is_hx_reads_the_header_value(value, expected):
+def test_is_hx_reads_the_header_value(value: str, *, expected: bool) -> None:
     """web-23: ``is_hx`` is true only when ``HX-Request`` equals "true" (case-insensitive), not merely present."""
     request = Request({"type": "http", "headers": [(b"hx-request", value.encode())]})
     assert is_hx(request) is expected

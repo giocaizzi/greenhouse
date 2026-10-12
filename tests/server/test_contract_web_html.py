@@ -29,17 +29,17 @@ import hashlib
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from types import SimpleNamespace
-from typing import Any
+from typing import TYPE_CHECKING, Protocol, Required, TypedDict, Unpack, cast
 
 import pytest
-from fastapi.routing import _iter_routes_with_context
+from fastapi.routing import APIRoute, _EffectiveRouteContext, _iter_routes_with_context
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 
 from fake_data import FAKE_DEVICE_ID, FAKE_DEVICE_ID_2, FAKE_DEVICE_IP, FAKE_LOCAL_KEY, FAKE_SENSOR_ID
 from golden import FROZEN_TS, assert_golden, assert_golden_json, install_offline_weather
+from greenhouse_core.models import ActivitySource, EntityType, TriggeredBy
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.app import create_app
@@ -56,7 +56,21 @@ from server.conftest import (
     TEST_AUTH_SECRET,
     FakeDeviceWiring,
     _make_stubbed_app,
+    app_of,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Sequence
+    from pathlib import Path
+
+    import httpx
+    import time_machine
+    from fastapi import FastAPI, params
+    from sqlalchemy import Engine
+    from starlette.routing import BaseRoute
+
+    from greenhouse_core.models import EventAction
+    from greenhouse_core.repository import EventDetails
 
 H = 3600
 T = FROZEN_TS  # 2026-04-15T10:00:00Z, a Wednesday
@@ -76,6 +90,33 @@ WEB_ROUTE_COUNT = 85
 # ── Seed ──────────────────────────────────────────────────────────────────────────────────────
 
 
+@dataclass(frozen=True)
+class SeedIds:
+    """The ids ``_seed_inventory`` created, handed to the other seed steps."""
+
+    indoor: int
+    outdoor: int
+    monstera: int
+    alocasia: int
+    loquat: int
+    irr_indoor: int
+    irr_outdoor: int
+    s_monstera: int
+    s_alocasia: int
+    s_loquat: int
+    s_ambient: int
+
+
+class MakeClient(Protocol):
+    """The ``make_client`` factory: a fresh seeded app (``build_app`` options) and a client on it."""
+
+    def __call__(
+        self, *, bypass_auth: bool = True, seeded: bool = True, **settings_override: object
+    ) -> tuple[FastAPI, TestClient]:
+        """Build the app and its client."""
+        ...
+
+
 def seed_greenhouse(repo: IrrigationRepository) -> None:
     """Populate a deterministic greenhouse. Every timestamp is derived from ``T``.
 
@@ -90,7 +131,7 @@ def seed_greenhouse(repo: IrrigationRepository) -> None:
     _seed_schedules_and_settings(repo, ids)
 
 
-def _seed_inventory(repo: IrrigationRepository) -> SimpleNamespace:
+def _seed_inventory(repo: IrrigationRepository) -> SeedIds:
     """Clusters, plants, irrigators and sensors, in id order; return their ids."""
     indoor = repo.add_cluster("Indoor Jungle", location="Living room", environment="indoor")
     outdoor = repo.add_cluster("Balcony Orchard", location="Balcony", environment="outdoor")
@@ -154,7 +195,7 @@ def _seed_inventory(repo: IrrigationRepository) -> SimpleNamespace:
     )
     s_ambient = repo.add_sensor(indoor, "fake_tuya_sensor_00000004", "Room Climate", "tuya.tr301z", {})
 
-    return SimpleNamespace(
+    return SeedIds(
         indoor=indoor,
         outdoor=outdoor,
         monstera=monstera,
@@ -169,7 +210,7 @@ def _seed_inventory(repo: IrrigationRepository) -> SimpleNamespace:
     )
 
 
-def _seed_readings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_readings(repo: IrrigationRepository, ids: SeedIds) -> None:
     """Two-hourly readings for every probe over the last 48 h."""
     s_monstera, s_alocasia, s_loquat, s_ambient = ids.s_monstera, ids.s_alocasia, ids.s_loquat, ids.s_ambient
     # Readings every 2 h over the last 48 h; newest 30 min ago (fresh: < SENSOR_READING_STALE_SECONDS).
@@ -209,21 +250,50 @@ def _seed_readings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
             )
 
 
-def _seed_irrigation_history(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_event(
+    repo: IrrigationRepository, irrigator_id: int, action: str, triggered_by: str, **details: Unpack[EventDetails]
+) -> None:
+    """Seed one irrigation event; ``off`` / ``schedule_updated`` are legacy actions the enum no longer lists."""
+    repo.add_irrigation_event(irrigator_id, cast("EventAction", action), TriggeredBy(triggered_by), **details)
+
+
+def _source(value: str) -> ActivitySource:
+    """A seeded ``source`` column value; ``scheduler`` / ``web`` predate the ActivitySource vocabulary."""
+    return cast("ActivitySource", value)
+
+
+class SeedReason(TypedDict, total=False):
+    """One reason of a seeded decision payload."""
+
+    code: Required[str]
+    message: Required[str]
+    severity: Required[str]
+    duration_delta: int
+
+
+def _seed_irrigation_history(repo: IrrigationRepository, ids: SeedIds) -> None:
     """Starts, stops and a schedule update on both irrigators."""
     irr_indoor, irr_outdoor = ids.irr_indoor, ids.irr_outdoor
     # Irrigation history.
-    repo.add_irrigation_event(irr_indoor, "start", "auto", duration_minutes=3, notes="Scheduled", timestamp=T - 30 * H)
-    repo.add_irrigation_event(irr_indoor, "off", "auto", timestamp=T - 30 * H + 180)
-    repo.add_irrigation_event(
-        irr_indoor, "start", "manual", duration_minutes=2, notes="Manual start via web UI (2 min)", timestamp=T - 8 * H
+    _seed_event(repo, irr_indoor, "start", "auto", duration_minutes=3, notes="Scheduled", timestamp=T - 30 * H)
+    _seed_event(repo, irr_indoor, "off", "auto", timestamp=T - 30 * H + 180)
+    _seed_event(
+        repo,
+        irr_indoor,
+        "start",
+        "manual",
+        duration_minutes=2,
+        notes="Manual start via web UI (2 min)",
+        timestamp=T - 8 * H,
     )
-    repo.add_irrigation_event(irr_indoor, "off", "manual", notes="Manual stop via web UI", timestamp=T - 8 * H + 120)
-    repo.add_irrigation_event(irr_outdoor, "start", "auto", duration_minutes=5, timestamp=T - 20 * H)
-    repo.add_irrigation_event(irr_outdoor, "schedule_updated", "auto", notes="interval 24h", timestamp=T - 20 * H + 5)
+    _seed_event(repo, irr_indoor, "off", "manual", notes="Manual stop via web UI", timestamp=T - 8 * H + 120)
+    _seed_event(repo, irr_outdoor, "start", "auto", duration_minutes=5, timestamp=T - 20 * H)
+    _seed_event(repo, irr_outdoor, "schedule_updated", "auto", notes="interval 24h", timestamp=T - 20 * H + 5)
 
 
-def _decision_payload(cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[dict]) -> dict:
+def _decision_payload(
+    cluster_id: int, evaluated_at: int, action: str, minutes: int, reasons: list[SeedReason]
+) -> dict[str, object]:
     """The decision payload a seeded ``DecisionLog`` row carries."""
     return {
         "cluster_id": cluster_id,
@@ -236,14 +306,14 @@ def _decision_payload(cluster_id: int, evaluated_at: int, action: str, minutes: 
     }
 
 
-def _seed_decisions(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_decisions(repo: IrrigationRepository, ids: SeedIds) -> None:
     """Four decision-log rows across both clusters."""
     indoor, outdoor = ids.indoor, ids.outdoor
     # Decision log (newest first in the UI).
-    dry = {"code": "sensor_very_dry", "message": "Alocasia amazonica soil at 8%", "severity": "critical"}
-    hot = {"code": "temp_high", "message": "Warm room", "severity": "warning", "duration_delta": 1}
-    ok = {"code": "sensor_adequate", "message": "Soil moisture adequate", "severity": "info"}
-    cool = {"code": "cooldown", "message": "Irrigated 1h ago", "severity": "info"}
+    dry: SeedReason = {"code": "sensor_very_dry", "message": "Alocasia amazonica soil at 8%", "severity": "critical"}
+    hot: SeedReason = {"code": "temp_high", "message": "Warm room", "severity": "warning", "duration_delta": 1}
+    ok: SeedReason = {"code": "sensor_adequate", "message": "Soil moisture adequate", "severity": "info"}
+    cool: SeedReason = {"code": "cooldown", "message": "Irrigated 1h ago", "severity": "info"}
     for cluster_id, at, action, minutes, reasons, actuated in (
         (indoor, T - 30 * H, "irrigate", 3, [dry, hot], True),
         (indoor, T - 8 * H, "irrigate", 2, [dry], True),
@@ -260,23 +330,23 @@ def _seed_decisions(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
             primary_code=reasons[0]["code"],
             reason_text="; ".join(r["message"] for r in reasons),
             payload=_decision_payload(cluster_id, at, action, minutes, reasons),
-            triggered_by="auto",
+            triggered_by=TriggeredBy.AUTO,
             actuated=actuated,
         )
 
 
-def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_alerts(repo: IrrigationRepository, ids: SeedIds) -> None:
     """One open, one acknowledged and one resolved alert."""
     indoor, outdoor, alocasia, s_alocasia = ids.indoor, ids.outdoor, ids.alocasia, ids.s_alocasia
     # Alerts: one open, one acknowledged, one resolved.
     repo.upsert_alert(
         f"soil_dry:plant:{alocasia}",
-        "health",
+        ActivitySource.HEALTH,
         "soil_dry",
         "Alocasia is very dry",
         "Soil moisture 8% is below the critical threshold.",
         severity="critical",
-        entity_type="plant",
+        entity_type=EntityType.PLANT,
         entity_id=alocasia,
         cluster_id=indoor,
         plant_id=alocasia,
@@ -284,12 +354,12 @@ def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
     )
     acked = repo.upsert_alert(
         f"battery_low:sensor:{s_alocasia}",
-        "health",
+        ActivitySource.HEALTH,
         "battery_low",
         "Alocasia Probe battery low",
         "Replace the batteries soon.",
         severity="warning",
-        entity_type="sensor",
+        entity_type=EntityType.SENSOR,
         entity_id=s_alocasia,
         cluster_id=indoor,
         seen_at=T - 5 * H,
@@ -297,12 +367,12 @@ def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
     acked.status, acked.acknowledged_at = "acknowledged", T - 4 * H
     resolved = repo.upsert_alert(
         f"check_failed:cluster:{outdoor}",
-        "scheduler",
+        _source("scheduler"),
         "check_failed",
         "Check failed for Balcony Orchard",
         "Transient error during the scheduled check.",
         severity="warning",
-        entity_type="cluster",
+        entity_type=EntityType.CLUSTER,
         entity_id=outdoor,
         cluster_id=outdoor,
         seen_at=T - 26 * H,
@@ -310,7 +380,7 @@ def _seed_alerts(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
     resolved.status, resolved.resolved_at = "resolved", T - 25 * H
 
 
-def _seed_activity_and_health(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_activity_and_health(repo: IrrigationRepository, ids: SeedIds) -> None:
     """Activity timeline rows and the Monstera's daily health snapshots."""
     indoor, outdoor, alocasia, irr_indoor, monstera = (
         ids.indoor,
@@ -327,7 +397,14 @@ def _seed_activity_and_health(repo: IrrigationRepository, ids: SimpleNamespace) 
         (T - 2 * H, "health", "plant", alocasia, "critical", "soil_dry", "Alocasia is very dry"),
     ):
         repo.add_activity_event(
-            source, entity_type, code, message, entity_id=entity_id, severity=severity, timestamp=at, payload={"k": 1}
+            _source(source),
+            EntityType(entity_type),
+            code,
+            message,
+            entity_id=entity_id,
+            severity=severity,
+            timestamp=at,
+            payload={"k": 1},
         )
 
     # Daily plant-health snapshots (Monstera) for the hero ring / timeline.
@@ -347,7 +424,7 @@ def _seed_activity_and_health(repo: IrrigationRepository, ids: SimpleNamespace) 
         )
 
 
-def _seed_schedules_and_settings(repo: IrrigationRepository, ids: SimpleNamespace) -> None:
+def _seed_schedules_and_settings(repo: IrrigationRepository, ids: SeedIds) -> None:
     """Watering window, vacations, configs and preferences."""
     indoor, outdoor = ids.indoor, ids.outdoor
     # Watering window on the outdoor cluster: 06-09, Mon/Wed/Fri.
@@ -388,6 +465,7 @@ def _seeded_template() -> sqlite3.Connection:
     raw = engine.raw_connection()
     try:
         snapshot = sqlite3.connect(":memory:", check_same_thread=False)
+        assert raw.driver_connection is not None
         raw.driver_connection.backup(snapshot)
     finally:
         raw.close()
@@ -395,7 +473,7 @@ def _seeded_template() -> sqlite3.Connection:
     return snapshot
 
 
-def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_override):
+def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_override: object) -> tuple[FastAPI, Engine]:
     """A fresh stubbed app (same wiring as ``_make_stubbed_app``) on a copy of the seeded DB."""
     engine = create_engine(
         "sqlite://",
@@ -406,10 +484,11 @@ def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_overr
     if seeded:
         raw = engine.raw_connection()
         try:
+            assert raw.driver_connection is not None
             _seeded_template().backup(raw.driver_connection)
         finally:
             raw.close()
-    base = {
+    base: dict[str, object] = {
         "db_url": "sqlite://",
         "enable_scheduler": False,
         "auth_enabled": True,
@@ -433,7 +512,7 @@ def build_app(*, bypass_auth: bool = True, seeded: bool = True, **settings_overr
 
 
 @pytest.fixture
-def web_env(clean_env, frozen_clock):
+def web_env(clean_env: Path, frozen_clock: time_machine.Traveller) -> time_machine.Traveller:
     """Hermetic + frozen environment; builds the shared seeded template inside it."""
     del clean_env  # requested only for its side effect
     _seeded_template()
@@ -441,13 +520,15 @@ def web_env(clean_env, frozen_clock):
 
 
 @pytest.fixture
-def make_client(web_env):
+def make_client(web_env: time_machine.Traveller) -> Iterator[MakeClient]:
     """Factory: a *fresh* seeded app + TestClient per call (used by every mutating case)."""
     del web_env  # requested only for its side effect
-    engines = []
+    engines: list[Engine] = []
 
-    def _make(**kwargs) -> tuple[Any, TestClient]:
-        application, engine = build_app(**kwargs)
+    def _make(
+        *, bypass_auth: bool = True, seeded: bool = True, **settings_override: object
+    ) -> tuple[FastAPI, TestClient]:
+        application, engine = build_app(bypass_auth=bypass_auth, seeded=seeded, **settings_override)
         engines.append(engine)
         return application, TestClient(application, raise_server_exceptions=False)
 
@@ -456,10 +537,10 @@ def make_client(web_env):
         engine.dispose()
 
 
-_SHARED: dict[str, Any] = {}
+_SHARED: dict[str, tuple[FastAPI, Engine]] = {}
 
 
-def reset_shared_app() -> Any:
+def reset_shared_app() -> FastAPI:
     """The per-process read-only app, reset to the freshly-seeded state.
 
     Building an app costs ~0.5 s (``FastApiMCP`` renders the OpenAPI schema), so the GET sweep
@@ -469,10 +550,11 @@ def reset_shared_app() -> Any:
     ``create_app`` applies them for this seed (prefs timezone ``UTC``, not paused).
     """
     if "app" not in _SHARED:
-        _SHARED["app"], _SHARED["engine"] = build_app()
-    application, engine = _SHARED["app"], _SHARED["engine"]
+        _SHARED["app"] = build_app()
+    application, engine = _SHARED["app"]
     raw = engine.raw_connection()
     try:
+        assert raw.driver_connection is not None
         _seeded_template().backup(raw.driver_connection)
     finally:
         raw.close()
@@ -485,7 +567,7 @@ def reset_shared_app() -> Any:
 
 
 @pytest.fixture
-def seeded_get_client(web_env) -> TestClient:
+def seeded_get_client(web_env: time_machine.Traveller) -> TestClient:
     """TestClient on the shared app, freshly reset to the seeded state."""
     del web_env  # requested only for its side effect
     return TestClient(reset_shared_app(), raise_server_exceptions=False)
@@ -509,7 +591,7 @@ def _digest_jwts(value: str) -> str:
     return _JWT_RE.sub(lambda m: f"<JWT sha256={hashlib.sha256(m.group().encode()).hexdigest()}>", value)
 
 
-def pinned_headers(resp) -> dict[str, str]:
+def pinned_headers(resp: httpx.Response) -> dict[str, str]:
     """Headers that are part of the contract: content type, redirects, cookies, every ``HX-*``."""
     out = {name: resp.headers[name] for name in _PINNED_HEADERS if name in resp.headers}
     if "set-cookie" in out:
@@ -520,7 +602,7 @@ def pinned_headers(resp) -> dict[str, str]:
     return dict(sorted(out.items()))
 
 
-def render_response(method: str, url: str, request_headers: dict[str, str], resp) -> str:
+def render_response(method: str, url: str, request_headers: dict[str, str], resp: httpx.Response) -> str:
     """Golden text: request line, status, pinned headers, blank line, full body."""
     lines = [f"<!-- {method} {url} -->"]
     for name, value in sorted(request_headers.items()):
@@ -540,17 +622,18 @@ def render_response(method: str, url: str, request_headers: dict[str, str], resp
 class TemplateSpy:
     """Records ``(template name, sorted context keys)`` for every ``TemplateResponse`` call."""
 
-    calls: list[list] = field(default_factory=list)
+    calls: list[list[object]] = field(default_factory=list)
 
-    def install(self, monkeypatch) -> None:
+    def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Wrap ``TemplateResponse`` so every render records its template and context keys."""
-        original = templates.TemplateResponse
+        original: Callable[..., object] = templates.TemplateResponse  # forwarded verbatim
 
-        def spy(*args, **kwargs):
+        def spy(*args: object, **kwargs: object) -> object:
             # Signature: TemplateResponse(request, name, context=None, ...) — positional or keyword.
             positional = dict(zip(("request", "name", "context"), args, strict=False))
             name = kwargs.get("name", positional.get("name"))
             context = kwargs.get("context", positional.get("context")) or {}
+            assert isinstance(context, dict)
             self.calls.append([name, sorted(context)])
             return original(*args, **kwargs)
 
@@ -560,34 +643,51 @@ class TemplateSpy:
 # ── 1. Route inventory ────────────────────────────────────────────────────────────────────────
 
 
-def web_routes(routes) -> list:
+def web_routes(routes: Sequence[BaseRoute]) -> list[APIRoute | _EffectiveRouteContext]:
     """Flatten (FastAPI >= 0.140 keeps included routers lazy) and keep the web-UI routes, in order."""
-    out = []
+    out: list[APIRoute | _EffectiveRouteContext] = []
     for original, context in _iter_routes_with_context(routes):
         route = context if context is not None else original
         endpoint = getattr(route, "endpoint", None)
         if endpoint is not None and endpoint.__module__.startswith("greenhouse_server.web.routes."):
+            assert isinstance(route, (APIRoute, _EffectiveRouteContext))
             out.append(route)
     return out
 
 
-def _route_inventory(application) -> list[dict]:
+def _methods(route: APIRoute | _EffectiveRouteContext) -> set[str]:
+    """A web route's methods (always set on a resolved route)."""
+    assert route.methods is not None
+    return route.methods
+
+
+def _dependency_name(dep: params.Depends) -> str:
+    """The name of a route dependency's callable (always set on a route dependency)."""
+    assert dep.dependency is not None
+    return dep.dependency.__name__
+
+
+def _route_row(route: APIRoute | _EffectiveRouteContext) -> dict[str, object]:
+    """One web route as its inventory row."""
+    endpoint = route.endpoint
+    assert endpoint is not None
+    return {
+        "methods": sorted(_methods(route)),
+        "path": route.path,
+        "name": route.name,
+        "endpoint": f"{endpoint.__module__}.{endpoint.__qualname__}",
+        "include_in_schema": route.include_in_schema,
+        "dependencies": [_dependency_name(d) for d in route.dependencies],
+    }
+
+
+def _route_inventory(application: FastAPI) -> list[dict[str, object]]:
     """Every route the web router contributes to ``application``, in registration order."""
-    return [
-        {
-            "methods": sorted(route.methods),
-            "path": route.path,
-            "name": route.name,
-            "endpoint": f"{route.endpoint.__module__}.{route.endpoint.__qualname__}",
-            "include_in_schema": route.include_in_schema,
-            "dependencies": [d.dependency.__name__ for d in route.dependencies],
-        }
-        for route in web_routes(application.routes)
-    ]
+    return [_route_row(route) for route in web_routes(application.routes)]
 
 
 @pytest.mark.usefixtures("web_env")
-def test_web_route_inventory():
+def test_web_route_inventory() -> None:
     """Routes, methods, endpoint names, auth dependency and include_in_schema — in registration order.
 
     Order is behavior (first match wins, e.g. ``/clusters/new`` before ``/clusters/{cluster_id}``).
@@ -613,7 +713,7 @@ class GetCase:
 
     name: str  # golden file stem; also the template-context key
     url: str
-    headers: dict = field(default_factory=dict)
+    headers: dict[str, str] = field(default_factory=dict)
 
 
 C = GetCase
@@ -752,26 +852,27 @@ GET_CASES: tuple[GetCase, ...] = (
 )
 
 
-def _run_get(client: TestClient, case: GetCase):
-    return client.get(case.url, headers=case.headers, follow_redirects=False)
+def _run_get(client: TestClient, case: GetCase) -> httpx.Response:
+    resp: httpx.Response = client.get(case.url, headers=case.headers, follow_redirects=False)
+    return resp
 
 
-def test_get_cases_are_unique():
+def test_get_cases_are_unique() -> None:
     """Get cases are unique."""
     names = [c.name for c in GET_CASES]
     assert len(names) == len(set(names))
 
 
 @pytest.mark.parametrize("case", GET_CASES, ids=lambda c: c.name)
-def test_get_route_html_golden(case, seeded_get_client):
+def test_get_route_html_golden(case: GetCase, seeded_get_client: TestClient) -> None:
     """Full response (status, pinned headers, body) of one GET against the seeded greenhouse."""
     resp = _run_get(seeded_get_client, case)
     assert_golden(f"web/get/{case.name}.html", render_response("GET", case.url, case.headers, resp))
 
 
-def test_get_sweep_covers_every_web_get_route():
+def test_get_sweep_covers_every_web_get_route() -> None:
     """Every GET route of the web router is hit by at least one case (path template match)."""
-    get_paths = [r.path for r in web_routes(web_router.routes) if "GET" in r.methods]
+    get_paths = [r.path for r in web_routes(web_router.routes) if "GET" in _methods(r)]
     case_paths = [c.url.split("?")[0] for c in GET_CASES]
     for path in get_paths:
         pattern = "^" + re.sub(r"\{[^}]+\}", "[^/]+", path) + "$"
@@ -797,7 +898,9 @@ def _no_open_alerts(repo: IrrigationRepository) -> None:
 
 def _sixty_activity_events(repo: IrrigationRepository) -> None:
     for i in range(60):
-        repo.add_activity_event("web", "cluster", "note", f"Event {i}", entity_id=INDOOR, timestamp=T - 3 * H - i * 60)
+        repo.add_activity_event(
+            _source("web"), EntityType.CLUSTER, "note", f"Event {i}", entity_id=INDOOR, timestamp=T - 3 * H - i * 60
+        )
 
 
 VARIANTS = (
@@ -814,10 +917,17 @@ VARIANTS = (
 
 
 @pytest.mark.parametrize(("name", "url", "setup", "running"), VARIANTS, ids=[v[0] for v in VARIANTS])
-def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
+def test_get_variant_html_golden(
+    name: str,
+    url: str,
+    setup: Callable[[IrrigationRepository], None] | None,
+    seeded_get_client: TestClient,
+    *,
+    running: bool,
+) -> None:
     """Same golden format as the sweep, after a state tweak (or with the scheduler running, paused)."""
     if setup is not None:
-        session = seeded_get_client.app.state.session_factory()
+        session = app_of(seeded_get_client).state.session_factory()
         try:
             setup(IrrigationRepository(session))
             session.commit()
@@ -837,11 +947,11 @@ def test_get_variant_html_golden(name, url, setup, running, seeded_get_client):
 
 
 @pytest.mark.usefixtures("web_env")
-def test_template_context_golden(monkeypatch):
+def test_template_context_golden(monkeypatch: pytest.MonkeyPatch) -> None:
     """``{case: [[template, sorted context keys], …]}`` for the whole GET sweep (reset app per case)."""
     spy = TemplateSpy()
     spy.install(monkeypatch)
-    observed: dict[str, list] = {}
+    observed: dict[str, list[list[object]]] = {}
     for case in GET_CASES:
         client = TestClient(reset_shared_app(), raise_server_exceptions=False)
         spy.calls.clear()

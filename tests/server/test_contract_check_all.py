@@ -21,6 +21,7 @@ Golden: ``tests/golden/orchestration/check_all.json``.
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import pytest
 from sqlalchemy.orm import Session
@@ -31,13 +32,21 @@ from greenhouse_server.services.irrigation import CHECK_FAILED_ALERT_CODE, Irrig
 from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    import time_machine
+
+    from greenhouse_server.services.irrigation import CheckResult
+
 
 class Boom(RuntimeError):  # noqa: N818 — the name is in the pinned golden (repr in alert text)
     """The injected failure (a distinct type so the golden shows exactly where it came from)."""
 
 
 @pytest.fixture
-def three_dry_clusters(clean_env, frozen_clock):
+def three_dry_clusters(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[Pipeline]:
     """A pipeline with three dry, fully wired clusters, marked so only the check's writes count."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
@@ -49,30 +58,30 @@ def three_dry_clusters(clean_env, frozen_clock):
 
 
 @pytest.fixture
-def tx_log(monkeypatch):
+def tx_log(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Record every ``Session.commit`` / ``Session.rollback`` in call order."""
     log: list[str] = []
     real_commit, real_rollback = Session.commit, Session.rollback
 
-    def commit(self):
+    def commit(self: Session) -> None:
         log.append("commit")
-        return real_commit(self)
+        real_commit(self)
 
-    def rollback(self):
+    def rollback(self: Session) -> None:
         log.append("rollback")
-        return real_rollback(self)
+        real_rollback(self)
 
     monkeypatch.setattr(Session, "commit", commit)
     monkeypatch.setattr(Session, "rollback", rollback)
     return log
 
 
-def _crash_after_check(monkeypatch, tx_log: list[str], failing: set[int]) -> dict:
+def _crash_after_check(monkeypatch: pytest.MonkeyPatch, tx_log: list[str], failing: set[int]) -> dict[str, set[int]]:
     """Make ``check_cluster`` run fully, then raise for the cluster ids in ``failing``."""
     original = IrrigationService.check_cluster
     state = {"failing": failing}
 
-    def flaky(self, cluster_id):
+    def flaky(self: IrrigationService, cluster_id: int) -> CheckResult:
         tx_log.append(f"check:{cluster_id}")
         result = original(self, cluster_id)
         if cluster_id in state["failing"]:
@@ -84,7 +93,7 @@ def _crash_after_check(monkeypatch, tx_log: list[str], failing: set[int]) -> dic
     return state
 
 
-def _summary(p: Pipeline, tx_log: list[str]) -> dict:
+def _summary(p: Pipeline, tx_log: list[str]) -> dict[str, Any]:
     observed = p.observed()
     db = observed["db_writes"]
     return {
@@ -103,7 +112,9 @@ def _summary(p: Pipeline, tx_log: list[str]) -> dict:
     }
 
 
-def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_clusters, tx_log, monkeypatch):
+def test_crash_after_writes_rolls_back_only_the_failing_cluster(
+    three_dry_clusters: Pipeline, tx_log: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """I-ii (1)+(3): Bravo crashes after actuating; Alpha's and Charlie's start events survive."""
     p = three_dry_clusters
     _crash_after_check(monkeypatch, tx_log, failing={2})
@@ -142,7 +153,9 @@ def test_crash_after_writes_rolls_back_only_the_failing_cluster(three_dry_cluste
     assert_golden_json("orchestration/check_all_crash_after_writes.json", summary)
 
 
-def test_crash_in_first_cluster_does_not_block_later_ones(three_dry_clusters, tx_log, monkeypatch):
+def test_crash_in_first_cluster_does_not_block_later_ones(
+    three_dry_clusters: Pipeline, tx_log: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """I-ii (2): a crash in the first cluster still lets the later clusters run and commit."""
     p = three_dry_clusters
     _crash_after_check(monkeypatch, tx_log, failing={1})
@@ -154,7 +167,9 @@ def test_crash_in_first_cluster_does_not_block_later_ones(three_dry_clusters, tx
     assert [a["cluster_id"] for a in summary["alerts"]] == [1]
 
 
-def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
+def test_check_failed_alert_lifecycle(
+    three_dry_clusters: Pipeline, tx_log: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The next successful check resolves ``check_failed``; a later crash re-opens the same row."""
     p = three_dry_clusters
     state = _crash_after_check(monkeypatch, tx_log, failing={2})
@@ -178,7 +193,9 @@ def test_check_failed_alert_lifecycle(three_dry_clusters, tx_log, monkeypatch):
     assert_golden_json("orchestration/check_all_alert_lifecycle.json", _summary(p, tx_log))
 
 
-def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, tx_log, monkeypatch):
+def test_scheduler_check_job_isolates_clusters_the_same_way(
+    three_dry_clusters: Pipeline, tx_log: list[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """I-ii (4): the scheduler's ``_check_job`` body gives the same per-cluster isolation."""
     p = three_dry_clusters
     assert scheduler._app is p.app  # noqa: SLF001 — pins the module global init_scheduler rebinds per create_app
@@ -211,7 +228,9 @@ def test_scheduler_check_job_isolates_clusters_the_same_way(three_dry_clusters, 
     assert_golden_json("orchestration/check_all_scheduler_job.json", summary)
 
 
-def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_dry_clusters, tx_log):
+def test_scheduler_check_job_without_registry_reports_errors_but_commits(
+    three_dry_clusters: Pipeline, tx_log: list[str]
+) -> None:
     """With no registry on ``app.state`` (degraded mode) the job evaluates and logs, but cannot actuate."""
     p = three_dry_clusters
     assert getattr(p.app.state, "device_registry", None) is None
@@ -227,10 +246,12 @@ def test_scheduler_check_job_without_registry_reports_errors_but_commits(three_d
     assert summary["transactions"] == ["commit", "commit", "commit", "commit"]
 
 
-def test_scheduler_check_job_swallows_a_total_failure(three_dry_clusters, tx_log, monkeypatch, caplog):
+def test_scheduler_check_job_swallows_a_total_failure(
+    three_dry_clusters: Pipeline, tx_log: list[str], monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """If ``check_all_clusters`` itself raises, the job rolls back, logs and returns (never raises)."""
 
-    def explode(_self):
+    def explode(_self: IrrigationService) -> NoReturn:
         msg = "whole check exploded"
         raise Boom(msg)
 

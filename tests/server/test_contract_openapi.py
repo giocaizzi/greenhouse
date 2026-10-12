@@ -28,11 +28,17 @@ import re
 import typing
 
 import pytest
-from fastapi.routing import APIRoute, _iter_routes_with_context
+from fastapi.routing import APIRoute, _EffectiveRouteContext, _iter_routes_with_context
 from starlette.routing import Mount
 
 from golden import assert_golden, assert_golden_json, install_offline_weather
 from server.conftest import _make_stubbed_app
+
+if typing.TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from fastapi import FastAPI
 
 # sha256 of ``json.dumps(app.openapi(), sort_keys=True)``, first recorded at the
 # original baseline (main @ a1b2622, hence "PHASE0"); re-recorded only by
@@ -56,7 +62,7 @@ def _normalize_version(text: str) -> str:
 
 
 @pytest.fixture
-def contract_app(clean_env):
+def contract_app(clean_env: Path) -> Iterator[FastAPI]:
     """A real-auth app (no dependency overrides on the auth gate) on in-memory SQLite."""
     del clean_env  # requested only for its side effect
     application, engine = _make_stubbed_app(bypass_auth=False)
@@ -65,7 +71,7 @@ def contract_app(clean_env):
     engine.dispose()
 
 
-def _type_name(tp: typing.Any) -> str | None:
+def _type_name(tp: object) -> str | None:
     """Readable, module-free rendering of a response_model (``list[ClusterResponse]``)."""
     if tp is None:
         return None
@@ -76,15 +82,17 @@ def _type_name(tp: typing.Any) -> str | None:
     return getattr(tp, "__name__", repr(tp))
 
 
-def _callable_name(fn: typing.Any) -> str:
+def _callable_name(fn: object) -> str:
     return getattr(fn, "__name__", type(fn).__name__)
 
 
-def _route_rows(app) -> list[dict]:
-    rows: list[dict] = []
+def _route_rows(app: FastAPI) -> list[dict[str, typing.Any]]:
+    rows: list[dict[str, typing.Any]] = []
     for original, context in _iter_routes_with_context(app.routes):
         route = context if context is not None else original
         if isinstance(original, APIRoute):
+            assert isinstance(route, (APIRoute, _EffectiveRouteContext))
+            assert route.methods is not None
             response_class = route.response_class
             response_class = getattr(response_class, "value", response_class)  # unwrap DefaultPlaceholder
             rows.append(
@@ -102,6 +110,7 @@ def _route_rows(app) -> list[dict]:
                 }
             )
         elif isinstance(original, Mount):
+            assert isinstance(route, Mount)
             rows.append(
                 {
                     "kind": "Mount",
@@ -123,19 +132,19 @@ def _route_rows(app) -> list[dict]:
     return rows
 
 
-def test_openapi_document_matches_golden(contract_app):
+def test_openapi_document_matches_golden(contract_app: FastAPI) -> None:
     """The full OpenAPI document, key order preserved, equals the golden."""
     text = json.dumps(contract_app.openapi(), indent=1, ensure_ascii=False) + "\n"
     assert_golden("contracts/openapi.json", _normalize_version(text))
 
 
-def test_openapi_matches_phase0_baseline_fingerprint(contract_app):
+def test_openapi_matches_phase0_baseline_fingerprint(contract_app: FastAPI) -> None:
     """The document still hashes to the recorded ``PHASE0_OPENAPI_SHA256`` fingerprint."""
     digest = hashlib.sha256(json.dumps(contract_app.openapi(), sort_keys=True).encode()).hexdigest()
     assert digest == PHASE0_OPENAPI_SHA256
 
 
-def test_openapi_header_fields(contract_app):
+def test_openapi_header_fields(contract_app: FastAPI) -> None:
     """Title, hard-coded version, OpenAPI version and declared tag order are frozen."""
     spec = contract_app.openapi()
     assert spec["info"]["title"] == "Greenhouse API"
@@ -159,7 +168,7 @@ def test_openapi_header_fields(contract_app):
     ]
 
 
-def test_operation_id_is_route_function_name(contract_app):
+def test_operation_id_is_route_function_name(contract_app: FastAPI) -> None:
     """``generate_unique_id_function=lambda r: r.name`` → operationId == function name."""
     by_key = {
         (method.upper(), path): op["operationId"]
@@ -178,12 +187,12 @@ def test_operation_id_is_route_function_name(contract_app):
     assert len(contract_app.openapi()["paths"]) == API_PATH_COUNT
 
 
-def test_route_table_matches_golden(contract_app):
+def test_route_table_matches_golden(contract_app: FastAPI) -> None:
     """Every route in registration order (API + web + mounts + MCP) equals the golden."""
     assert_golden_json("contracts/routes.json", _route_rows(contract_app))
 
 
-def test_route_table_counts(contract_app):
+def test_route_table_counts(contract_app: FastAPI) -> None:
     """Headline counts: 84 schema operations, 85 web routes."""
     rows = _route_rows(contract_app)
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]

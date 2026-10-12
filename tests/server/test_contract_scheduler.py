@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 from http import HTTPStatus
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,7 +33,7 @@ import greenhouse_server.web.routes.analytics as web_analytics
 from golden import FROZEN_TS, assert_golden_json
 from greenhouse_core.constants import LEAK_ALERT_CODE
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import PlantHealthDaily
+from greenhouse_core.models import ActivitySource, EntityType, PlantHealthDaily, TriggeredBy
 from greenhouse_server import scheduler as sched
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
@@ -45,12 +46,22 @@ from greenhouse_server.services.sync import SyncService
 from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    import time_machine
+    from apscheduler.job import Job
+    from apscheduler.schedulers.background import BackgroundScheduler
+
+    from greenhouse_core.repository import IrrigationRepository
+
 HOUR = 3600
 CORE_JOB_ORDER = ["sensor_sync", "check_all", "plant_health_snapshot", "sensor_anomaly", "device_health_monitor"]
 
 
 @pytest.fixture
-def p(clean_env, frozen_clock):
+def p(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[Pipeline]:
     """A fresh pipeline harness; the process-wide scheduler is stopped afterwards if a test started it."""
     del clean_env, frozen_clock  # requested only for their side effects
     pipeline = Pipeline()
@@ -61,7 +72,7 @@ def p(clean_env, frozen_clock):
 
 
 @pytest.fixture
-def paused_running_scheduler(p):
+def paused_running_scheduler(p: Pipeline) -> Iterator[BackgroundScheduler]:
     """Start the process-wide scheduler without letting it fire anything."""
     del p  # requested only for its side effect
     sched.start_scheduler(paused=True)
@@ -71,7 +82,7 @@ def paused_running_scheduler(p):
         sched.stop_scheduler()
 
 
-def _job_view(job) -> dict:
+def _job_view(job: Job) -> dict[str, object]:
     trigger_tz = getattr(job.trigger, "timezone", None)
     return {
         "id": job.id,
@@ -89,7 +100,7 @@ def _job_view(job) -> dict:
     }
 
 
-def _registry_view() -> dict:
+def _registry_view() -> dict[str, Any]:
     return {
         "jobs": [_job_view(j) for j in bg_scheduler.get_jobs()],
         "get_jobs": sched.get_jobs(),
@@ -109,14 +120,14 @@ def _prefs_paused(p: Pipeline) -> bool:
 
 
 @pytest.mark.usefixtures("p")
-def test_registered_jobs_golden():
+def test_registered_jobs_golden() -> None:
     """The five built-in jobs, in registration order, with their triggers and defaults."""
     view = _registry_view()
     assert [j["id"] for j in view["jobs"]] == CORE_JOB_ORDER
     assert_golden_json("orchestration/scheduler_registry.json", view)
 
 
-def test_init_scheduler_is_idempotent(p):
+def test_init_scheduler_is_idempotent(p: Pipeline) -> None:
     """Calling ``init_scheduler`` again for the same app yields the identical job set (no duplicates)."""
     before = _registry_view()
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
@@ -126,7 +137,7 @@ def test_init_scheduler_is_idempotent(p):
 
 
 @pytest.mark.usefixtures("p", "clean_env")
-def test_init_scheduler_rebinds_the_module_app():
+def test_init_scheduler_rebinds_the_module_app() -> None:
     """A second ``create_app`` takes over ``scheduler._app`` (the trap behind the lazy imports)."""
     second = Pipeline()
     try:
@@ -136,7 +147,7 @@ def test_init_scheduler_rebinds_the_module_app():
         second.close()
 
 
-def test_every_job_has_safe_defaults_stopped_and_running(p):
+def test_every_job_has_safe_defaults_stopped_and_running(p: Pipeline) -> None:
     """``max_instances=1``, ``coalesce=True``, ``misfire_grace_time=None`` on core *and* ad-hoc jobs."""
     p.app.state.device_registry = p.wiring.registry
     irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — no public entry point; ad-hoc job, stopped scheduler
@@ -153,7 +164,7 @@ def test_every_job_has_safe_defaults_stopped_and_running(p):
 
 
 @pytest.mark.usefixtures("p", "paused_running_scheduler")
-def test_running_scheduler_reports_next_run_times():
+def test_running_scheduler_reports_next_run_times() -> None:
     """On a running scheduler every core job has a ``next_run_time`` (frozen clock → exact values)."""
     assert_golden_json(
         "orchestration/scheduler_registry_running.json",
@@ -161,7 +172,7 @@ def test_running_scheduler_reports_next_run_times():
     )
 
 
-def test_timezone_preference_rebuilds_cron_jobs_and_keeps_pause(p):
+def test_timezone_preference_rebuilds_cron_jobs_and_keeps_pause(p: Pipeline) -> None:
     """The only runtime 'modify' path: a timezone change re-adds the two cron jobs in the new zone."""
     assert p.call("POST", "/api/v1/scheduler/pause")["response"] == {"paused": True}
     p.call("PUT", "/api/v1/preferences", {"timezone": "Europe/Rome"})
@@ -171,7 +182,7 @@ def test_timezone_preference_rebuilds_cron_jobs_and_keeps_pause(p):
     assert_golden_json("orchestration/scheduler_registry_after_tz_change.json", view)
 
 
-def test_no_api_to_add_or_modify_jobs(p):
+def test_no_api_to_add_or_modify_jobs(p: Pipeline) -> None:
     """The scheduler API surface is list / delete / pause / resume (+ /health) — nothing adds or edits jobs."""
     routes = sorted(
         (method.upper(), path)
@@ -193,7 +204,7 @@ def test_no_api_to_add_or_modify_jobs(p):
 
 
 @pytest.mark.parametrize("running", [False, True], ids=["stopped", "running"])
-def test_paused_flag_is_explicit_and_mirrors_preferences(p, running):
+def test_paused_flag_is_explicit_and_mirrors_preferences(p: Pipeline, *, running: bool) -> None:
     """``paused`` is true only for ``check_all`` after an explicit pause, and equals the persisted flag."""
     if running:
         sched.start_scheduler(paused=True)
@@ -218,13 +229,15 @@ def test_paused_flag_is_explicit_and_mirrors_preferences(p, running):
             sched.stop_scheduler()
 
 
-def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(p, monkeypatch):
+def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Web ``POST /scheduler/{pause,resume}`` and the API both go through ``set_check_all_paused``."""
-    calls: list[tuple[str, bool]] = []
+    calls: list[tuple[str | None, bool]] = []
     real = sched.set_check_all_paused
-    origin = {"via": None}
+    origin: dict[str, str | None] = {"via": None}
 
-    def spy(repo, paused):
+    def spy(repo: IrrigationRepository, *, paused: bool) -> bool:
         calls.append((origin["via"], paused))
         return real(repo, paused=paused)
 
@@ -253,7 +266,7 @@ def test_web_and_api_pause_share_one_function_on_a_stopped_scheduler(p, monkeypa
     ]
 
 
-def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
+def test_pause_without_check_all_job_is_404_and_persists_nothing(p: Pipeline) -> None:
     """Pause without check all job is 404 and persists nothing."""
     bg_scheduler.remove_job("check_all")
     try:
@@ -266,7 +279,9 @@ def test_pause_without_check_all_job_is_404_and_persists_nothing(p):
         sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
 
-def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
+def test_apply_persisted_pause_edge_cases(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Startup re-apply: no-op when not persisted / job missing; a failing pause is logged, not raised."""
     sched.apply_persisted_pause(persisted_paused=False)
     assert sched.is_check_all_paused() is False
@@ -274,7 +289,7 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
     assert sched.is_check_all_paused() is True
     sched.init_scheduler(p.app, p.app.state.settings, tz_name="UTC")
 
-    def broken(_job_id):
+    def broken(_job_id: str) -> NoReturn:
         msg = "cannot pause"
         raise RuntimeError(msg)
 
@@ -291,7 +306,7 @@ def test_apply_persisted_pause_edge_cases(p, monkeypatch, caplog):
 # ── delete ──────────────────────────────────────────────────────────────────
 
 
-def test_delete_core_vs_adhoc_jobs(p):
+def test_delete_core_vs_adhoc_jobs(p: Pipeline) -> None:
     """Built-in jobs → 409 (API) and nothing changes; an ad-hoc job is deleted; unknown → 404."""
     irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — leak-check jobs have no public entry point
     adhoc_id = f"leak-check-1-{FROZEN_TS}"
@@ -308,7 +323,7 @@ def test_delete_core_vs_adhoc_jobs(p):
     assert_golden_json("orchestration/scheduler_delete.json", out)
 
 
-def test_web_delete_requires_running_scheduler(p):
+def test_web_delete_requires_running_scheduler(p: Pipeline) -> None:
     """The web delete form answers 503 on a stopped scheduler, then 409 / 200 / 404 like the API."""
     irrigation_jobs_mod._add_leak_check_job(1, FROZEN_TS)  # noqa: SLF001 — leak-check jobs have no public entry point
     stopped = p.client.post("/scheduler/jobs/check_all/delete")
@@ -326,7 +341,7 @@ def test_web_delete_requires_running_scheduler(p):
 # ── Job bodies ─────────────────────────────────────────────────────────────
 
 
-def _seed_series(p: Pipeline, *, ages: range, soil: float = 45.0, cluster: str = "Golden Cluster") -> dict:
+def _seed_series(p: Pipeline, *, ages: range, soil: float = 45.0, cluster: str = "Golden Cluster") -> dict[str, int]:
     ids = p.seed_cluster(cluster, soil=None)
     with p.repo() as repo:
         for age in ages:
@@ -336,7 +351,7 @@ def _seed_series(p: Pipeline, *, ages: range, soil: float = 45.0, cluster: str =
     return ids
 
 
-def test_sync_job_is_a_noop_without_gateway(p, monkeypatch):
+def test_sync_job_is_a_noop_without_gateway(p: Pipeline, monkeypatch: pytest.MonkeyPatch) -> None:
     """Sync job is a noop without gateway."""
     opened = []
     monkeypatch.setattr(p.app.state, "session_factory", lambda: opened.append(1))
@@ -344,7 +359,7 @@ def test_sync_job_is_a_noop_without_gateway(p, monkeypatch):
     assert opened == []
 
 
-def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
+def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p: Pipeline) -> None:
     """Sync job with gateway syncs every sensor and commits."""
     _seed_series(p, ages=range(2 * HOUR, 6 * HOUR, HOUR))
     p.seed_cluster("No sensor", sensor=False, soil=None)
@@ -361,11 +376,13 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p):
     assert [(r["sensor_id"], r["timestamp"], r["soil_moisture"]) for r in new] == [(1, FROZEN_TS, 41.0)]
 
 
-def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
+def test_sync_job_failure_is_rolled_back_and_logged(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Sync job failure is rolled back and logged."""
     p.app.state.device_gateway = RecordingGateway()
 
-    def explode(_self, hours=24):
+    def explode(_self: SyncService, hours: int = 24) -> NoReturn:
         del hours  # the sync job passes it by keyword
         msg = "cloud down"
         raise RuntimeError(msg)
@@ -376,7 +393,7 @@ def test_sync_job_failure_is_rolled_back_and_logged(p, monkeypatch, caplog):
     assert "Sync job failed" in caplog.text
 
 
-def test_health_snapshot_job_writes_daily_rows(p):
+def test_health_snapshot_job_writes_daily_rows(p: Pipeline) -> None:
     """Health snapshot job writes daily rows."""
     _seed_series(p, ages=range(0, 12 * HOUR, HOUR))
     run_core_job("plant_health_snapshot")
@@ -390,7 +407,9 @@ def test_health_snapshot_job_writes_daily_rows(p):
 
 
 @pytest.mark.usefixtures("p")
-def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
+def test_health_snapshot_job_failure_is_logged(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Health snapshot job failure is logged."""
     monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
@@ -398,7 +417,7 @@ def test_health_snapshot_job_failure_is_logged(monkeypatch, caplog):
     assert "Plant health snapshot job failed" in caplog.text
 
 
-def test_anomaly_job_raises_stale_alert_and_notifies(p):
+def test_anomaly_job_raises_stale_alert_and_notifies(p: Pipeline) -> None:
     # 12 hourly readings ending 5 h ago → silent for > 2 x the median interval.
     """Anomaly job raises stale alert and notifies."""
     _seed_series(p, ages=range(5 * HOUR, 17 * HOUR, HOUR))
@@ -410,7 +429,7 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p):
 
 
 @pytest.mark.usefixtures("p")
-def test_anomaly_job_failure_is_logged(monkeypatch, caplog):
+def test_anomaly_job_failure_is_logged(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     """Anomaly job failure is logged."""
     monkeypatch.setattr(SensorAnomalyService, "scan", lambda _self: 1 / 0)
     with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
@@ -418,7 +437,7 @@ def test_anomaly_job_failure_is_logged(monkeypatch, caplog):
     assert "Anomaly scan job failed" in caplog.text
 
 
-def test_health_monitor_job_noops(p, monkeypatch):
+def test_health_monitor_job_noops(p: Pipeline, monkeypatch: pytest.MonkeyPatch) -> None:
     """No ``_app`` → return; no monitor wired (tests' default) → return without opening a session."""
     opened = []
     monkeypatch.setattr(p.app.state, "session_factory", lambda: opened.append(1))
@@ -429,7 +448,7 @@ def test_health_monitor_job_noops(p, monkeypatch):
     assert opened == []
 
 
-def test_init_health_monitor_then_job_polls_every_device(p):
+def test_init_health_monitor_then_job_polls_every_device(p: Pipeline) -> None:
     """With a registry, ``init_health_monitor`` wires the singleton; the job polls irrigators and sensors."""
     ids = p.seed_cluster(soil=35.0)
     sched.init_health_monitor(p.app, p.app.state.settings)
@@ -450,7 +469,9 @@ def test_init_health_monitor_then_job_polls_every_device(p):
         assert monitor.is_actuation_blocked(repo.get_irrigator(ids["irrigator_id"])) == (True, [HealthAlarm.NO_WATER])
 
 
-def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
+def test_health_monitor_job_failure_is_logged(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Health monitor job failure is logged."""
     p.app.state.device_registry = p.wiring.registry
     sched.init_health_monitor(p.app, p.app.state.settings)
@@ -460,7 +481,9 @@ def test_health_monitor_job_failure_is_logged(p, monkeypatch, caplog):
     assert "Device health monitor job failed" in caplog.text
 
 
-def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeypatch, caplog):
+def test_init_health_monitor_startup_hook_failure_still_wires_monitor(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Init health monitor startup hook failure still wires monitor."""
     p.app.state.device_registry = p.wiring.registry
     monkeypatch.setattr(DeviceHealthMonitor, "backfill_from_history", lambda _self: 1 / 0)
@@ -470,7 +493,7 @@ def test_init_health_monitor_startup_hook_failure_still_wires_monitor(p, monkeyp
     assert "Health monitor startup hooks failed" in caplog.text
 
 
-def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
+def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p: Pipeline) -> None:
     """OD3: the startup migration of pre-unification ``pump_dry_run`` alerts is gone.
 
     An open alert with the old ``pump::pump_dry_run::…`` key used to be resolved by
@@ -480,12 +503,12 @@ def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
     with p.repo() as repo:
         repo.upsert_alert(
             dedup_key=f"pump::pump_dry_run::{ids['cluster_id']}::irrigator{ids['irrigator_id']}",
-            source="pump",
+            source=ActivitySource.PUMP,
             code="pump_dry_run",
             title="Pump dry-run",
             message="row from the pre-unification code",
             severity="critical",
-            entity_type="irrigator",
+            entity_type=EntityType.IRRIGATOR,
             entity_id=ids["irrigator_id"],
             cluster_id=ids["cluster_id"],
         )
@@ -494,10 +517,10 @@ def test_init_health_monitor_leaves_old_pump_dry_run_alerts_alone(p):
     assert [(a["code"], a["status"]) for a in p.db_rows()["alerts"]] == [("pump_dry_run", "open")]
 
 
-def test_get_cloud_reads_app_state(p, monkeypatch):
+def test_get_cloud_reads_app_state(p: Pipeline, monkeypatch: pytest.MonkeyPatch) -> None:
     """Get cloud reads app state."""
     assert sched._get_cloud() is None  # noqa: SLF001 — unit test of the private gateway lookup
-    gw = RecordingGateway()
+    gw: object = RecordingGateway()  # stands in for the app's DeviceGateway
     p.app.state.device_gateway = gw
     assert sched._get_cloud() is gw  # noqa: SLF001 — unit test of the private gateway lookup
     monkeypatch.setattr(sched, "_app", None)
@@ -507,7 +530,7 @@ def test_get_cloud_reads_app_state(p, monkeypatch):
 # ── Leak follow-up job bodies ───────────────────────────────────────────────
 
 
-def _seed_leak_shape(p: Pipeline, started_at: int) -> dict:
+def _seed_leak_shape(p: Pipeline, started_at: int) -> dict[str, int]:
     """Baseline 40 % before ``started_at``, then a climb that never settles (a stuck valve)."""
     ids = p.seed_cluster(soil=None)
     with p.repo() as repo:
@@ -522,7 +545,7 @@ def _seed_leak_shape(p: Pipeline, started_at: int) -> dict:
     return ids
 
 
-def test_run_leak_check_raises_hold_once_and_marks_done(p):
+def test_run_leak_check_raises_hold_once_and_marks_done(p: Pipeline) -> None:
     """Run leak check raises hold once and marks done."""
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
@@ -539,7 +562,9 @@ def test_run_leak_check_raises_hold_once_and_marks_done(p):
     )
 
 
-def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
+def test_run_leak_check_noops_and_failure(
+    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     """Run leak check noops and failure."""
     started_at = FROZEN_TS - 2 * HOUR
     _seed_leak_shape(p, started_at)
@@ -555,7 +580,7 @@ def test_run_leak_check_noops_and_failure(p, monkeypatch, caplog):
     assert p.db_rows()["activity_events"] == []
 
 
-def test_rearm_leak_checks(p):
+def test_rearm_leak_checks(p: Pipeline) -> None:
     """Stopped scheduler → 0; running → pending auto starts re-armed (overdue ones run now), manual ones never."""
     ids = p.seed_cluster(soil=35.0)
     p.add_event(ids["irrigator_id"], age=600)  # due in 20 min
@@ -576,7 +601,7 @@ def test_rearm_leak_checks(p):
     assert rearmed == len(jobs)
 
 
-def test_schedule_pump_watcher_guards(p):
+def test_schedule_pump_watcher_guards(p: Pipeline) -> None:
     """Watcher scheduling refuses: non-positive duration, stopped scheduler, no registry, feature off."""
     assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 0, FROZEN_TS) is False
     assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False  # scheduler stopped
@@ -587,7 +612,7 @@ def test_schedule_pump_watcher_guards(p):
         p.app.state.settings = p.app.state.settings.model_copy(update={"pump_watcher_enabled": False})
         assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS) is False
         p.app.state.settings = p.app.state.settings.model_copy(update={"pump_watcher_enabled": True})
-        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS, triggered_by="manual") is True
+        assert pump_watcher_jobs_mod.schedule_pump_watcher(1, 5, FROZEN_TS, triggered_by=TriggeredBy.MANUAL) is True
         (job,) = [j for j in bg_scheduler.get_jobs() if j.id.startswith("pump-watcher-")]
         assert (job.id, job.name, str(job.trigger)) == (
             f"pump-watcher-1-{FROZEN_TS}",
@@ -598,7 +623,7 @@ def test_schedule_pump_watcher_guards(p):
         sched.stop_scheduler()
 
 
-def test_check_job_with_app_runs_check_all_via_api_equivalent(p):
+def test_check_job_with_app_runs_check_all_via_api_equivalent(p: Pipeline) -> None:
     """``_check_job`` on a seeded app (registry wired) actuates exactly like ``POST /check``."""
     p.seed_cluster(soil=35.0)
     p.app.state.device_registry = p.wiring.registry
@@ -610,7 +635,7 @@ def test_check_job_with_app_runs_check_all_via_api_equivalent(p):
     assert [n["kind"] for n in p.notifier.sent] == ["irrigation"]
 
 
-def test_health_endpoint_reflects_scheduler_state(p):
+def test_health_endpoint_reflects_scheduler_state(p: Pipeline) -> None:
     """``GET /health`` exposes ``scheduler_running`` and the same job serializer as ``/scheduler/jobs``."""
     client = TestClient(p.app)
     stopped = client.get("/api/v1/health").json()

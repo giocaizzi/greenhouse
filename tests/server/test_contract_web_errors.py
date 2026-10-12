@@ -12,6 +12,7 @@ Goldens in ``golden/web/errors/<case>.html`` (request line, status, pinned heade
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,8 +22,13 @@ from server import test_contract_web_html as _web
 from server.conftest import TEST_MCP_TOKEN
 from server.test_contract_web_html import (
     INDOOR,
+    MakeClient,
     render_response,
 )
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from time_machine import Traveller
 
 HTML = {"Accept": "text/html,application/xhtml+xml"}
 JSON = {"Accept": "application/json"}
@@ -48,14 +54,16 @@ web_env = _web.web_env
         ("form_422__hx", "POST", "/clusters", HX),
     ],
 )
-def test_error_page_golden(name, method, url, headers, seeded_get_client):
+def test_error_page_golden(
+    name: str, method: str, url: str, headers: dict[str, str], seeded_get_client: TestClient
+) -> None:
     """Which handler answers (HTML error page / HX partial / JSON) — by path, not by ``Accept``."""
     resp = seeded_get_client.request(method, url, headers=headers, follow_redirects=False)
     assert_golden(f"web/errors/{name}.html", render_response(method, url, headers, resp))
 
 
 @pytest.fixture
-def anon(web_env, app_real_auth):
+def anon(web_env: Traveller, app_real_auth: FastAPI) -> TestClient:
     """``anonymous_client`` on the real-auth app, under the frozen clock with offline weather."""
     del web_env  # requested only for its side effect
     install_offline_weather(app_real_auth)
@@ -76,7 +84,9 @@ def anon(web_env, app_real_auth):
         ("unknown_path__anonymous", "GET", "/no/such/page", HTML, {}),
     ],
 )
-def test_auth_wall_golden(name, method, url, headers, cookies, anon):  # noqa: PLR0913, PLR0917 — parametrize argnames
+def test_auth_wall_golden(  # noqa: PLR0913, PLR0917 — parametrize argnames
+    name: str, method: str, url: str, headers: dict[str, str], cookies: dict[str, str], anon: TestClient
+) -> None:
     """Anonymous browser → 303 ``/login?next=…`` (HTMX: 204 + ``HX-Redirect``); API → JSON 401."""
     for key, value in cookies.items():
         anon.cookies.set(key, value)
@@ -84,13 +94,13 @@ def test_auth_wall_golden(name, method, url, headers, cookies, anon):  # noqa: P
     assert_golden(f"web/errors/{name}.html", render_response(method, url, headers, resp))
 
 
-def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth):
+def test_session_cookie_name_is_the_one_the_garbage_case_uses(app_real_auth: FastAPI) -> None:
     """Guards the case above: it must exercise the real cookie, not an ignored one."""
     assert app_real_auth.state.settings.auth_cookie_name == "greenhouse_session"
 
 
 @pytest.mark.usefixtures("web_env")
-def test_json_401_carries_www_authenticate(anon, make_client):
+def test_json_401_carries_www_authenticate(anon: TestClient, make_client: MakeClient) -> None:
     """The JSON 401 carries ``WWW-Authenticate: Bearer`` (RFC 9110 §11.6.1).
 
     ``AuthError`` (``greenhouse_server/auth.py``) and ``require_mcp_token`` (``app.py``) both set
@@ -117,7 +127,7 @@ def test_json_401_carries_www_authenticate(anon, make_client):
     assert mcp.headers["www-authenticate"] == "Bearer"
 
 
-def test_error_format_follows_accept_on_web_paths(seeded_get_client):
+def test_error_format_follows_accept_on_web_paths(seeded_get_client: TestClient) -> None:
     """Web-path errors follow ``Accept``; machine paths stay JSON.
 
     Router-level 404/405 (Starlette ``HTTPException``) used to bypass the handler and answer
@@ -142,7 +152,7 @@ def test_error_format_follows_accept_on_web_paths(seeded_get_client):
 
 
 @pytest.mark.parametrize(("name", "url"), [("auth_disabled__dashboard", "/"), ("auth_disabled__login_form", "/login")])
-def test_auth_disabled_mode_golden(name, url, make_client):
+def test_auth_disabled_mode_golden(name: str, url: str, make_client: MakeClient) -> None:
     """``auth_enabled=False`` dev mode: no auth wall, and the chrome hides the Sign-out button."""
     _, client = make_client(bypass_auth=False, auth_enabled=False)
     resp = client.get(url, follow_redirects=False)
