@@ -97,12 +97,12 @@ def test_login_dialog_needs_both_fields(username: str, password: str, dismissed:
     async def scenario() -> None:
         app = Host()
         async with app.run_test() as pilot:
-            await pilot.pause()
+            await pilot.pause(0)
             screen = app.screen
             screen.query_one("#username", Input).value = username
             screen.query_one("#password", Input).value = password
             await pilot.click("#login")
-            await pilot.pause()
+            await pilot.pause(0)
 
     asyncio.run(scenario())
     assert results == dismissed
