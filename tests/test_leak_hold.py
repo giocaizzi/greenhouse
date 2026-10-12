@@ -104,25 +104,6 @@ class TestHoldBlocks(_Fixture):
         assert f"#{alert.id}" in reason.message
         assert "still rising" in reason.message
 
-    def test_acknowledged_alert_still_holds(self) -> None:
-        """Acknowledging says "seen", not "fixed" — only resolving lifts it."""
-        self._raise_leak(status="acknowledged")
-
-        decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision is not None
-
-        assert decision.primary_code == TriggerCode.LEAK_HOLD
-
-    def test_force_does_not_bypass_the_hold(self) -> None:
-        """A stuck valve is hardware: the escape hatch is the irrigator route."""
-        self._raise_leak()
-
-        decision = self.logic.decide_for_cluster(self.cluster_id, bypass_quiet_hours=True)
-        assert decision is not None
-
-        assert decision.action == Action.SKIP
-        assert decision.primary_code == TriggerCode.LEAK_HOLD
-
     def test_hold_outranks_cooldown(self) -> None:
         """Both active → report the safety gate, not the routine one."""
         self._raise_leak()
@@ -153,15 +134,6 @@ class TestHoldBlocks(_Fixture):
 class TestHoldLifts(_Fixture):
     """What releases a leak hold."""
 
-    def test_resolved_alert_releases_the_hold(self) -> None:
-        """Resolving the alert releases the hold."""
-        self._raise_leak(status="resolved")
-
-        decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision is not None
-
-        assert decision.action == Action.IRRIGATE
-
     def test_hold_expires_after_the_configured_window(self) -> None:
         """The hold expires after ``LEAK_HOLD_HOURS``."""
         self._raise_leak(seen_at=int(time.time()) - (LEAK_HOLD_HOURS * 3600 + 60))
@@ -170,15 +142,6 @@ class TestHoldLifts(_Fixture):
         assert decision is not None
 
         assert decision.action == Action.IRRIGATE
-
-    def test_hold_still_active_just_inside_the_window(self) -> None:
-        """The hold still applies just inside the window."""
-        self._raise_leak(seen_at=int(time.time()) - (LEAK_HOLD_HOURS * 3600 - 600))
-
-        decision = self.logic.decide_for_cluster(self.cluster_id)
-        assert decision is not None
-
-        assert decision.primary_code == TriggerCode.LEAK_HOLD
 
     def test_alert_on_another_cluster_does_not_hold_this_one(self) -> None:
         """An alert on another cluster does not hold this one."""

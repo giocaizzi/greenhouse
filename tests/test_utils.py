@@ -28,22 +28,13 @@ def _reset_display_tz() -> Iterator[None]:
 class TestSeasonalLightFactor:
     """``seasonal_light_factor`` per month."""
 
-    def test_summer_peak(self) -> None:
-        """June and July return 1.0 (peak)."""
+    def test_month_table(self) -> None:
+        """Peak in June-July, lowest in December-January, rising through spring and falling through fall."""
         assert seasonal_light_factor(6) == 1.0
         assert seasonal_light_factor(7) == 1.0
-
-    def test_winter_minimum(self) -> None:
-        """December and January return lowest factor."""
         assert seasonal_light_factor(12) == WINTER_LIGHT_FACTOR
         assert seasonal_light_factor(1) == WINTER_LIGHT_FACTOR
-
-    def test_spring_increases(self) -> None:
-        """Factor increases from winter to summer."""
         assert seasonal_light_factor(2) < seasonal_light_factor(4) < seasonal_light_factor(6)
-
-    def test_fall_decreases(self) -> None:
-        """Factor decreases from summer to winter."""
         assert seasonal_light_factor(8) > seasonal_light_factor(10) > seasonal_light_factor(12)
 
     def test_current_month_default(self) -> None:
