@@ -18,9 +18,11 @@ from fake_data import (
 from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.learning.clock import light_month
 from greenhouse_core.learning.issues import detect_conflicts
+from greenhouse_core.learning.models import PlantProfile
 from greenhouse_core.learning.profiling import compute_drainage_rate
-from greenhouse_core.models import IrrigationEvent
-from greenhouse_core.plant_db import get_plant_database
+from greenhouse_core.models import EventAction, IrrigationEvent, TriggeredBy
+from greenhouse_core.plant_db import CareData, get_plant_database
+from greenhouse_core.repository import IrrigationRepository
 
 SIMULATED_CYCLES = 4
 MIN_EFFICIENCY_FOR_GOOD_RESPONSE = 0.5
@@ -33,7 +35,7 @@ class TestIrrigationLearner:
     """Test learning engine with synthetic irrigation+sensor data."""
 
     @pytest.fixture(autouse=True)
-    def setup(self, tmp_db):
+    def setup(self, tmp_db: IrrigationRepository) -> None:
         """Seed a cluster with a plant and an irrigator for the learner."""
         self.db = tmp_db
         self.learner = IrrigationLearner(self.db, get_plant_database())
@@ -60,7 +62,9 @@ class TestIrrigationLearner:
             plant_id=self.plant_id,
         )
 
-    def _simulate_irrigation_cycle(self, base_time: int, pre_moisture: float, post_moisture: float, duration: int = 2):
+    def _simulate_irrigation_cycle(
+        self, base_time: int, pre_moisture: float, post_moisture: float, duration: int = 2
+    ) -> int:
         """Simulate an irrigation event with pre and post sensor readings."""
         self.db.add_sensor_reading(
             sensor_id=self.sensor_id,
@@ -70,8 +74,8 @@ class TestIrrigationLearner:
         )
         event_id = self.db.add_irrigation_event(
             irrigator_id=self.irrigator_id,
-            action="start",
-            triggered_by="auto",
+            action=EventAction.START,
+            triggered_by=TriggeredBy.AUTO,
             duration_minutes=duration,
             timestamp=base_time,
         )
@@ -83,7 +87,7 @@ class TestIrrigationLearner:
         )
         return event_id
 
-    def test_analyze_response_positive_delta(self):
+    def test_analyze_response_positive_delta(self) -> None:
         """Irrigation response shows positive moisture delta."""
         now = int(time.time())
         self._simulate_irrigation_cycle(now, pre_moisture=30.0, post_moisture=50.0)
@@ -99,7 +103,7 @@ class TestIrrigationLearner:
         assert r.delta == pytest.approx(20.0)
         assert r.delta_per_minute == pytest.approx(10.0)
 
-    def test_analyze_response_no_change(self):
+    def test_analyze_response_no_change(self) -> None:
         """No moisture change detected (possible blocked drip)."""
         now = int(time.time())
         self._simulate_irrigation_cycle(now, pre_moisture=30.0, post_moisture=31.0)
@@ -110,7 +114,7 @@ class TestIrrigationLearner:
         assert len(responses) == 1
         assert responses[0].delta == pytest.approx(1.0)
 
-    def test_response_peak_ignores_a_spike_reading(self):
+    def test_response_peak_ignores_a_spike_reading(self) -> None:
         """The post value is the window's *maximum* — exactly what a spike wins.
 
         A blocked drip (30% → 31%) with one 99% glitch in the after-window must
@@ -121,8 +125,8 @@ class TestIrrigationLearner:
         self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=now - 900, soil_moisture=30.0)
         self.db.add_irrigation_event(
             irrigator_id=self.irrigator_id,
-            action="start",
-            triggered_by="auto",
+            action=EventAction.START,
+            triggered_by=TriggeredBy.AUTO,
             duration_minutes=2,
             timestamp=now,
         )
@@ -136,7 +140,7 @@ class TestIrrigationLearner:
         assert responses[0].post_moisture == pytest.approx(31.0)
         assert responses[0].delta == pytest.approx(1.0)
 
-    def test_plant_profile_builds_from_multiple_cycles(self):
+    def test_plant_profile_builds_from_multiple_cycles(self) -> None:
         """Plant profile builds correctly from 3+ irrigation cycles."""
         now = int(time.time())
         for i in range(SIMULATED_CYCLES):
@@ -156,18 +160,18 @@ class TestIrrigationLearner:
         assert profile.avg_absorption_per_minute > 0
         assert profile.efficiency_score > MIN_EFFICIENCY_FOR_GOOD_RESPONSE
 
-    def test_plant_profile_insufficient_data(self):
+    def test_plant_profile_insufficient_data(self) -> None:
         """Plant profile returns None with no irrigation history."""
         sensor = self.db.get_sensors_in_cluster(self.cluster_id)[0]
         profile = self.learner.get_plant_profile(sensor, days=30)
         assert profile is None
 
-    def test_detect_no_issues_with_insufficient_data(self):
+    def test_detect_no_issues_with_insufficient_data(self) -> None:
         """No alerts when not enough data."""
         alerts = self.learner.detect_issues(self.cluster_id)
         assert len(alerts) == 0
 
-    def test_drainage_rate_computation(self):
+    def test_drainage_rate_computation(self) -> None:
         """Drainage rate computed from declining moisture readings."""
         now = int(time.time())
         for h in range(6):
@@ -184,7 +188,7 @@ class TestIrrigationLearner:
         assert drainage < 0
         assert drainage == pytest.approx(-4.0, abs=0.5)
 
-    def test_generate_report_with_data(self):
+    def test_generate_report_with_data(self) -> None:
         """Report generates text output with profiles."""
         now = int(time.time())
         for i in range(3):
@@ -200,12 +204,12 @@ class TestIrrigationLearner:
         assert FAKE_SENSOR_NAME in report
         assert "Absorption" in report
 
-    def test_generate_report_no_data(self):
+    def test_generate_report_no_data(self) -> None:
         """Report shows insufficient data message."""
         report = self.learner.generate_report(self.cluster_id)
         assert "insufficient data" in report
 
-    def test_generate_report_empty_cluster(self):
+    def test_generate_report_empty_cluster(self) -> None:
         """Report handles cluster with no sensors."""
         empty_cluster = self.db.add_cluster("Empty")
         report = self.learner.generate_report(empty_cluster)
@@ -213,7 +217,7 @@ class TestIrrigationLearner:
 
     # ── Edge case: anomalous moisture ───────────────────────────────────────
 
-    def test_analyze_response_very_high_moisture(self):
+    def test_analyze_response_very_high_moisture(self) -> None:
         """Response correctly handles extreme moisture spike (>95%)."""
         now = int(time.time())
         self._simulate_irrigation_cycle(now, pre_moisture=80.0, post_moisture=98.0)
@@ -225,7 +229,7 @@ class TestIrrigationLearner:
         assert responses[0].delta == pytest.approx(18.0)
         assert responses[0].post_moisture == pytest.approx(98.0)
 
-    def test_analyze_response_negative_delta(self):
+    def test_analyze_response_negative_delta(self) -> None:
         """Moisture drop after irrigation (e.g., shallow sensor, water drains)."""
         now = int(time.time())
         self._simulate_irrigation_cycle(now, pre_moisture=45.0, post_moisture=40.0)
@@ -238,7 +242,7 @@ class TestIrrigationLearner:
 
     # ── Edge case: profile with minimal data ────────────────────────────────
 
-    def test_plant_profile_with_mixed_responses(self):
+    def test_plant_profile_with_mixed_responses(self) -> None:
         """Profile handles a mix of positive and negative deltas."""
         now = int(time.time())
         deltas = [(30, 50), (40, 38), (25, 55), (35, 36)]  # 2 positive, 2 negative
@@ -257,7 +261,7 @@ class TestIrrigationLearner:
         assert profile.efficiency_score == pytest.approx(0.5)  # 2 out of 4 had >2% increase
         assert profile.min_delta < 0
 
-    def test_drainage_rate_no_decline(self):
+    def test_drainage_rate_no_decline(self) -> None:
         """Drainage rate returns 0 when moisture only rises."""
         now = int(time.time())
         for h in range(6):
@@ -274,7 +278,7 @@ class TestIrrigationLearner:
 
     # ── Issue detection edge cases ──────────────────────────────────────────
 
-    def test_blocked_drip_alert(self):
+    def test_blocked_drip_alert(self) -> None:
         """Consistently near-zero delta triggers blocked_drip alert."""
         now = int(time.time())
         for i in range(5):
@@ -289,7 +293,7 @@ class TestIrrigationLearner:
         alert_types = [a.alert_type for a in alerts]
         assert "blocked_drip" in alert_types
 
-    def test_no_blocked_drip_when_healthy(self):
+    def test_no_blocked_drip_when_healthy(self) -> None:
         """No blocked_drip alert when irrigation responses are healthy."""
         now = int(time.time())
         for i in range(5):
@@ -304,7 +308,7 @@ class TestIrrigationLearner:
         alert_types = [a.alert_type for a in alerts]
         assert "blocked_drip" not in alert_types
 
-    def test_rapid_drainage_alert(self):
+    def test_rapid_drainage_alert(self) -> None:
         """Fast moisture loss triggers rapid_drainage alert."""
         now = int(time.time())
         # Build profile with enough events
@@ -327,7 +331,7 @@ class TestIrrigationLearner:
         alert_types = [a.alert_type for a in alerts]
         assert "rapid_drainage" in alert_types or "light_accelerated_drainage" in alert_types
 
-    def test_analyze_response_no_irrigator(self):
+    def test_analyze_response_no_irrigator(self) -> None:
         """Analyze response returns empty list for deleted irrigator."""
         fake_event = IrrigationEvent(
             id=999,
@@ -340,7 +344,7 @@ class TestIrrigationLearner:
         responses = self.learner.analyze_irrigation_response(fake_event)
         assert responses == []
 
-    def test_detect_issues_empty_cluster(self):
+    def test_detect_issues_empty_cluster(self) -> None:
         """No alerts for a cluster with no sensors."""
         empty_cluster = self.db.add_cluster("Empty Alert Cluster")
         alerts = self.learner.detect_issues(empty_cluster)
@@ -362,7 +366,7 @@ class TestIssueHeuristics:
     """
 
     @pytest.fixture(autouse=True)
-    def setup(self, tmp_db):
+    def setup(self, tmp_db: IrrigationRepository) -> None:
         """Seed a cluster with a plant, an irrigator and a sensor for the issue heuristics."""
         self.db = tmp_db
         self.learner = IrrigationLearner(self.db, get_plant_database())
@@ -391,7 +395,7 @@ class TestIssueHeuristics:
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
-    def _build_profile(self, sensor_id: int, irrigator_id: int, base_time: int, cycles: int = 5):
+    def _build_profile(self, sensor_id: int, irrigator_id: int, base_time: int, cycles: int = 5) -> None:
         """Create ``cycles`` healthy irrigation cycles so a PlantProfile builds.
 
         Each cycle is a +20% absorption event, spaced one day apart, which yields
@@ -408,14 +412,14 @@ class TestIssueHeuristics:
             self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=ts - 900, soil_moisture=30.0)
             self.db.add_irrigation_event(
                 irrigator_id=irrigator_id,
-                action="start",
-                triggered_by="auto",
+                action=EventAction.START,
+                triggered_by=TriggeredBy.AUTO,
                 duration_minutes=2,
                 timestamp=ts,
             )
             self.db.add_sensor_reading(sensor_id=sensor_id, timestamp=ts + 1800, soil_moisture=50.0)
 
-    def _add_second_sensor(self):
+    def _add_second_sensor(self) -> tuple[int, int]:
         """Add a second plant+sensor to the same cluster (shared single irrigator)."""
         plant2 = self.db.add_plant(
             cluster_id=self.cluster_id,
@@ -432,7 +436,7 @@ class TestIssueHeuristics:
         )
         return plant2, sensor2
 
-    def _seed_recent_moisture(self, both: tuple[int, int], moisture: float, now: int):
+    def _seed_recent_moisture(self, both: tuple[int, int], moisture: float, now: int) -> None:
         """Give both sensors a single recent in-range moisture reading.
 
         ``detect_conflicts`` returns early when fewer than two sensors have a
@@ -443,14 +447,22 @@ class TestIssueHeuristics:
         for sid in both:
             self.db.add_sensor_reading(sensor_id=sid, timestamp=now - 300, soil_moisture=moisture)
 
-    def _care_map(self):
+    def _profile(self, sensor_id: int) -> PlantProfile:
+        """The learned profile of a sensor the test built one for."""
+        sensor = self.db.get_sensor(sensor_id)
+        assert sensor is not None
+        profile = self.learner.get_plant_profile(sensor)
+        assert profile is not None  # every caller ran _build_profile for this sensor first
+        return profile
+
+    def _care_map(self) -> dict[int, CareData]:
         """Build the plant_care map exactly as detect_issues does, for direct calls."""
         plants = self.db.get_plants_in_cluster(self.cluster_id)
         return {p.id: self.learner.plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
 
     # ── light_accelerated_drainage vs rapid_drainage ────────────────────────
 
-    def test_light_accelerated_drainage_alert(self, monkeypatch):
+    def test_light_accelerated_drainage_alert(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Rapid drainage under bright daytime light fires light_accelerated_drainage."""
         # Pin the seasonal factor so the 800-lux bright threshold is deterministic.
         monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *_a, **_k: 1.0)
@@ -472,10 +484,11 @@ class TestIssueHeuristics:
         assert "light_accelerated_drainage" in types
         assert "rapid_drainage" not in types
         alert = next(a for a in alerts if a.alert_type == "light_accelerated_drainage")
+        assert alert.data is not None
         assert alert.severity == "warning"
         assert alert.data["avg_lux"] > BRIGHT_LUX_THRESHOLD
 
-    def test_rapid_drainage_without_bright_light(self, monkeypatch):
+    def test_rapid_drainage_without_bright_light(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Rapid drainage in dim light fires plain rapid_drainage, not the light variant."""
         monkeypatch.setattr("greenhouse_core.learning.issues.seasonal_light_factor", lambda *_a, **_k: 1.0)
 
@@ -494,7 +507,7 @@ class TestIssueHeuristics:
         assert "rapid_drainage" in types
         assert "light_accelerated_drainage" not in types
 
-    def test_no_drainage_alert_when_retention_healthy(self):
+    def test_no_drainage_alert_when_retention_healthy(self) -> None:
         """Stable moisture (drainage above -5 %/hr) fires no drainage alert."""
         now = int(time.time())
         self._build_profile(self.sensor_id, self.irrigator_id, now - 7 * 86400)
@@ -514,7 +527,7 @@ class TestIssueHeuristics:
 
     # ── chronic_underwatering ───────────────────────────────────────────────
 
-    def test_chronic_underwatering_alert(self):
+    def test_chronic_underwatering_alert(self) -> None:
         """Soil that never reaches target_min over 7d fires chronic_underwatering."""
         now = int(time.time())
         # >=5 cycles required (response_count >= 5). Keep post-moisture below the
@@ -524,8 +537,8 @@ class TestIssueHeuristics:
             self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts - 900, soil_moisture=20.0)
             self.db.add_irrigation_event(
                 irrigator_id=self.irrigator_id,
-                action="start",
-                triggered_by="auto",
+                action=EventAction.START,
+                triggered_by=TriggeredBy.AUTO,
                 duration_minutes=2,
                 timestamp=ts,
             )
@@ -535,9 +548,10 @@ class TestIssueHeuristics:
         types = [a.alert_type for a in alerts]
         assert "chronic_underwatering" in types
         alert = next(a for a in alerts if a.alert_type == "chronic_underwatering")
+        assert alert.data is not None
         assert alert.data["max_recent"] < alert.data["target_min"]
 
-    def test_no_chronic_underwatering_when_target_reached(self):
+    def test_no_chronic_underwatering_when_target_reached(self) -> None:
         """Soil that reaches target_min does not fire chronic_underwatering."""
         now = int(time.time())
         for i in range(6):
@@ -545,8 +559,8 @@ class TestIssueHeuristics:
             self.db.add_sensor_reading(sensor_id=self.sensor_id, timestamp=ts - 900, soil_moisture=40.0)
             self.db.add_irrigation_event(
                 irrigator_id=self.irrigator_id,
-                action="start",
-                triggered_by="auto",
+                action=EventAction.START,
+                triggered_by=TriggeredBy.AUTO,
                 duration_minutes=2,
                 timestamp=ts,
             )
@@ -557,7 +571,7 @@ class TestIssueHeuristics:
 
     # ── unresolvable_conflict ───────────────────────────────────────────────
 
-    def test_unresolvable_conflict_alert(self):
+    def test_unresolvable_conflict_alert(self) -> None:
         """Dry plant needing long irrigation that would over-saturate a wet plant."""
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()
@@ -572,18 +586,19 @@ class TestIssueHeuristics:
         self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=80.0)
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         types = [a.alert_type for a in alerts]
         assert "unresolvable_conflict" in types
         alert = next(a for a in alerts if a.alert_type == "unresolvable_conflict")
+        assert alert.data is not None
         assert alert.severity == "critical"
         assert alert.data["projected_wet"] > OVER_WATER_LINE_PCT
 
-    def test_conflict_keys_on_the_latest_readings_not_the_oldest(self):
+    def test_conflict_keys_on_the_latest_readings_not_the_oldest(self) -> None:
         """The dry/wet snapshot must average the *newest* samples in the window.
 
         ``get_recent_readings`` returns newest-first, so slicing the tail of
@@ -608,15 +623,15 @@ class TestIssueHeuristics:
         self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=80.0)
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
 
         assert "unresolvable_conflict" not in [a.alert_type for a in alerts]
 
-    def test_no_conflict_when_both_plants_in_range(self):
+    def test_no_conflict_when_both_plants_in_range(self) -> None:
         """No conflict when neither plant is dry nor over-saturated."""
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()
@@ -628,8 +643,8 @@ class TestIssueHeuristics:
         self.db.add_sensor_reading(sensor_id=sensor2, timestamp=now - 600, soil_moisture=52.0)
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
@@ -641,7 +656,7 @@ class TestIssueHeuristics:
     MONTH_BOUNDARY = datetime(2026, 1, 31, 23, 30, tzinfo=UTC)
     JANUARY, FEBRUARY = 1, 2
 
-    def test_light_month_follows_the_preferences_timezone(self):
+    def test_light_month_follows_the_preferences_timezone(self) -> None:
         """The learning light season reads the month in the preferences timezone (default UTC)."""
         with time_machine.travel(self.MONTH_BOUNDARY, tick=False):
             self.db.update_preferences(timezone="Europe/Rome")
@@ -649,16 +664,16 @@ class TestIssueHeuristics:
             self.db.update_preferences(timezone="UTC")
             assert light_month(self.db) == self.JANUARY
 
-    def test_drainage_and_low_light_use_the_local_month(self, monkeypatch):
+    def test_drainage_and_low_light_use_the_local_month(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Both light heuristics scale their thresholds with the local month, not the UTC one."""
         factor_months: list[int | None] = []
         threshold_months: list[int | None] = []
 
-        def factor(month=None):
+        def factor(month: int | None = None) -> float:
             factor_months.append(month)
             return 1.0
 
-        def threshold(base, month=None):
+        def threshold(base: float, month: int | None = None) -> float:
             threshold_months.append(month)
             return float(base)
 
@@ -684,7 +699,7 @@ class TestIssueHeuristics:
 
     # ── low_light ───────────────────────────────────────────────────────────
 
-    def test_low_light_alert(self, monkeypatch):
+    def test_low_light_alert(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Sustained daytime light below half the seasonal minimum fires low_light."""
         # Pin threshold: effective(150) = 150, fires below 75 lux.
         monkeypatch.setattr(
@@ -709,17 +724,18 @@ class TestIssueHeuristics:
             )
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         low_light = [a for a in alerts if a.alert_type == "low_light" and a.sensor_name == FAKE_SENSOR_NAME]
         assert low_light
         assert low_light[0].severity == "warning"
+        assert low_light[0].data is not None
         assert low_light[0].data["avg_lux"] < MONSTERA_LOW_LIGHT_LUX
 
-    def test_no_low_light_when_bright_enough(self, monkeypatch):
+    def test_no_low_light_when_bright_enough(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Adequate daytime light does not fire low_light."""
         monkeypatch.setattr(
             "greenhouse_core.learning.issues.effective_light_threshold", lambda base, *_a, **_k: float(base)
@@ -738,8 +754,8 @@ class TestIssueHeuristics:
             )
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
@@ -748,7 +764,7 @@ class TestIssueHeuristics:
 
     # ── low_env_humidity ────────────────────────────────────────────────────
 
-    def test_low_env_humidity_alert(self):
+    def test_low_env_humidity_alert(self) -> None:
         """Ambient humidity far below ideal (ideal_min - 15) fires low_env_humidity."""
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()
@@ -765,17 +781,18 @@ class TestIssueHeuristics:
             )
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
         hum = [a for a in alerts if a.alert_type == "low_env_humidity" and a.sensor_name == FAKE_SENSOR_NAME]
         assert hum
         assert hum[0].severity == "warning"
+        assert hum[0].data is not None
         assert hum[0].data["avg_env_humidity"] < hum[0].data["ideal_min"] - 15
 
-    def test_no_low_env_humidity_when_humid_enough(self):
+    def test_no_low_env_humidity_when_humid_enough(self) -> None:
         """Humidity within ~15% of ideal does not fire low_env_humidity."""
         now = int(time.time())
         _plant2, sensor2 = self._add_second_sensor()
@@ -792,8 +809,8 @@ class TestIssueHeuristics:
             )
 
         profiles = {
-            self.sensor_id: self.learner.get_plant_profile(self.db.get_sensor(self.sensor_id)),
-            sensor2: self.learner.get_plant_profile(self.db.get_sensor(sensor2)),
+            self.sensor_id: self._profile(self.sensor_id),
+            sensor2: self._profile(sensor2),
         }
 
         alerts = detect_conflicts(self.db, self.learner.plant_db, self.cluster_id, profiles, self._care_map())
