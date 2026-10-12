@@ -110,7 +110,9 @@ def test_login_dialog_needs_both_fields(username: str, password: str, dismissed:
 
 @pytest.mark.usefixtures("clean_env")
 @pytest.mark.parametrize(("quiet", "toasts"), [(False, [("boom", "Server error 500", "error")]), (True, [])])
-def test_api_error_toast_respects_quiet(*, quiet: bool, toasts: list[tuple[str, str, str]]) -> None:
+def test_api_error_toast_respects_quiet(
+    *, quiet: bool, toasts: list[tuple[str, str, str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """tui-32: a non-401 ``ServerError`` becomes an error toast unless the caller passed ``quiet=True``.
 
     Either way ``api`` returns ``None``.
@@ -120,7 +122,11 @@ def test_api_error_toast_respects_quiet(*, quiet: bool, toasts: list[tuple[str, 
         "http://test.invalid", client_factory=lambda _token: cast("IrrigationClient", object()), animations=False
     )
     seen: list[tuple[str, str, str]] = []
-    app.notify = lambda message, *, title="", severity="information", **_kw: seen.append((message, title, severity))  # type: ignore[method-assign]  # record this app's toasts only
+    monkeypatch.setattr(
+        app,
+        "notify",
+        lambda message, *, title="", severity="information", **_kw: seen.append((message, title, severity)),
+    )
 
     def failing(_client: IrrigationClient) -> Never:
         raise ServerError(500, "boom")

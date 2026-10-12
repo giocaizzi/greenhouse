@@ -1235,7 +1235,9 @@ class TestSearchAndSystem:
 
         _run(scenario())
 
-    def test_search_columns_fit_the_latest_results(self, greenhouse: tuple[TestClient, FakeDeviceWiring]) -> None:
+    def test_search_columns_fit_the_latest_results(
+        self, greenhouse: tuple[TestClient, FakeDeviceWiring], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Column widths follow each result set: a long early hit no longer keeps the table wide."""
         http, _ = greenhouse
         hits: dict[str, list[dict[str, object]]] = {
@@ -1245,7 +1247,7 @@ class TestSearchAndSystem:
 
         async def scenario() -> None:
             tui = GreenhouseApp(
-                "http://testserver", client_factory=_canned_search_factory(http, hits), refresh_seconds=0
+                "http://testserver", client_factory=_canned_search_factory(http, hits, monkeypatch), refresh_seconds=0
             )
             async with tui.run_test(size=SIZE) as pilot:
                 await _settle(pilot, tui)
@@ -1652,7 +1654,9 @@ def _paged_activity_handler(requests: list[dict[str, str]]) -> Callable[[httpx.R
     return handler
 
 
-def _canned_search_factory(http: TestClient, hits: dict[str, list[dict[str, object]]]) -> ClientFactory:
+def _canned_search_factory(
+    http: TestClient, hits: dict[str, list[dict[str, object]]], mp: pytest.MonkeyPatch
+) -> ClientFactory:
     """Client factory whose ``search`` answers from ``hits`` (query → hit list)."""
     base = tui_client_factory(http)
 
@@ -1662,7 +1666,7 @@ def _canned_search_factory(http: TestClient, hits: dict[str, list[dict[str, obje
 
     def factory(token: str | None) -> IrrigationClient:
         client = base(token)
-        client.search = fake_search  # type: ignore[method-assign]  # canned hits for this client only
+        mp.setattr(client, "search", fake_search)
         return client
 
     return factory
@@ -1845,11 +1849,11 @@ class TestResilience:
             engine.dispose()
 
 
-def test_failed_shielded_card_rebuild_is_logged_with_traceback() -> None:
+def test_failed_shielded_card_rebuild_is_logged_with_traceback(monkeypatch: pytest.MonkeyPatch) -> None:
     """A rebuild whose worker was cancelled is awaited by no one; its failure is logged, not left unretrieved."""
     records: list[logging.LogRecord] = []
     handler = logging.Handler()
-    handler.emit = records.append  # type: ignore[method-assign,assignment]  # collect records on this handler only
+    monkeypatch.setattr(handler, "emit", records.append)
     dashboard.logger.addHandler(handler)
 
     async def boom() -> None:

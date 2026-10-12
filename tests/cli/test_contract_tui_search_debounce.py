@@ -41,7 +41,9 @@ def seeded(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[tu
     engine.dispose()
 
 
-def _timestamping_factory(http: TestClient, calls: list[tuple[float, str]]) -> Callable[[str | None], IrrigationClient]:
+def _timestamping_factory(
+    http: TestClient, calls: list[tuple[float, str]], mp: pytest.MonkeyPatch
+) -> Callable[[str | None], IrrigationClient]:
     base = tui_client_factory(http)
 
     def factory(token: str | None) -> IrrigationClient:
@@ -52,20 +54,22 @@ def _timestamping_factory(http: TestClient, calls: list[tuple[float, str]]) -> C
             calls.append((time.monotonic(), query))
             return search(query, *args, **kwargs)
 
-        client.search = timed  # type: ignore[method-assign]  # timestamp this client's searches only
+        mp.setattr(client, "search", timed)
         return client
 
     return factory
 
 
-def test_search_is_debounced_and_sends_the_full_query_last(seeded: tuple[TestClient, Engine]) -> None:
+def test_search_is_debounced_and_sends_the_full_query_last(
+    seeded: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """First search ≥ 0.2 s after the first keystroke; the last query sent is "citrus"."""
     http, _ = seeded
     calls: list[tuple[float, str]] = []
     first_key: list[float] = []
 
     async def scenario() -> None:
-        tui = make_tui(http, factory=_timestamping_factory(http, calls))
+        tui = make_tui(http, factory=_timestamping_factory(http, calls, monkeypatch))
         async with tui.run_test(size=SIZE) as pilot:
             await settle(pilot, tui)
             await pilot.press("slash")

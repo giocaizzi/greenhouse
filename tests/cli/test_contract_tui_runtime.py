@@ -295,7 +295,7 @@ def test_activity_cursor_stays_on_the_selected_event_across_refresh(seeded: tupl
 # ── 401 → in-app sign-in ────────────────────────────────────────────────────
 
 
-def _authenticating_factory(application: FastAPI, log: list[RequestLog]) -> ClientFactory:
+def _authenticating_factory(application: FastAPI, log: list[RequestLog], mp: pytest.MonkeyPatch) -> ClientFactory:
     """Client factory on the real (auth-enforcing) app that sends the token and records every request."""
     lock = threading.Lock()
 
@@ -312,7 +312,7 @@ def _authenticating_factory(application: FastAPI, log: list[RequestLog]) -> Clie
                 response: httpx.Response = original(method, path, **kwargs)
                 return response
 
-        client.http.request = serialized  # type: ignore[method-assign,assignment]  # record and serialize this client only
+        mp.setattr(client.http, "request", serialized)
         return client
 
     return factory
@@ -335,7 +335,9 @@ def _assert_one_quiet_sign_in_prompt(tui: GreenhouseApp, toasts: list[tuple[str,
     assert startup == ["/api/v1/clusters", "/api/v1/health/system"]
 
 
-def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env: Path, frozen_clock: time_machine.Traveller) -> None:
+def test_401_opens_one_sign_in_dialog_then_logs_in(
+    clean_env: Path, frozen_clock: time_machine.Traveller, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Concurrent 401s on startup open exactly one LoginScreen and raise no error toast.
 
     Signing in posts the credentials verbatim, stores the token, toasts and reloads the dashboard.
@@ -346,8 +348,8 @@ def test_401_opens_one_sign_in_dialog_then_logs_in(clean_env: Path, frozen_clock
 
     async def scenario() -> None:
         # ``http`` is unused when a factory is given; None stands in for it on purpose.
-        tui = make_tui(cast("TestClient", None), factory=_authenticating_factory(application, log))
-        toasts = _record_toasts(tui)
+        tui = make_tui(cast("TestClient", None), factory=_authenticating_factory(application, log, monkeypatch))
+        toasts = _record_toasts(tui, monkeypatch)
         async with tui.run_test(size=SIZE) as pilot:
             await settle(pilot, tui)
             _assert_one_quiet_sign_in_prompt(tui, toasts, log)

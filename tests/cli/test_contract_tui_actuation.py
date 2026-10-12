@@ -72,7 +72,7 @@ def _run(coro: Coroutine[object, object, None]) -> None:
     asyncio.run(coro)
 
 
-def _record_toasts(tui: GreenhouseApp) -> list[tuple[str, str]]:
+def _record_toasts(tui: GreenhouseApp, mp: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     """Wrap ``app.notify`` (every screen's ``notify`` delegates to it) to record (severity, message)."""
     toasts: list[tuple[str, str]] = []
     original: Callable[..., None] = tui.notify
@@ -81,7 +81,7 @@ def _record_toasts(tui: GreenhouseApp) -> list[tuple[str, str]]:
         toasts.append((kwargs.get("severity", "information"), str(message)))
         return original(message, *args, **kwargs)
 
-    tui.notify = notify  # type: ignore[method-assign]  # record toasts on this app instance only
+    mp.setattr(tui, "notify", notify)
     return toasts
 
 
@@ -106,9 +106,11 @@ def _dialog(screen: Screen[object]) -> dict[str, object] | None:
 class _Recorder:
     """Drive one key at a time and record dialog + mutating requests + toasts."""
 
-    def __init__(self, pilot: Pilot[None], tui: GreenhouseApp, log: list[RequestLog], label: str) -> None:
+    def __init__(
+        self, pilot: Pilot[None], tui: GreenhouseApp, log: list[RequestLog], label: str, mp: pytest.MonkeyPatch
+    ) -> None:
         self.pilot, self.tui, self.log, self.label = pilot, tui, log, label
-        self.toasts = _record_toasts(tui)
+        self.toasts = _record_toasts(tui, mp)
         self.rows: list[Row] = []
 
     async def tab(self, tab: str) -> None:
@@ -159,12 +161,12 @@ class _Recorder:
             await pilot.click("#start")  # blank minutes = device default
 
 
-async def _dashboard(http: TestClient, rows: list[Row]) -> None:
+async def _dashboard(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> None:
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await settle(pilot, tui)
-        rec = _Recorder(pilot, tui, log, "dashboard")
+        rec = _Recorder(pilot, tui, log, "dashboard", mp)
         await rec.key("c")
         await rec.key("S")
         await rec.key("n", fill={"name": "Kitchen", "location": "sill"})
@@ -172,14 +174,14 @@ async def _dashboard(http: TestClient, rows: list[Row]) -> None:
         rows += rec.rows
 
 
-async def _cluster(http: TestClient, rows: list[Row]) -> None:
+async def _cluster(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> None:
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await settle(pilot, tui)
         await tui.push_screen(ClusterScreen(1))
         await settle(pilot, tui)
-        rec = _Recorder(pilot, tui, log, "cluster")
+        rec = _Recorder(pilot, tui, log, "cluster", mp)
         await _cluster_overview_keys(rec)
         await _cluster_plant_keys(rec)
         await _cluster_sensor_keys(rec)
@@ -250,25 +252,25 @@ async def _cluster_detach_and_delete(rec: _Recorder) -> None:
     await rec.key("D")
 
 
-async def _alerts(http: TestClient, rows: list[Row]) -> None:
+async def _alerts(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> None:
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("a")
         await settle(pilot, tui)
-        rec = _Recorder(pilot, tui, log, "alerts")
+        rec = _Recorder(pilot, tui, log, "alerts", mp)
         for key in ("k", "v", "y", "f"):
             await rec.key(key)
         rows += rec.rows
 
 
-async def _system(http: TestClient, rows: list[Row]) -> None:
+async def _system(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> None:
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("s")
         await settle(pilot, tui)
-        rec = _Recorder(pilot, tui, log, "system")
+        rec = _Recorder(pilot, tui, log, "system", mp)
         await rec.key("delete", note="cursor on a built-in job")
         await rec.key("p", note="pause (scheduler active)")
         await rec.key("p", note="resume (scheduler paused)")
@@ -277,13 +279,13 @@ async def _system(http: TestClient, rows: list[Row]) -> None:
         rows += rec.rows
 
 
-async def _settings(http: TestClient, rows: list[Row]) -> None:
+async def _settings(http: TestClient, rows: list[Row], mp: pytest.MonkeyPatch) -> None:
     log: list[RequestLog] = []
     tui = make_tui(http, log)
     async with tui.run_test(size=SIZE) as pilot:
         await pilot.press("o")
         await settle(pilot, tui)
-        rec = _Recorder(pilot, tui, log, "settings")
+        rec = _Recorder(pilot, tui, log, "settings", mp)
         await rec.key("u", note="no vacation windows yet")
         await rec.key("delete", note="no vacation windows yet")
         await rec.key("p")
@@ -295,21 +297,21 @@ async def _settings(http: TestClient, rows: list[Row]) -> None:
         rows += rec.rows
 
 
-def test_actuating_keys_golden(seeded: tuple[TestClient, Engine]) -> None:
+def test_actuating_keys_golden(seeded: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch) -> None:
     """Key → dialog → exact mutating requests (+ toasts) for every screen == golden."""
     http, _ = seeded
     rows: list[Row] = []
     for session in (_dashboard, _cluster, _alerts, _system, _settings):
-        _run(session(http, rows))
+        _run(session(http, rows, monkeypatch))
     assert_golden_json("tui/actuation.json", rows)
 
 
-def test_dialog_kind_per_actuating_key(seeded: tuple[TestClient, Engine]) -> None:
+def test_dialog_kind_per_actuating_key(seeded: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch) -> None:
     """The headline table of the golden, asserted directly so a diff names the key that changed."""
     http, _ = seeded
     rows: list[Row] = []
-    _run(_dashboard(http, rows))
-    _run(_system(http, rows))
+    _run(_dashboard(http, rows, monkeypatch))
+    _run(_system(http, rows, monkeypatch))
     kinds = {(r["screen"], r["key"], r.get("note")): r["dialog"] for r in rows}
     assert kinds == {
         ("dashboard", "c", None): "ConfirmScreen",

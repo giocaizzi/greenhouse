@@ -120,7 +120,7 @@ def _rows(table: DataTable[object]) -> list[dict[str, object]]:
     return [{"key": row.key.value, "cells": [_cell(c) for c in table.get_row(row.key)]} for row in table.ordered_rows]
 
 
-def _record_toasts(tui: GreenhouseApp) -> list[list[str]]:
+def _record_toasts(tui: GreenhouseApp, mp: pytest.MonkeyPatch) -> list[list[str]]:
     toasts: list[list[str]] = []
     original: Callable[..., None] = tui.notify
 
@@ -128,7 +128,7 @@ def _record_toasts(tui: GreenhouseApp) -> list[list[str]]:
         toasts.append([kwargs.get("severity", "information"), str(message)])
         return original(message, *args, **kwargs)
 
-    tui.notify = notify  # type: ignore[method-assign]  # record toasts on this app instance only
+    mp.setattr(tui, "notify", notify)
     return toasts
 
 
@@ -328,7 +328,9 @@ async def _press_on_tab(
     return capture
 
 
-def test_edit_and_delete_with_nothing_selected(seeded: tuple[TestClient, Engine]) -> None:
+def test_edit_and_delete_with_nothing_selected(
+    seeded: tuple[TestClient, Engine], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``u`` / ``delete`` on every CRUD tab of an empty cluster: the toast, no dialog, no write."""
     http, _ = seeded
     empty_id = _create_empty_cluster(http)
@@ -337,7 +339,7 @@ def test_edit_and_delete_with_nothing_selected(seeded: tuple[TestClient, Engine]
 
     async def scenario() -> None:
         tui = make_tui(http, log, factory=None)
-        toasts = _record_toasts(tui)
+        toasts = _record_toasts(tui, monkeypatch)
         async with tui.run_test(size=SIZE) as pilot:
             screen = await _open_cluster(pilot, tui, empty_id)
             for tab in ("tab-plants", "tab-sensors", "tab-windows", "tab-overview", "tab-config"):

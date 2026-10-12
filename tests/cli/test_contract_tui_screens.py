@@ -102,7 +102,8 @@ class _SearchGate:
     The requests themselves are unchanged; they are only delayed.
     """
 
-    def __init__(self, http: TestClient) -> None:
+    def __init__(self, http: TestClient, mp: pytest.MonkeyPatch) -> None:
+        self.mp = mp
         self.open = threading.Event()
         self.open.set()
         self._factory = tui_client_factory(http)
@@ -117,7 +118,7 @@ class _SearchGate:
                 raise AssertionError(msg)
             return search(*args, **kwargs)
 
-        client.search = gated  # type: ignore[method-assign]  # gate this client's searches only
+        self.mp.setattr(client, "search", gated)
         return client
 
 
@@ -141,8 +142,8 @@ class _Tourist:
         await settle(self.pilot, self.tui)
 
 
-async def _tour(http: TestClient, captures: Captures) -> None:
-    gate = _SearchGate(http)
+async def _tour(http: TestClient, captures: Captures, mp: pytest.MonkeyPatch) -> None:
+    gate = _SearchGate(http, mp)
     tui = make_tui(http, factory=gate.factory)
     async with tui.run_test(size=SIZE) as pilot:
         tourist = _Tourist(pilot, tui, captures)
@@ -225,7 +226,7 @@ def captures() -> Captures:
         try:
             http, _, engine = make_seeded_app()
             try:
-                asyncio.run(_tour(http, out))
+                asyncio.run(_tour(http, out, mp))
             finally:
                 engine.dispose()
             http, _, engine = make_seeded_app(bypass_auth=False)
