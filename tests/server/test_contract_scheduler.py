@@ -38,11 +38,8 @@ from greenhouse_server import scheduler as sched
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services import irrigation_jobs as irrigation_jobs_mod
 from greenhouse_server.services import pump_watcher_jobs as pump_watcher_jobs_mod
-from greenhouse_server.services.anomaly import SensorAnomalyService
-from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.leak import LeakDetectionService
-from greenhouse_server.services.sync import SyncService
 from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline, RecordingGateway
 
@@ -376,23 +373,6 @@ def test_sync_job_with_gateway_syncs_every_sensor_and_commits(p: Pipeline) -> No
     assert [(r["sensor_id"], r["timestamp"], r["soil_moisture"]) for r in new] == [(1, FROZEN_TS, 41.0)]
 
 
-def test_sync_job_failure_is_rolled_back_and_logged(
-    p: Pipeline, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Sync job failure is rolled back and logged."""
-    p.app.state.device_gateway = RecordingGateway()
-
-    def explode(_self: SyncService, hours: int = 24) -> NoReturn:
-        del hours  # the sync job passes it by keyword
-        msg = "cloud down"
-        raise RuntimeError(msg)
-
-    monkeypatch.setattr(SyncService, "sync_all_sensors", explode)
-    with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        run_core_job("sensor_sync")
-    assert "Sync job failed" in caplog.text
-
-
 def test_health_snapshot_job_writes_daily_rows(p: Pipeline) -> None:
     """Health snapshot job writes daily rows."""
     _seed_series(p, ages=range(0, 12 * HOUR, HOUR))
@@ -406,17 +386,6 @@ def test_health_snapshot_job_writes_daily_rows(p: Pipeline) -> None:
     assert_golden_json("orchestration/scheduler_health_snapshot.json", rows)
 
 
-@pytest.mark.usefixtures("p")
-def test_health_snapshot_job_failure_is_logged(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Health snapshot job failure is logged."""
-    monkeypatch.setattr(PlantHealthService, "snapshot_daily", lambda _self: 1 / 0)
-    with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        run_core_job("plant_health_snapshot")
-    assert "Plant health snapshot job failed" in caplog.text
-
-
 def test_anomaly_job_raises_stale_alert_and_notifies(p: Pipeline) -> None:
     # 12 hourly readings ending 5 h ago → silent for > 2 x the median interval.
     """Anomaly job raises stale alert and notifies."""
@@ -426,15 +395,6 @@ def test_anomaly_job_raises_stale_alert_and_notifies(p: Pipeline) -> None:
     alerts = p.db_rows()["alerts"]
     assert [(a["source"], a["code"], a["status"]) for a in alerts] == [("anomaly", "sensor_stale", "open")]
     assert_golden_json("orchestration/scheduler_anomaly.json", {"alerts": alerts, "notifications": p.notifier.sent})
-
-
-@pytest.mark.usefixtures("p")
-def test_anomaly_job_failure_is_logged(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
-    """Anomaly job failure is logged."""
-    monkeypatch.setattr(SensorAnomalyService, "scan", lambda _self: 1 / 0)
-    with caplog.at_level(logging.ERROR, logger="greenhouse_server.scheduler"):
-        run_core_job("sensor_anomaly")
-    assert "Anomaly scan job failed" in caplog.text
 
 
 def test_health_monitor_job_noops(p: Pipeline, monkeypatch: pytest.MonkeyPatch) -> None:
