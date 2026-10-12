@@ -9,12 +9,19 @@ manual start answers 502 and writes nothing.
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET
 from greenhouse_core.devices import DeviceGateway, IK10PWAdapter
 from server.test_contract_pipeline import Pipeline, _irrigate
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+    from pathlib import Path
+
+    import time_machine
 
 REFUSAL_PREFIX = "Local Duration DP unavailable (Local connection failed: No device_ip in config"
 
@@ -25,8 +32,8 @@ class _NoCloudExpected:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def __getattr__(self, name: str):
-        def _record(*_args, **_kwargs):
+    def __getattr__(self, name: str) -> Callable[..., dict[str, bool]]:
+        def _record(*_args: object, **_kwargs: object) -> dict[str, bool]:
             self.calls.append(name)
             return {"success": True}
 
@@ -34,7 +41,9 @@ class _NoCloudExpected:
 
 
 @pytest.fixture
-def ik10pw_pipeline(clean_env, frozen_clock):
+def ik10pw_pipeline(
+    clean_env: Path, frozen_clock: time_machine.Traveller
+) -> Iterator[tuple[Pipeline, _NoCloudExpected]]:
     """A pipeline whose irrigator is the real IK10PW adapter on a Cloud that must not be called."""
     del clean_env, frozen_clock  # requested only for their side effects
     p = Pipeline()
@@ -45,7 +54,7 @@ def ik10pw_pipeline(clean_env, frozen_clock):
     p.close()
 
 
-def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline):
+def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline: tuple[Pipeline, _NoCloudExpected]) -> None:
     """Pipeline records attempted and sends no on."""
     p, cloud = ik10pw_pipeline
     p.seed_cluster(soil=35.0)
@@ -59,7 +68,7 @@ def test_pipeline_records_attempted_and_sends_no_on(ik10pw_pipeline):
     assert cloud.calls == []
 
 
-def test_manual_start_returns_502_and_records_nothing(ik10pw_pipeline):
+def test_manual_start_returns_502_and_records_nothing(ik10pw_pipeline: tuple[Pipeline, _NoCloudExpected]) -> None:
     """Manual start returns 502 and records nothing."""
     p, cloud = ik10pw_pipeline
     ids = p.seed_cluster(soil=35.0)

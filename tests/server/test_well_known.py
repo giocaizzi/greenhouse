@@ -8,10 +8,11 @@ docstring for the upstream context.
 from http import HTTPStatus
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-def test_oauth_protected_resource_returns_rfc9728_metadata(client: TestClient):
+def test_oauth_protected_resource_returns_rfc9728_metadata(client: TestClient) -> None:
     """RFC 9728 probe gets 200 with valid metadata pointing at /mcp.
 
     With ``authorization_servers`` empty, conformant clients should stop
@@ -27,7 +28,7 @@ def test_oauth_protected_resource_returns_rfc9728_metadata(client: TestClient):
     assert body["resource_name"] == "greenhouse"
 
 
-def test_oauth_authorization_server_returns_json_404(client: TestClient):
+def test_oauth_authorization_server_returns_json_404(client: TestClient) -> None:
     """The RFC 8414 probe gets a JSON 404 an MCP SDK can parse.
 
     RFC 8414 probe falls through to 404 — but as JSON, not the default
@@ -49,7 +50,7 @@ def test_oauth_authorization_server_returns_json_404(client: TestClient):
         "/.well-known/oauth-authorization-server",
     ],
 )
-def test_well_known_routes_do_not_require_authentication(client: TestClient, path: str):
+def test_well_known_routes_do_not_require_authentication(client: TestClient, path: str) -> None:
     """OAuth discovery URLs answer without credentials.
 
     OAuth discovery URLs must be reachable without credentials —
@@ -60,7 +61,7 @@ def test_well_known_routes_do_not_require_authentication(client: TestClient, pat
     assert resp.status_code != HTTPStatus.UNAUTHORIZED, resp.text
 
 
-def test_well_known_paths_stay_out_of_openapi(app):
+def test_well_known_paths_stay_out_of_openapi(app: FastAPI) -> None:
     """The .well-known stubs stay out of OpenAPI.
 
     The .well-known stubs must not appear in OpenAPI — otherwise

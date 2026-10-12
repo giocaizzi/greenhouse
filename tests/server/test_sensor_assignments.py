@@ -4,14 +4,30 @@ from __future__ import annotations
 
 import time
 from http import HTTPStatus
+from typing import TYPE_CHECKING, TypedDict
 
 import pytest
 
 from greenhouse_core.repository import IrrigationRepository
 
+if TYPE_CHECKING:
+    import httpx
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+
+class Seeded(TypedDict):
+    """The ``seeded`` fixture: the client plus the ids it created."""
+
+    client: TestClient
+    cluster_id: int
+    plant_a: int
+    plant_b: int
+    sensor_id: int
+
 
 @pytest.fixture
-def seeded(client):
+def seeded(client: TestClient) -> Seeded:
     """Cluster + plant A + plant B + sensor (no plant yet) + readings spanning both windows."""
     client.post("/api/v1/clusters", json={"name": "Assignment Cluster"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
@@ -29,11 +45,12 @@ def seeded(client):
     return {"client": client, "cluster_id": 1, "plant_a": 1, "plant_b": 2, "sensor_id": 1}
 
 
-def _set_plant(client, sensor_id, plant_id):
-    return client.put(f"/api/v1/clusters/1/sensors/{sensor_id}", json={"plant_id": plant_id})
+def _set_plant(client: TestClient, sensor_id: int, plant_id: int) -> httpx.Response:
+    resp: httpx.Response = client.put(f"/api/v1/clusters/1/sensors/{sensor_id}", json={"plant_id": plant_id})
+    return resp
 
 
-def test_creating_sensor_with_plant_opens_assignment(seeded):
+def test_creating_sensor_with_plant_opens_assignment(seeded: Seeded) -> None:
     """Creating sensor with plant opens assignment."""
     client = seeded["client"]
     resp = client.get(f"/api/v1/sensors/{seeded['sensor_id']}/assignments")
@@ -46,7 +63,7 @@ def test_creating_sensor_with_plant_opens_assignment(seeded):
     assert row["ended_at"] is None
 
 
-def test_reassign_closes_old_and_opens_new(seeded):
+def test_reassign_closes_old_and_opens_new(seeded: Seeded) -> None:
     """Reassign closes old and opens new."""
     client = seeded["client"]
     resp = _set_plant(client, seeded["sensor_id"], seeded["plant_b"])
@@ -60,7 +77,7 @@ def test_reassign_closes_old_and_opens_new(seeded):
     assert rows[1]["ended_at"] is None  # current
 
 
-def test_reassign_to_same_plant_is_noop(seeded):
+def test_reassign_to_same_plant_is_noop(seeded: Seeded) -> None:
     """Reassign to same plant is noop."""
     client = seeded["client"]
     _set_plant(client, seeded["sensor_id"], seeded["plant_a"])
@@ -68,23 +85,24 @@ def test_reassign_to_same_plant_is_noop(seeded):
     assert len(rows) == 1  # nothing new opened
 
 
-def test_assignment_endpoint_404_for_missing_sensor(client):
+def test_assignment_endpoint_404_for_missing_sensor(client: TestClient) -> None:
     """Assignment endpoint 404 for missing sensor."""
     assert client.get("/api/v1/sensors/9999/assignments").status_code == HTTPStatus.NOT_FOUND
 
 
-def _two_plants_and_a_probe(client, cluster: str, device_id: str, probe: str):
+def _two_plants_and_a_probe(client: TestClient, cluster: str, device_id: str, probe: str) -> httpx.Response:
     """Cluster 1 with plants 1 (Monstera) and 2 (Dypsis) and sensor 1 on plant 1; return the sensor response."""
     client.post("/api/v1/clusters", json={"name": cluster})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Dypsis lutescens"})
-    return client.post(
+    resp: httpx.Response = client.post(
         "/api/v1/clusters/1/sensors",
         json={"tuya_device_id": device_id, "name": probe, "type": "tuya.tr301z", "plant_id": 1},
     )
+    return resp
 
 
-def _add_reading_now(app, soil: float) -> None:
+def _add_reading_now(app: FastAPI, soil: float) -> None:
     """Persist one soil reading on sensor 1, stamped with the current second."""
     session = app.state.session_factory()
     try:
@@ -94,7 +112,7 @@ def _add_reading_now(app, soil: float) -> None:
         session.close()
 
 
-def _soil_by_plant(app, plant_id: int) -> list[float]:
+def _soil_by_plant(app: FastAPI, plant_id: int) -> list[float | None]:
     """Soil values ``readings_for_plant`` attributes to ``plant_id``."""
     session = app.state.session_factory()
     try:
@@ -105,13 +123,13 @@ def _soil_by_plant(app, plant_id: int) -> list[float]:
         session.close()
 
 
-def _chart_soil(client, plant_id: int) -> list[float]:
+def _chart_soil(client: TestClient, plant_id: int) -> list[float]:
     """Soil values on ``plant_id``'s 24 h chart."""
     chart = client.get(f"/api/v1/plants/{plant_id}/chart-data?hours=24&metric=soil_moisture").json()
     return [p[1] for d in chart["datasets"] for p in d["points"]]
 
 
-def test_readings_for_plant_respects_assignment_window(client, app):
+def test_readings_for_plant_respects_assignment_window(client: TestClient, app: FastAPI) -> None:
     # Timeline: sensor created on plant A at T0, reading_A at T0+1s, reassign to
     # plant B at "now", reading_B at "now" — readings_for_plant must split by
     # which plant owned the sensor at reading time.
@@ -142,7 +160,7 @@ def test_readings_for_plant_respects_assignment_window(client, app):
     assert before_move not in plant_b_soil
 
 
-def test_plant_chart_uses_assignment_window(client, app):
+def test_plant_chart_uses_assignment_window(client: TestClient, app: FastAPI) -> None:
     """The plant chart must not retroactively re-attribute readings on sensor move."""
     _two_plants_and_a_probe(client, "Chart Cluster", "fake_chart_sensor", "Chart Probe")
 
@@ -170,7 +188,7 @@ def test_plant_chart_uses_assignment_window(client, app):
 
 
 @pytest.mark.usefixtures("app")
-def test_delete_plant_closes_open_assignment(client):
+def test_delete_plant_closes_open_assignment(client: TestClient) -> None:
     """Delete plant closes open assignment."""
     client.post("/api/v1/clusters", json={"name": "Delete Cluster"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa"})

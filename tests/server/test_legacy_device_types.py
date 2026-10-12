@@ -11,25 +11,37 @@ from __future__ import annotations
 
 import logging
 from http import HTTPStatus
+from typing import TYPE_CHECKING, TypeVar
 
 import pytest
 from alembic import command
+from fastapi import FastAPI
 from sqlalchemy import create_engine, text
 
 from greenhouse_core import database
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from fastapi.testclient import TestClient
+
 KNOWN_IRRIGATORS = "fake.irrigator, rainpoint.ik10pw"
 
+_RowId = TypeVar("_RowId")
 
-def _legacy_row(client, write):
+
+def _legacy_row(client: TestClient, write: Callable[[IrrigationRepository], _RowId]) -> _RowId:
     """Write a row the way an old database holds it: straight through the repository.
 
     The API and web refuse an unknown ``type`` on write, so a legacy value can only come
     from a pre-existing row.
     """
-    session = client.app.state.session_factory()
+    app = client.app
+    assert isinstance(app, FastAPI)
+    session = app.state.session_factory()
     try:
         row_id = write(IrrigationRepository(session))
         session.commit()
@@ -38,8 +50,8 @@ def _legacy_row(client, write):
         session.close()
 
 
-def _cluster_with_irrigator(client, irrigator_type: str) -> tuple[int, int]:
-    cid = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
+def _cluster_with_irrigator(client: TestClient, irrigator_type: str) -> tuple[int, int]:
+    cid: int = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
     iid = _legacy_row(
         client,
         lambda repo: repo.add_irrigator(
@@ -54,7 +66,9 @@ def _cluster_with_irrigator(client, irrigator_type: str) -> tuple[int, int]:
 
 
 @pytest.mark.parametrize("legacy", ["tuya_cloud", "tuya_local"])
-def test_manual_start_refuses_a_legacy_irrigator_with_503(client, app, caplog, legacy):
+def test_manual_start_refuses_a_legacy_irrigator_with_503(
+    client: TestClient, app: FastAPI, caplog: pytest.LogCaptureFixture, legacy: str
+) -> None:
     """Manual start refuses a legacy irrigator with 503."""
     _, iid = _cluster_with_irrigator(client, legacy)
     with caplog.at_level(logging.ERROR, logger="greenhouse_core.devices.registry"):
@@ -65,7 +79,9 @@ def test_manual_start_refuses_a_legacy_irrigator_with_503(client, app, caplog, l
     assert app.state.fake_devices.irrigator.calls == []
 
 
-def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded_client, app):
+def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(
+    seeded_client: TestClient, app: FastAPI
+) -> None:
     """Forced cluster irrigation skips actuation for a legacy irrigator."""
     client = seeded_client
     irrigator_id = client.get("/api/v1/clusters/1/irrigator").json()["id"]
@@ -76,7 +92,7 @@ def test_forced_cluster_irrigation_skips_actuation_for_a_legacy_irrigator(seeded
     assert app.state.fake_devices.irrigator.calls == []
 
 
-def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
+def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client: TestClient, app: FastAPI) -> None:
     """Emergency stop reports a legacy irrigator as an error."""
     _, iid = _cluster_with_irrigator(client, "tuya_local")
     resp = client.post("/api/v1/bulk/stop-all", json={})
@@ -90,7 +106,9 @@ def test_emergency_stop_reports_a_legacy_irrigator_as_an_error(client, app):
 
 
 @pytest.mark.parametrize("legacy", ["soil_moisture", "temp_humidity", "light"])
-def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, legacy):
+def test_health_poll_skips_a_legacy_sensor_with_a_warning(
+    client: TestClient, app: FastAPI, caplog: pytest.LogCaptureFixture, legacy: str
+) -> None:
     """Health poll skips a legacy sensor with a warning."""
     cid = client.post("/api/v1/clusters", json={"name": "Legacy", "environment": "indoor"}).json()["id"]
     sid = _legacy_row(
@@ -104,7 +122,9 @@ def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, l
         repo = IrrigationRepository(session)
         monitor = DeviceHealthMonitor(repo, app.state.fake_devices.registry, clock=lambda: 1_700_000_000)
         with caplog.at_level(logging.WARNING, logger="greenhouse_core.devices.registry"):
-            state = monitor.poll_sensor(repo.get_sensor(sid))
+            sensor = repo.get_sensor(sid)
+            assert sensor is not None
+            state = monitor.poll_sensor(sensor)
     finally:
         session.close()
     assert (state.observed_at, state.offline, state.alarms) == (1_700_000_000, False, frozenset())
@@ -114,7 +134,7 @@ def test_health_poll_skips_a_legacy_sensor_with_a_warning(client, app, caplog, l
     ]
 
 
-def test_upgrade_rewrites_leftover_legacy_types_to_model_keys(tmp_path):
+def test_upgrade_rewrites_leftover_legacy_types_to_model_keys(tmp_path: Path) -> None:
     """Alembic ``a1d3f5b7c902`` rewrites rows the old web forms left on legacy values."""
     engine = create_engine(f"sqlite:///{tmp_path}/legacy.db")
     cfg = database._alembic_config(engine)  # noqa: SLF001 — reuses init_db's Alembic config builder

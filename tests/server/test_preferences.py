@@ -2,13 +2,15 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
 DEFAULT_REFRESH_INTERVAL_SECONDS = 30
 
 
 class TestGetPreferences:
     """Tests for get preferences."""
 
-    def test_defaults_exist(self, client):
+    def test_defaults_exist(self, client: TestClient) -> None:
         """GET preferences always returns a row with sensible defaults."""
         resp = client.get("/api/v1/preferences")
         assert resp.status_code == HTTPStatus.OK
@@ -25,7 +27,7 @@ class TestGetPreferences:
         assert data["notify_alerts"] is True
         assert data["notify_auto"] is True
 
-    def test_idempotent(self, client):
+    def test_idempotent(self, client: TestClient) -> None:
         """Multiple GET calls return the same defaults without creating duplicates."""
         r1 = client.get("/api/v1/preferences")
         r2 = client.get("/api/v1/preferences")
@@ -35,7 +37,7 @@ class TestGetPreferences:
 class TestUpdatePreferences:
     """Tests for update preferences."""
 
-    def test_put_full(self, client):
+    def test_put_full(self, client: TestClient) -> None:
         """PUT with all fields updates every preference."""
         update = {
             "units": "imperial",
@@ -53,7 +55,7 @@ class TestUpdatePreferences:
         assert data["refresh_interval_seconds"] == update["refresh_interval_seconds"]
         assert data["dry_run_global"] is True
 
-    def test_put_partial_preserves_other_fields(self, client):
+    def test_put_partial_preserves_other_fields(self, client: TestClient) -> None:
         """PUT with a subset of fields must not reset the others."""
         # Set all first
         client.put("/api/v1/preferences", json={"units": "imperial", "theme": "dark"})
@@ -65,13 +67,13 @@ class TestUpdatePreferences:
         assert data["theme"] == "dark"  # preserved
         assert data["timezone"] == "Europe/Rome"
 
-    def test_get_reflects_put(self, client):
+    def test_get_reflects_put(self, client: TestClient) -> None:
         """GET after PUT returns the updated values."""
         client.put("/api/v1/preferences", json={"dry_run_global": True})
         resp = client.get("/api/v1/preferences")
         assert resp.json()["dry_run_global"] is True
 
-    def test_put_notify_flags(self, client):
+    def test_put_notify_flags(self, client: TestClient) -> None:
         """PUT can toggle individual ntfy notification categories."""
         resp = client.put("/api/v1/preferences", json={"notify_auto": False, "notify_alerts": False})
         assert resp.status_code == HTTPStatus.OK

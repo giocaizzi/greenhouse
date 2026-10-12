@@ -5,12 +5,15 @@ Absent → unchanged; ``null`` → cleared for an optional field, ignored for a 
 
 from http import HTTPStatus
 
-
-def _cluster(client, **extra):
-    return client.post("/api/v1/clusters", json={"name": "C1", "location": "Shelf", **extra}).json()["id"]
+from fastapi.testclient import TestClient
 
 
-def test_cluster_location_null_clears_absent_keeps(client):
+def _cluster(client: TestClient, **extra: object) -> int:
+    cluster_id: int = client.post("/api/v1/clusters", json={"name": "C1", "location": "Shelf", **extra}).json()["id"]
+    return cluster_id
+
+
+def test_cluster_location_null_clears_absent_keeps(client: TestClient) -> None:
     """Cluster location null clears absent keeps."""
     cid = _cluster(client)
     kept = client.put(f"/api/v1/clusters/{cid}", json={"environment": "outdoor"}).json()
@@ -19,7 +22,7 @@ def test_cluster_location_null_clears_absent_keeps(client):
     assert (cleared["name"], cleared["location"]) == ("C1", None)
 
 
-def test_plant_notes_null_clears(client):
+def test_plant_notes_null_clears(client: TestClient) -> None:
     """Plant notes null clears."""
     cid = _cluster(client)
     pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Monstera deliciosa", "notes": "n"}).json()[
@@ -29,7 +32,7 @@ def test_plant_notes_null_clears(client):
     assert (resp.status_code, resp.json()["notes"], resp.json()["species"]) == (200, None, "Monstera deliciosa")
 
 
-def test_vacation_notes_and_email_null_clear(client):
+def test_vacation_notes_and_email_null_clear(client: TestClient) -> None:
     """Vacation notes and email null clear."""
     created = client.post(
         "/api/v1/vacation",
@@ -45,7 +48,7 @@ def test_vacation_notes_and_email_null_clear(client):
     )
 
 
-def test_preferences_default_cluster_null_clears(client):
+def test_preferences_default_cluster_null_clears(client: TestClient) -> None:
     """Preferences default cluster null clears."""
     cid = _cluster(client)
     assert client.put("/api/v1/preferences", json={"default_cluster_id": cid}).json()["default_cluster_id"] == cid
@@ -53,7 +56,7 @@ def test_preferences_default_cluster_null_clears(client):
     assert (body["default_cluster_id"], body["theme"]) == (None, "auto")
 
 
-def test_sensor_plant_id_null_unassigns(client):
+def test_sensor_plant_id_null_unassigns(client: TestClient) -> None:
     """Sensor plant ID null unassigns."""
     cid = _cluster(client)
     pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Monstera deliciosa"}).json()["id"]
@@ -65,7 +68,7 @@ def test_sensor_plant_id_null_unassigns(client):
     assert client.put(f"/api/v1/clusters/{cid}/sensors/{sid}", json={"plant_id": None}).json()["plant_id"] is None
 
 
-def test_irrigator_capacity_null_clears(client):
+def test_irrigator_capacity_null_clears(client: TestClient) -> None:
     """Irrigator capacity null clears."""
     cid = _cluster(client)
     client.post(
@@ -76,7 +79,7 @@ def test_irrigator_capacity_null_clears(client):
     assert (body["reservoir_l"], body["name"]) == (None, "P")
 
 
-def test_preferences_refuse_an_unknown_default_cluster(client):
+def test_preferences_refuse_an_unknown_default_cluster(client: TestClient) -> None:
     """A default cluster that does not exist is 404 (API) / a 404 page (web); nothing is written."""
     resp = client.put("/api/v1/preferences", json={"default_cluster_id": 999, "theme": "dark"})
     assert (resp.status_code, resp.json()) == (404, {"detail": "Cluster not found"})

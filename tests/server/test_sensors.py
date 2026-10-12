@@ -2,6 +2,9 @@
 
 from http import HTTPStatus
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
@@ -10,7 +13,7 @@ from greenhouse_core.repository import IrrigationRepository
 class TestSensorCRUD:
     """Tests for sensor CRUD."""
 
-    def test_add_and_list(self, client):
+    def test_add_and_list(self, client: TestClient) -> None:
         """Add and list."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
@@ -23,7 +26,7 @@ class TestSensorCRUD:
         resp = client.get("/api/v1/clusters/1/sensors")
         assert len(resp.json()) == 1
 
-    def test_add_with_plant(self, client):
+    def test_add_with_plant(self, client: TestClient) -> None:
         """Add with plant."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -34,7 +37,7 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.CREATED
         assert resp.json()["plant_id"] == 1
 
-    def test_add_duplicate_device(self, client):
+    def test_add_duplicate_device(self, client: TestClient) -> None:
         """Add duplicate device."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -47,13 +50,13 @@ class TestSensorCRUD:
         )
         assert resp.status_code == HTTPStatus.CONFLICT
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """List empty."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors")
         assert resp.json() == []
 
-    def test_get_by_id(self, client):
+    def test_get_by_id(self, client: TestClient) -> None:
         """Get by ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -64,7 +67,7 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "My Sensor"
 
-    def test_get_wrong_cluster_returns_404(self, client):
+    def test_get_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Get wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -75,13 +78,13 @@ class TestSensorCRUD:
         resp = client.get("/api/v1/clusters/2/sensors/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_get_not_found(self, client):
+    def test_get_not_found(self, client: TestClient) -> None:
         """Get not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/sensors/999")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_name_and_plant_id(self, client):
+    def test_update_name_and_plant_id(self, client: TestClient) -> None:
         """Update name and plant ID."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -98,7 +101,7 @@ class TestSensorCRUD:
         assert data["name"] == "New Name"
         assert data["plant_id"] == 1
 
-    def test_update_rejects_plant_from_another_cluster(self, client):
+    def test_update_rejects_plant_from_another_cluster(self, client: TestClient) -> None:
         """D2: the plant-in-cluster rule applies on update too (API and web share it)."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -112,7 +115,7 @@ class TestSensorCRUD:
         assert resp.json() == {"detail": "Plant 1 not found in cluster"}
         assert client.get("/api/v1/clusters/1/sensors/1").json()["plant_id"] is None
 
-    def test_update_wrong_cluster_returns_404(self, client):
+    def test_update_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Update wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -123,13 +126,13 @@ class TestSensorCRUD:
         resp = client.put("/api/v1/clusters/2/sensors/1", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, client: TestClient) -> None:
         """Update not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/sensors/999", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_sensor(self, client):
+    def test_delete_sensor(self, client: TestClient) -> None:
         """Delete sensor."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -143,7 +146,7 @@ class TestSensorCRUD:
         resp = client.get("/api/v1/clusters/1/sensors/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_wrong_cluster_returns_404(self, client):
+    def test_delete_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Delete wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -154,7 +157,7 @@ class TestSensorCRUD:
         resp = client.delete("/api/v1/clusters/2/sensors/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, client: TestClient) -> None:
         """Delete not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/sensors/999")
@@ -164,7 +167,7 @@ class TestSensorCRUD:
 class TestListAllSensorsTopLevel:
     """Tests for list all sensors top level."""
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """GET /sensors with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/sensors")
         assert resp.status_code == HTTPStatus.OK
@@ -172,7 +175,7 @@ class TestListAllSensorsTopLevel:
         assert data["sensors"] == []
         assert data["next_cursor"] is None
 
-    def test_list_across_clusters(self, client):
+    def test_list_across_clusters(self, client: TestClient) -> None:
         """GET /sensors returns every sensor regardless of cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -188,7 +191,7 @@ class TestListAllSensorsTopLevel:
         names = sorted(s["name"] for s in resp.json()["sensors"])
         assert names == ["A1", "B1"]
 
-    def test_filter_by_cluster_id(self, client):
+    def test_filter_by_cluster_id(self, client: TestClient) -> None:
         """cluster_id filter restricts to one cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -204,7 +207,7 @@ class TestListAllSensorsTopLevel:
         names = [s["name"] for s in resp.json()["sensors"]]
         assert names == ["B1"]
 
-    def test_pagination(self, client):
+    def test_pagination(self, client: TestClient) -> None:
         """Limit + cursor walks the rows id-ascending."""
         client.post("/api/v1/clusters", json={"name": "A"})
         for n in range(3):
@@ -226,7 +229,7 @@ class TestListAllSensorsTopLevel:
 class TestSensorReassignmentActivity:
     """Tests for sensor reassignment activity."""
 
-    def test_put_plant_id_change_emits_sensor_reassigned_event(self, client):
+    def test_put_plant_id_change_emits_sensor_reassigned_event(self, client: TestClient) -> None:
         """Changing a sensor's plant_id via PUT must publish a sensor_reassigned activity event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -243,7 +246,7 @@ class TestSensorReassignmentActivity:
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" in codes
 
-    def test_no_op_plant_id_change_does_not_emit_event(self, client):
+    def test_no_op_plant_id_change_does_not_emit_event(self, client: TestClient) -> None:
         """Setting plant_id to its current value must NOT publish an event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -258,7 +261,7 @@ class TestSensorReassignmentActivity:
         codes = [e["code"] for e in resp.json()["items"]]
         assert "sensor_reassigned" not in codes
 
-    def test_clearing_plant_id_emits_event(self, client):
+    def test_clearing_plant_id_emits_event(self, client: TestClient) -> None:
         """Detaching a sensor (setting plant_id to None) also publishes the event."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -271,6 +274,7 @@ class TestSensorReassignmentActivity:
 
         # Resolve the underlying session factory via TestClient app state.
         app = client.app
+        assert isinstance(app, FastAPI)
         with app.state.session_factory() as session:
             repo = IrrigationRepository(session)
             repo.reassign_sensor_to_plant(1, None)
@@ -287,14 +291,18 @@ class TestSensorLocalKeyMasking:
     SECRET = FAKE_LOCAL_KEY
     MASK = "••••••••"
 
-    def _stored_config(self, client, sid):
-        session = client.app.state.session_factory()
+    def _stored_config(self, client: TestClient, sid: int) -> dict[str, object]:
+        app = client.app
+        assert isinstance(app, FastAPI)
+        session = app.state.session_factory()
         try:
-            return parse_device_config(IrrigationRepository(session).get_sensor(sid).config)
+            sensor = IrrigationRepository(session).get_sensor(sid)
+            assert sensor is not None
+            return parse_device_config(sensor.config)
         finally:
             session.close()
 
-    def test_responses_mask_and_the_mask_round_trips(self, client):
+    def test_responses_mask_and_the_mask_round_trips(self, client: TestClient) -> None:
         """Responses mask and the mask round trips."""
         cid = client.post("/api/v1/clusters", json={"name": "C"}).json()["id"]
         created = client.post(

@@ -7,6 +7,10 @@ irrigator id (``/irrigators/{id}/start`` etc.).
 
 from http import HTTPStatus
 
+import httpx
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import IrrigationRepository
@@ -15,7 +19,7 @@ from greenhouse_core.repository import IrrigationRepository
 class TestIrrigatorCRUD:
     """Tests for irrigator CRUD."""
 
-    def test_add_and_get(self, client):
+    def test_add_and_get(self, client: TestClient) -> None:
         """Add and get."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
@@ -29,7 +33,7 @@ class TestIrrigatorCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["name"] == "Pump"
 
-    def test_add_second_irrigator_conflicts(self, client):
+    def test_add_second_irrigator_conflicts(self, client: TestClient) -> None:
         """A cluster may have at most one irrigator — a second POST returns 409."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         first = client.post(
@@ -43,7 +47,7 @@ class TestIrrigatorCRUD:
         )
         assert resp.status_code == HTTPStatus.CONFLICT
 
-    def test_add_duplicate_device(self, client):
+    def test_add_duplicate_device(self, client: TestClient) -> None:
         """Re-using a Tuya device id (here, on another cluster) returns 409."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -57,13 +61,13 @@ class TestIrrigatorCRUD:
         )
         assert resp.status_code == HTTPStatus.CONFLICT
 
-    def test_get_no_irrigator_returns_404(self, client):
+    def test_get_no_irrigator_returns_404(self, client: TestClient) -> None:
         """Get no irrigator returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.get("/api/v1/clusters/1/irrigator")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_name_and_config(self, client):
+    def test_update_name_and_config(self, client: TestClient) -> None:
         """Update name and config."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -79,13 +83,13 @@ class TestIrrigatorCRUD:
         assert data["name"] == "New Pump"
         assert data["config"] == {"key": "value"}
 
-    def test_update_no_irrigator_returns_404(self, client):
+    def test_update_no_irrigator_returns_404(self, client: TestClient) -> None:
         """Update no irrigator returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/irrigator", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_create_with_capacity_round_trips(self, client):
+    def test_create_with_capacity_round_trips(self, client: TestClient) -> None:
         """POST with reservoir_l/flow_rate_l_per_min persists and is returned."""
         capacity = {"reservoir_l": 12.5, "flow_rate_l_per_min": 1.5}
         client.post("/api/v1/clusters", json={"name": "C1"})
@@ -101,7 +105,7 @@ class TestIrrigatorCRUD:
         got = client.get("/api/v1/clusters/1/irrigator").json()
         assert {key: got[key] for key in capacity} == capacity
 
-    def test_create_without_capacity_defaults_none(self, client):
+    def test_create_without_capacity_defaults_none(self, client: TestClient) -> None:
         """Capacity fields are optional and default to None."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
@@ -112,7 +116,7 @@ class TestIrrigatorCRUD:
         assert data["reservoir_l"] is None
         assert data["flow_rate_l_per_min"] is None
 
-    def test_update_capacity_round_trips(self, client):
+    def test_update_capacity_round_trips(self, client: TestClient) -> None:
         """PUT with capacity fields updates and returns the new values."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -128,7 +132,7 @@ class TestIrrigatorCRUD:
         got = client.get("/api/v1/clusters/1/irrigator").json()
         assert {key: got[key] for key in capacity} == capacity
 
-    def test_update_rejects_negative_capacity(self, client):
+    def test_update_rejects_negative_capacity(self, client: TestClient) -> None:
         """Negative capacity values are rejected by schema validation (ge=0)."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -138,7 +142,7 @@ class TestIrrigatorCRUD:
         resp = client.put("/api/v1/clusters/1/irrigator", json={"reservoir_l": -1.0})
         assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
 
-    def test_delete_irrigator(self, client):
+    def test_delete_irrigator(self, client: TestClient) -> None:
         """Delete irrigator."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -152,13 +156,13 @@ class TestIrrigatorCRUD:
         resp = client.get("/api/v1/clusters/1/irrigator")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_no_irrigator_returns_404(self, client):
+    def test_delete_no_irrigator_returns_404(self, client: TestClient) -> None:
         """Delete no irrigator returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_double_delete_returns_404(self, client):
+    def test_double_delete_returns_404(self, client: TestClient) -> None:
         """Double delete returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -169,7 +173,7 @@ class TestIrrigatorCRUD:
         resp = client.delete("/api/v1/clusters/1/irrigator")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_can_recreate_after_delete(self, client):
+    def test_can_recreate_after_delete(self, client: TestClient) -> None:
         """Deleting frees the 0:1 slot so a new irrigator can be added."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -187,7 +191,7 @@ class TestIrrigatorCRUD:
 class TestIrrigatorControl:
     """Tests for irrigator control."""
 
-    def test_start(self, seeded_client):
+    def test_start(self, seeded_client: TestClient) -> None:
         """Start."""
         resp = seeded_client.post("/api/v1/irrigators/1/start", json={"minutes": 5})
         assert resp.status_code == HTTPStatus.OK
@@ -197,19 +201,19 @@ class TestIrrigatorControl:
         events = resp.json()["irrigators"][0]["events"]
         assert any(e["action"] == "start" for e in events)
 
-    def test_stop(self, seeded_client):
+    def test_stop(self, seeded_client: TestClient) -> None:
         """Stop."""
         resp = seeded_client.post("/api/v1/irrigators/1/stop")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
-    def test_log_manual(self, seeded_client):
+    def test_log_manual(self, seeded_client: TestClient) -> None:
         """Log manual."""
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={"minutes": 3})
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
-    def test_log_manual_requires_minutes(self, seeded_client):
+    def test_log_manual_requires_minutes(self, seeded_client: TestClient) -> None:
         """Log manual requires minutes."""
         resp = seeded_client.post("/api/v1/irrigators/1/log-manual", json={})
         assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
@@ -218,7 +222,7 @@ class TestIrrigatorControl:
 class TestListAllIrrigatorsTopLevel:
     """Tests for list all irrigators top level."""
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """GET /irrigators with no rows returns empty list and null cursor."""
         resp = client.get("/api/v1/irrigators")
         assert resp.status_code == HTTPStatus.OK
@@ -226,7 +230,7 @@ class TestListAllIrrigatorsTopLevel:
         assert data["irrigators"] == []
         assert data["next_cursor"] is None
 
-    def test_list_across_clusters(self, client):
+    def test_list_across_clusters(self, client: TestClient) -> None:
         """GET /irrigators returns every irrigator regardless of cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -242,7 +246,7 @@ class TestListAllIrrigatorsTopLevel:
         names = sorted(i["name"] for i in resp.json()["irrigators"])
         assert names == ["A1", "B1"]
 
-    def test_filter_by_cluster_id(self, client):
+    def test_filter_by_cluster_id(self, client: TestClient) -> None:
         """cluster_id filter restricts to one cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -258,7 +262,7 @@ class TestListAllIrrigatorsTopLevel:
         names = [i["name"] for i in resp.json()["irrigators"]]
         assert names == ["B1"]
 
-    def test_pagination(self, client):
+    def test_pagination(self, client: TestClient) -> None:
         """Limit + cursor walks the rows id-ascending across clusters."""
         for n in range(3):
             client.post("/api/v1/clusters", json={"name": f"C{n}"})
@@ -276,7 +280,7 @@ class TestListAllIrrigatorsTopLevel:
         assert len(data2["irrigators"]) == 1
         assert data2["next_cursor"] is None
 
-    def test_get_not_found_on_unknown_cluster(self, client):
+    def test_get_not_found_on_unknown_cluster(self, client: TestClient) -> None:
         """Filter by an unknown cluster returns an empty page, not a 404."""
         resp = client.get("/api/v1/irrigators?cluster_id=999")
         assert resp.status_code == HTTPStatus.OK
@@ -289,9 +293,9 @@ class TestLocalKeyMasking:
     SECRET = FAKE_LOCAL_KEY
     MASK = "••••••••"
 
-    def _seed(self, client):
+    def _seed(self, client: TestClient) -> httpx.Response:
         client.post("/api/v1/clusters", json={"name": "C1"})
-        return client.post(
+        resp: httpx.Response = client.post(
             "/api/v1/clusters/1/irrigator",
             json={
                 "tuya_device_id": "fake_tuya_device_aabbccdd",
@@ -300,16 +304,21 @@ class TestLocalKeyMasking:
                 "config": {"device_ip": "192.0.2.10", "local_key": self.SECRET},
             },
         )
+        return resp
 
     @staticmethod
-    def _stored_config(client):
-        session = client.app.state.session_factory()
+    def _stored_config(client: TestClient) -> dict[str, object]:
+        app = client.app
+        assert isinstance(app, FastAPI)
+        session = app.state.session_factory()
         try:
-            return parse_device_config(IrrigationRepository(session).get_irrigator_for_cluster(1).config)
+            irrigator = IrrigationRepository(session).get_irrigator_for_cluster(1)
+            assert irrigator is not None
+            return parse_device_config(irrigator.config)
         finally:
             session.close()
 
-    def test_every_irrigator_response_masks_the_local_key(self, client):
+    def test_every_irrigator_response_masks_the_local_key(self, client: TestClient) -> None:
         """Every irrigator response masks the local key."""
         created = self._seed(client)
         expected = {"device_ip": "192.0.2.10", "local_key": self.MASK}
@@ -322,7 +331,7 @@ class TestLocalKeyMasking:
         assert self.SECRET not in client.get("/api/v1/clusters/1/irrigator").text
         assert self._stored_config(client)["local_key"] == self.SECRET
 
-    def test_sending_the_mask_back_keeps_the_stored_key(self, client):
+    def test_sending_the_mask_back_keeps_the_stored_key(self, client: TestClient) -> None:
         """Sending the mask back keeps the stored key."""
         self._seed(client)
         round_trip = client.get("/api/v1/clusters/1/irrigator").json()["config"]
@@ -331,7 +340,7 @@ class TestLocalKeyMasking:
         assert resp.status_code == HTTPStatus.OK
         assert self._stored_config(client) == {"device_ip": "192.0.2.11", "local_key": self.SECRET}
 
-    def test_a_new_local_key_replaces_the_stored_one(self, client):
+    def test_a_new_local_key_replaces_the_stored_one(self, client: TestClient) -> None:
         """A new local key replaces the stored one."""
         self._seed(client)
         resp = client.put(
@@ -341,7 +350,7 @@ class TestLocalKeyMasking:
         assert resp.json()["config"]["local_key"] == self.MASK
         assert self._stored_config(client)["local_key"] == "fake_local_key_rotated"
 
-    def test_no_local_key_means_nothing_to_mask(self, client):
+    def test_no_local_key_means_nothing_to_mask(self, client: TestClient) -> None:
         """No local key means nothing to mask."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(

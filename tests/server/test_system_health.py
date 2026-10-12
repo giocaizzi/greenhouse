@@ -4,7 +4,7 @@ import time
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -14,7 +14,7 @@ from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 
-def _make_app():
+def _make_app() -> tuple[TestClient, Engine]:
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
     app = create_app(settings, engine=engine)
@@ -26,7 +26,7 @@ def _make_app():
 class TestSystemHealthPulse:
     """Tests for system health pulse."""
 
-    def test_empty_system_status_down(self, client):
+    def test_empty_system_status_down(self, client: TestClient) -> None:
         """Empty system status down."""
         resp = client.get("/api/v1/health/system")
         assert resp.status_code == HTTPStatus.OK
@@ -38,7 +38,7 @@ class TestSystemHealthPulse:
         assert data["cloud_reachable"] is False
         assert data["last_sync_at"] is None
 
-    def test_fresh_sensor_ok_status(self):
+    def test_fresh_sensor_ok_status(self) -> None:
         """A sensor with a reading within the last hour → status ok."""
         client, engine = _make_app()
         try:
@@ -50,6 +50,7 @@ class TestSystemHealthPulse:
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
+                assert sensor is not None
                 now = int(time.time())
                 session.add(SensorReading(sensor_id=sensor.id, timestamp=now - 300, soil_moisture=50.0))
                 session.commit()
@@ -63,7 +64,7 @@ class TestSystemHealthPulse:
         finally:
             engine.dispose()
 
-    def test_stale_sensor_degraded_status(self):
+    def test_stale_sensor_degraded_status(self) -> None:
         """A sensor with a recent but stale (1-3h old) reading → degraded, cloud reachable."""
         client, engine = _make_app()
         try:
@@ -75,6 +76,7 @@ class TestSystemHealthPulse:
 
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
+                assert sensor is not None
                 # 90 minutes old: stale (>3600s) but reachable (<3600s for cloud means NOT reachable
                 # per cloud_reachable definition, but stale per sensor staleness threshold of 3h)
                 # Use 2h old: stale sensor (>3h threshold) → no, 2h < 3h so it's "ok"
@@ -107,7 +109,7 @@ class TestSystemHealthPulse:
         finally:
             engine.dispose()
 
-    def test_degraded_from_open_alerts(self):
+    def test_degraded_from_open_alerts(self) -> None:
         """Three or more open alerts with fresh sensor → degraded status."""
         client, engine = _make_app()
         try:
@@ -121,6 +123,7 @@ class TestSystemHealthPulse:
             open_alerts = 3
             with Session(engine) as session:
                 sensor = session.get(Sensor, 1)
+                assert sensor is not None
                 session.add(SensorReading(sensor_id=sensor.id, timestamp=now - 300, soil_moisture=50.0))
                 for i in range(open_alerts):
                     session.add(
@@ -149,7 +152,7 @@ class TestSystemHealthPulse:
         finally:
             engine.dispose()
 
-    def test_response_schema(self, client):
+    def test_response_schema(self, client: TestClient) -> None:
         """Response schema."""
         resp = client.get("/api/v1/health/system")
         data = resp.json()
