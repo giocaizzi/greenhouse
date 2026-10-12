@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import create_engine
@@ -19,21 +20,27 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import RepoDep, get_sync_service
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from greenhouse_core.repository import IrrigationRepository
+
 
 class _RecordingSync:
     """Stand-in SyncService: writes one row through the request's repository, never commits."""
 
-    def __init__(self, repo) -> None:
+    def __init__(self, repo: IrrigationRepository) -> None:
         self._repo = repo
         self.hours: list[int] = []
 
-    def sync_all_sensors(self, hours: int = 24) -> dict:
+    def sync_all_sensors(self, hours: int = 24) -> dict[str, object]:
         self.hours.append(hours)
         self._repo.add_cluster(name="written-by-sync")
         return {"total_synced": 3, "total_new": 2, "total_live": 1, "errors": ["sensor 9: boom"]}
 
 
-def test_sync_route_commits_the_sync_writes_and_maps_the_stats(app, client):
+def test_sync_route_commits_the_sync_writes_and_maps_the_stats(app: FastAPI, client: TestClient) -> None:
     """``POST /api/v1/sync`` passes ``hours``, commits what the sync wrote and returns the four counters."""
     calls: list[_RecordingSync] = []
 
@@ -53,21 +60,21 @@ def test_sync_route_commits_the_sync_writes_and_maps_the_stats(app, client):
     assert [c["name"] for c in client.get("/api/v1/clusters").json()] == ["written-by-sync"]
 
 
-def test_cluster_chart_data_unsupported_metric_is_400(client):
+def test_cluster_chart_data_unsupported_metric_is_400(client: TestClient) -> None:
     """Cluster chart data unsupported metric is 400."""
     resp = client.get("/api/v1/clusters/1/chart-data?metric=bogus")
     assert resp.status_code == HTTPStatus.BAD_REQUEST
     assert resp.json() == {"detail": "Unsupported metric: bogus"}
 
 
-def test_cluster_chart_data_unknown_cluster_is_404(client):
+def test_cluster_chart_data_unknown_cluster_is_404(client: TestClient) -> None:
     """Cluster chart data unknown cluster is 404."""
     resp = client.get("/api/v1/clusters/999/chart-data")
     assert resp.status_code == HTTPStatus.NOT_FOUND
     assert resp.json() == {"detail": "Cluster not found"}
 
 
-def test_plant_chart_data_unknown_plant_is_404(client):
+def test_plant_chart_data_unknown_plant_is_404(client: TestClient) -> None:
     """Plant chart data unknown plant is 404."""
     resp = client.get("/api/v1/plants/999/chart-data")
     assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -75,7 +82,7 @@ def test_plant_chart_data_unknown_plant_is_404(client):
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_create_app_loads_the_plant_db_from_settings_path():
+def test_create_app_loads_the_plant_db_from_settings_path() -> None:
     """``Settings.plant_db_path`` set → ``app.state.plant_db`` reads that file."""
     bundled = Path(greenhouse_core.__file__).parent / "data" / "plant_database.json"
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -89,7 +96,7 @@ def test_create_app_loads_the_plant_db_from_settings_path():
         engine.dispose()
 
 
-def test_stats_without_irrigator_reports_zero_totals(client):
+def test_stats_without_irrigator_reports_zero_totals(client: TestClient) -> None:
     """D19 (was B-N2, HTTP 500): a cluster with no irrigator answers the documented shape, all zero."""
     cid = client.post("/api/v1/clusters", json={"name": "Sensors only"}).json()["id"]
 
