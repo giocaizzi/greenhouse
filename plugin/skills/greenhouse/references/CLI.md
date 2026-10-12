@@ -62,6 +62,7 @@ greenhouse stop-all [--yes/-y]                          Emergency kill switch (e
 greenhouse login    [--print-token]                     Exchange credentials for a session JWT
 greenhouse logout                                       Clear the cached session token
 greenhouse whoami                                       Print the authenticated user
+greenhouse tui      [--refresh 30] [--no-animation]     Interactive full-screen dashboard (humans only)
 ```
 
 Notable flags:
@@ -141,9 +142,43 @@ greenhouse stats 1 --days 7 --export ./cluster-1-week.csv
 while :; do greenhouse check 1 | jq '{action, primary_code: .reasons[0].code}'; sleep 60; done
 ```
 
+### Interactive TUI (`greenhouse tui`)
+
+A full-screen Textual dashboard for **humans at a terminal** — never invoke it from an agent or a script (it takes over the terminal and produces no JSON). Same transport, auth and server-URL resolution as every other command, so `greenhouse --server http://pi.local:8000 tui` works from any machine that can reach the API; a 401 opens an in-app sign-in dialog that stores the token like `login`.
+
+It covers the whole API surface (a test asserts every `IrrigationClient` capability has a TUI entry point). Every write goes through a form or a confirmation dialog; `esc` cancels without sending anything. Press `?` in the TUI for the live key list.
+
+| Key | Where | Does |
+|---|---|---|
+| `d` / `a` / `l` / `s` / `o` | everywhere | Dashboard / Alerts / Activity / System / Settings |
+| `/` | everywhere | Search clusters, plants, sensors, irrigators, device IDs → jump to the cluster |
+| `r`, `q`, `?` | everywhere | Refresh, quit, key help |
+| `enter`, arrows | dashboard | Open the focused cluster card |
+| `n`, `S`, `c`, `X` | dashboard | New cluster, sync sensors, check all (confirm), **stop all** (confirm) |
+| `i` | cluster | Smart irrigate dialog (dry-run is the default; skip-sync / force options) |
+| `w`, `x`, `c`, `L` | cluster | Water now (manual start), stop, check (all confirmed), log a manual watering |
+| `n` / `u` / `del` | cluster → Plants, Sensors, Windows | Add / edit / delete the selected row |
+| `n` / `u` / `del` | cluster → Overview | Attach / edit / detach the irrigator |
+| `u` | cluster → Config | Edit the cluster's irrigation config (mode, duration, interval, auto-run, caps, quiet hours) |
+| `M`, `P` | cluster → Plants | Move plant to another cluster, refresh care data from the plant DB |
+| `m`, `[` / `]` | cluster → Charts | Cycle soil / temp / humidity / light / overlay, shorter / longer range (6h → 30d) |
+| `m` | cluster → Plants | Toggle the plant chart: 90-day health score ↔ 72h soil moisture |
+| `e`, `D`, `E` | cluster | Edit cluster, delete cluster (confirm), export 30-day stats CSV to the current dir |
+| `k`, `v`, `f`, `y` | alerts | Acknowledge, resolve, filter by status, re-scan |
+| `f`, `n` | activity | Filter severity, load older |
+| `p`, `S`, `P`, `H`, `del` | system | Pause / resume scheduler, sync, plant-DB sync (all), plant health snapshot, remove a scheduler job |
+| `p`, `g` | settings | Edit preferences, edit global irrigation defaults |
+| `n` / `u` / `del`, `O` | settings | Add / edit / delete vacation windows, log out |
+
+Cluster tabs: Overview (plant garden, irrigator, decision trail, forecast), Charts (+ 7×24 heatmap), Plants, Sensors, Insights (care insights, needs-water monitor, 7-day stats, 14-day efficacy, learning report), Decisions, History, Windows, Config (effective config with inheritance source). System also lists device freshness and the data-quality report.
+
+What it shows: animated pixel-art plant sprites per category (tropical, fern, succulent, cacti, fruit tree, generic) coloured by moisture mood (thriving / happy / thirsty / wilting / soaked) — they sway, sparkle, drop leaves when wilting and rain drops while watering; moisture gauges with the ideal band; 24h sparklines; plotext line charts (soil / temperature / humidity / light) with threshold lines and irrigation markers; the 7×24 irrigation heatmap; per-plant 90-day health timeline; decision trail with `TriggerCode`s; forecast; sensors, decisions, history, effective config and windows tables; alerts, activity and system health. Mood colours are display-only — the engine's thresholds stay server-side.
+
+If the user asks you to "show" them the greenhouse interactively, suggest `greenhouse tui`; for anything you need to read yourself, keep using MCP tools or JSON CLI commands.
+
 ## Things that look like CLI commands but aren't
 
-These exist as API endpoints / MCP tools but have **no dedicated CLI subcommand**. If the user needs them in a shell, point them at `curl` against `/api/v1` or suggest using the MCP tools instead:
+These exist as API endpoints / MCP tools but have **no dedicated CLI subcommand** (all of them are browsable in `greenhouse tui`, but not as JSON). If the user needs them in a shell, point them at `curl` against `/api/v1` or suggest using the MCP tools instead:
 
 - Activity timeline (`/activity`)
 - Forecast (`/clusters/{id}/forecast`)

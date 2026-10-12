@@ -20,13 +20,14 @@
 </section>
 
 <article class="card form-card">
+  {% if error %}<p class="error" role="alert">Not logged: {{ error }}</p>{% endif %}
   <form method="post" action="/irrigators/{{ irrigator.id }}/log-manual">
     <label for="minutes">Duration (minutes)
-      <input type="number" id="minutes" name="minutes" min="1" required autofocus>
+      <input type="number" id="minutes" name="minutes" min="1" required autofocus{% if minutes %} value="{{ minutes }}"{% endif %}>
       <small class="muted">How long you ran the irrigator by hand. This records the event only; it does not start the device.</small>
     </label>
     <label for="notes">Notes <small class="muted">(optional)</small>
-      <textarea id="notes" name="notes" rows="3"></textarea>
+      <textarea id="notes" name="notes" rows="3">{{ notes or "" }}</textarea>
     </label>
     <div class="form-actions">
       <a href="/clusters/{{ irrigator.cluster_id }}#irrigators" class="btn secondary">Cancel</a>

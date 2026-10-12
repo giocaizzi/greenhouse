@@ -126,6 +126,9 @@ class IrrigationClient:
     def get_cluster(self, cluster_id: int) -> dict:
         return self._request("GET", f"/api/v1/clusters/{cluster_id}")
 
+    def get_cluster_detail(self, cluster_id: int) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/detail")
+
     def update_cluster(self, cluster_id: int, **kwargs) -> dict:
         body = {k: v for k, v in kwargs.items() if v is not None}
         return self._request("PUT", f"/api/v1/clusters/{cluster_id}", json=body)
@@ -269,11 +272,64 @@ class IrrigationClient:
     def scheduler_jobs(self) -> list:
         return self._request("GET", "/api/v1/scheduler/jobs")
 
+    def delete_scheduler_job(self, job_id: str) -> dict:
+        return self._request("DELETE", f"/api/v1/scheduler/jobs/{job_id}")
+
     def scheduler_pause(self) -> dict:
         return self._request("POST", "/api/v1/scheduler/pause")
 
     def scheduler_resume(self) -> dict:
         return self._request("POST", "/api/v1/scheduler/resume")
+
+    def system_health(self) -> dict:
+        return self._request("GET", "/api/v1/health/system")
+
+    def forecast(self, cluster_id: int) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/forecast")
+
+    def list_activity(self, limit: int = 100, before: int | None = None, **filters) -> dict:
+        params: dict[str, int | str] = {"limit": limit}
+        if before is not None:
+            params["before"] = before
+        params.update({k: v for k, v in filters.items() if v is not None})
+        return self._request("GET", "/api/v1/activity", params=params)
+
+    def insights(self, cluster_id: int) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/insights")
+
+    def efficacy(self, cluster_id: int, days: int = 14) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/efficacy", params={"days": days})
+
+    def quality_report(self) -> dict:
+        return self._request("GET", "/api/v1/quality/report")
+
+    def search(self, query: str, limit: int = 20) -> dict:
+        return self._request("GET", "/api/v1/search", params={"q": query, "limit": limit})
+
+    def plant_health(self, plant_id: int) -> dict:
+        return self._request("GET", f"/api/v1/plants/{plant_id}/health")
+
+    def health_snapshot(self) -> dict:
+        return self._request("POST", "/api/v1/plants/health/snapshot")
+
+    # ── Charts ──
+
+    def cluster_chart_data(self, cluster_id: int, hours: int = 24, metric: str = "soil_moisture") -> dict:
+        return self._request(
+            "GET", f"/api/v1/clusters/{cluster_id}/chart-data", params={"hours": hours, "metric": metric}
+        )
+
+    def plant_chart_data(self, plant_id: int, hours: int = 24, metric: str = "soil_moisture") -> dict:
+        return self._request("GET", f"/api/v1/plants/{plant_id}/chart-data", params={"hours": hours, "metric": metric})
+
+    def cluster_overlay(self, cluster_id: int, hours: int = 72) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/overlay", params={"hours": hours})
+
+    def cluster_heatmap(self, cluster_id: int, days: int = 30) -> dict:
+        return self._request("GET", f"/api/v1/clusters/{cluster_id}/heatmap", params={"days": days})
+
+    def plant_health_timeline(self, plant_id: int) -> dict:
+        return self._request("GET", f"/api/v1/plants/{plant_id}/health-timeline")
 
     # ── Alerts ──
 

@@ -18,7 +18,15 @@ from greenhouse_server.deps import (
     WeatherClientDep,
     require_cluster,
 )
-from greenhouse_server.scheduler import CHECK_ALL_JOB_ID, is_check_all_paused
+from greenhouse_server.scheduler import (
+    CoreJobError,
+    JobNotRegisteredError,
+    core_job_ids,
+    delete_job,
+    get_jobs,
+    is_check_all_paused,
+    set_check_all_paused,
+)
 from greenhouse_server.scheduler import scheduler as bg_scheduler
 from greenhouse_server.services.bulk import stop_all_irrigators
 from greenhouse_server.services.forecast import ForecastService
@@ -118,18 +126,16 @@ def cluster_learn(
 
 @router.get("/scheduler")
 def scheduler_page(request: Request):
-    jobs: list[dict] = []
-    if bg_scheduler.running:
-        for job in bg_scheduler.get_jobs():
-            jobs.append(
-                {
-                    "id": job.id,
-                    "name": job.name or job.id,
-                    "trigger": str(job.trigger),
-                    "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
-                }
-            )
-    check_paused = is_check_all_paused() if bg_scheduler.running else False
+    # Share the API's job serializer so the per-row `paused` badge the
+    # template renders is actually populated. Core (built-in) jobs carry
+    # `core=True` so the template hides their delete button — deleting them
+    # is refused (409); `check_all` is paused instead.
+    core = core_job_ids()
+    jobs = (
+        [{**job, "name": job["name"] or job["id"], "core": job["id"] in core} for job in get_jobs()]
+        if bg_scheduler.running
+        else []
+    )
     return templates.TemplateResponse(
         request,
         "scheduler.html",
@@ -137,7 +143,9 @@ def scheduler_page(request: Request):
             request,
             scheduler_running=bg_scheduler.running,
             jobs=jobs,
-            check_all_paused=check_paused,
+            # Truthful on a stopped scheduler too: pause/resume work (and
+            # persist) whether or not the scheduler is running.
+            check_all_paused=is_check_all_paused(),
         ),
     )
 
@@ -147,37 +155,33 @@ def scheduler_delete_job(request: Request, job_id: str):
     if not bg_scheduler.running:
         raise HTTPException(503, "Scheduler not running")
     try:
-        bg_scheduler.remove_job(job_id)
-    except Exception as exc:
-        raise HTTPException(404, f"Job not found: {exc}") from exc
+        delete_job(job_id)
+    except CoreJobError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except JobNotRegisteredError as exc:
+        raise HTTPException(404, str(exc)) from exc
     # HTMX swap target is `closest tr` — return empty body to remove the row.
     return HTMLResponse("")
 
 
+def _set_check_all_paused_web(repo, paused: bool) -> RedirectResponse:
+    # Same code path as POST /api/v1/scheduler/{pause,resume}: works (and
+    # persists the preference) whether or not the scheduler is running.
+    try:
+        set_check_all_paused(repo, paused)
+    except JobNotRegisteredError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return RedirectResponse(url="/scheduler", status_code=303)
+
+
 @router.post("/scheduler/pause")
 def scheduler_pause(request: Request, repo: RepoDep):
-    if not bg_scheduler.running:
-        raise HTTPException(503, "Scheduler not running")
-    job = bg_scheduler.get_job(CHECK_ALL_JOB_ID)
-    if job is None:
-        raise HTTPException(404, f"Job {CHECK_ALL_JOB_ID} not found")
-    bg_scheduler.pause_job(CHECK_ALL_JOB_ID)
-    repo.update_preferences(scheduler_paused=True)
-    repo.session.commit()
-    return RedirectResponse(url="/scheduler", status_code=303)
+    return _set_check_all_paused_web(repo, True)
 
 
 @router.post("/scheduler/resume")
 def scheduler_resume(request: Request, repo: RepoDep):
-    if not bg_scheduler.running:
-        raise HTTPException(503, "Scheduler not running")
-    job = bg_scheduler.get_job(CHECK_ALL_JOB_ID)
-    if job is None:
-        raise HTTPException(404, f"Job {CHECK_ALL_JOB_ID} not found")
-    bg_scheduler.resume_job(CHECK_ALL_JOB_ID)
-    repo.update_preferences(scheduler_paused=False)
-    repo.session.commit()
-    return RedirectResponse(url="/scheduler", status_code=303)
+    return _set_check_all_paused_web(repo, False)
 
 
 @router.post("/bulk/stop-all")

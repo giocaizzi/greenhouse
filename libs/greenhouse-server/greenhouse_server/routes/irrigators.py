@@ -1,12 +1,9 @@
 """Irrigator CRUD + control routes."""
 
-import time
-
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 
-from greenhouse_core.devices import UnknownDeviceModel
-from greenhouse_core.repository import IrrigationRepository, IrrigatorExistsError
+from greenhouse_core.repository import IrrigatorExistsError
 from greenhouse_core.schemas import (
     CreateIrrigatorRequest,
     IrrigatorActionResponse,
@@ -19,8 +16,12 @@ from greenhouse_core.schemas import (
     UpdateIrrigatorRequest,
 )
 from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
-from greenhouse_server.services.irrigation import schedule_pump_watcher
-from greenhouse_server.services.notify import maybe_notify
+from greenhouse_server.services.manual_control import (
+    ManualActionError,
+    manual_log,
+    manual_start,
+    manual_stop,
+)
 
 router = APIRouter(tags=["irrigators"])
 
@@ -50,43 +51,6 @@ def list_all_irrigators(
         irrigators=[IrrigatorResponse.model_validate(r) for r in rows],
         next_cursor=next_cursor,
     )
-
-
-def _check_rate_limits(repo: IrrigationRepository, cluster_id: int, irrigator_id: int, minutes: int | None) -> None:
-    """Raise 409 if daily-cap or max-events-per-day thresholds are exceeded.
-
-    Args:
-        repo: Active repository session.
-        cluster_id: Cluster whose config holds the caps.
-        irrigator_id: Irrigator being started (duration cap is per-irrigator).
-        minutes: Requested duration; ``None`` counts as 0 for the duration cap.
-
-    Raises:
-        HTTPException: 409 if ``max_events_per_day`` or ``daily_cap_minutes``
-            would be exceeded.
-    """
-    config = repo.get_irrigation_config(cluster_id)
-    if not config:
-        return
-
-    requested = minutes or 0
-
-    if config.max_events_per_day is not None:
-        # Count "start" events in the last 24 h for the cluster's single irrigator.
-        irrigator = repo.get_irrigator_for_cluster(cluster_id)
-        total_starts = (
-            sum(1 for e in repo.get_recent_events(irrigator.id, hours=24) if e.action == "start")
-            if irrigator is not None
-            else 0
-        )
-        if total_starts >= config.max_events_per_day:
-            raise HTTPException(status_code=409, detail="cluster max_events_per_day reached")
-
-    if config.daily_cap_minutes is not None:
-        recent = repo.get_recent_events(irrigator_id, hours=24)
-        minutes_used = sum(e.duration_minutes or 0 for e in recent if e.action == "start")
-        if minutes_used + requested > config.daily_cap_minutes:
-            raise HTTPException(status_code=409, detail="irrigator daily cap reached")
 
 
 @router.post(
@@ -247,43 +211,11 @@ def start_irrigator(
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    if registry is None:
-        raise HTTPException(status_code=503, detail="No device registry (missing Tuya credentials)")
-
-    _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
-
     try:
-        adapter = registry.get_irrigator(irrigator)
-    except UnknownDeviceModel as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    success, output = adapter.start(irrigator, request.minutes)
-    if success:
-        started_at = int(time.time())
-        repo.add_irrigation_event(
-            irrigator_id=irrigator.id,
-            action="start",
-            duration_minutes=request.minutes,
-            triggered_by="manual",
-            notes=f"Manual start via API ({request.minutes} min)" if request.minutes else "Manual start via API",
-            timestamp=started_at,
-        )
-        repo.session.commit()
-        if request.minutes:
-            schedule_pump_watcher(irrigator.id, request.minutes, started_at)
-        maybe_notify(
-            notifier,
-            repo.get_preferences(),
-            "manual",
-            lambda: notifier.notify_irrigation(
-                triggered_by="manual",
-                irrigator_name=irrigator.name,
-                duration_minutes=request.minutes,
-                detail="started",
-            ),
-        )
-        return IrrigatorActionResponse(success=True, message=output)
-    raise HTTPException(status_code=502, detail=output)
+        output = manual_start(repo, registry, notifier, irrigator, request.minutes, via="API")
+    except ManualActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+    return IrrigatorActionResponse(success=True, message=output)
 
 
 @router.post("/irrigators/{irrigator_id}/stop", response_model=IrrigatorActionResponse)
@@ -306,35 +238,11 @@ def stop_irrigator(
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    if registry is None:
-        raise HTTPException(status_code=503, detail="No device registry (missing Tuya credentials)")
-
     try:
-        adapter = registry.get_irrigator(irrigator)
-    except UnknownDeviceModel as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    success, output = adapter.stop(irrigator)
-    if success:
-        repo.add_irrigation_event(
-            irrigator_id=irrigator.id,
-            action="off",
-            triggered_by="manual",
-            notes="Manual stop via API",
-        )
-        repo.session.commit()
-        maybe_notify(
-            notifier,
-            repo.get_preferences(),
-            "manual",
-            lambda: notifier.notify_irrigation(
-                triggered_by="manual",
-                irrigator_name=irrigator.name,
-                detail="stopped",
-            ),
-        )
-        return IrrigatorActionResponse(success=True, message=output)
-    raise HTTPException(status_code=502, detail=output)
+        output = manual_stop(repo, registry, notifier, irrigator, via="API")
+    except ManualActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from None
+    return IrrigatorActionResponse(success=True, message=output)
 
 
 @router.post("/irrigators/{irrigator_id}/log-manual", response_model=LogManualResponse)
@@ -357,24 +265,8 @@ def log_manual(
     irrigator = repo.get_irrigator(irrigator_id)
     if not irrigator:
         raise HTTPException(status_code=404, detail="Irrigator not found")
-    _check_rate_limits(repo, irrigator.cluster_id, irrigator_id, request.minutes)
-    event_id = repo.add_irrigation_event(
-        irrigator_id=irrigator.id,
-        action="start",
-        duration_minutes=request.minutes,
-        triggered_by="manual",
-        notes=request.notes or f"Manual ({request.minutes} min)",
-    )
-    repo.session.commit()
-    maybe_notify(
-        notifier,
-        repo.get_preferences(),
-        "manual",
-        lambda: notifier.notify_irrigation(
-            triggered_by="manual",
-            irrigator_name=irrigator.name,
-            duration_minutes=request.minutes,
-            detail="logged (watered by hand)",
-        ),
-    )
+    try:
+        event_id = manual_log(repo, notifier, irrigator, request.minutes, request.notes)
+    except ManualActionError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from None
     return LogManualResponse(success=True, event_id=event_id)

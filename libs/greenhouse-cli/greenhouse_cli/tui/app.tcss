@@ -1,0 +1,267 @@
+/* greenhouse TUI — layout + palette. Colours lean on the active Textual theme. */
+
+Screen {
+    background: $background;
+}
+
+.hint {
+    color: $text-muted;
+    padding: 0 1;
+    height: auto;
+}
+
+.panel {
+    border: round $primary 50%;
+    padding: 0 1;
+    height: auto;
+}
+
+/* ── Dashboard ─────────────────────────────────────────── */
+
+Banner {
+    height: auto;
+    padding: 0 1;
+    border-bottom: hkey $primary 40%;
+}
+
+#dashboard-empty {
+    padding: 1 2;
+    color: $text-muted;
+}
+
+#cluster-grid {
+    grid-size: 3;
+    grid-gutter: 1 2;
+    padding: 1 1;
+    height: auto;
+}
+
+.cluster-card {
+    height: auto;
+    border: round $panel-lighten-2;
+    padding: 0 1;
+}
+
+.cluster-card:focus, .cluster-card:hover {
+    border: round $accent;
+    background: $boost;
+}
+
+.card-body {
+    height: auto;
+}
+
+.card-sprite {
+    margin-right: 2;
+}
+
+.card-info {
+    width: 1fr;
+}
+
+.card-spark {
+    height: 2;
+    margin-top: 1;
+}
+
+/* ── Cluster ───────────────────────────────────────────── */
+
+#garden {
+    height: auto;
+    padding: 1 0;
+}
+
+.plant-tile {
+    width: 22;
+    height: auto;
+    padding: 0 1;
+    border: round $panel-lighten-1;
+    margin-right: 1;
+}
+
+#overview-panels {
+    height: auto;
+}
+
+#irrigator-panel {
+    width: 34;
+}
+
+#decision-panel {
+    width: 1fr;
+}
+
+#forecast-panel {
+    width: 44;
+}
+
+#metric-chart {
+    height: 1fr;
+    min-height: 14;
+}
+
+#heatmap {
+    height: auto;
+    padding: 1 1;
+}
+
+#plants-table {
+    height: auto;
+    max-height: 12;
+}
+
+#plant-chart {
+    height: 1fr;
+    min-height: 12;
+}
+
+/* ── Alerts / system ───────────────────────────────────── */
+
+#alerts-table {
+    height: 1fr;
+}
+
+#alert-detail {
+    height: auto;
+    min-height: 5;
+}
+
+#system-panels {
+    height: auto;
+}
+
+#global-config {
+    width: 40;
+}
+
+#jobs-table {
+    height: auto;
+    width: 1fr;
+}
+
+#devices-table {
+    height: auto;
+    margin-top: 1;
+}
+
+/* ── Dialogs ───────────────────────────────────────────── */
+
+ModalScreen {
+    align: center middle;
+    background: $background 60%;
+}
+
+.dialog {
+    width: 64;
+    height: auto;
+    border: thick $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+.dialog-head {
+    height: auto;
+}
+
+.dialog-sprite {
+    width: 18;
+}
+
+.dialog-message {
+    width: 1fr;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.dialog-error {
+    color: $error;
+    margin-bottom: 1;
+}
+
+.dialog-buttons {
+    height: auto;
+    align-horizontal: right;
+    margin-top: 1;
+}
+
+.dialog-buttons Button {
+    margin-left: 1;
+}
+
+.login-grid {
+    grid-size: 2;
+    grid-columns: 10 1fr;
+    grid-rows: 3;
+    height: auto;
+}
+
+.login-grid Label {
+    padding-top: 1;
+}
+
+/* ── Forms / search ────────────────────────────────────── */
+
+.form-dialog {
+    width: 76;
+    max-height: 90%;
+}
+
+.form-body {
+    height: auto;
+    max-height: 24;
+}
+
+.form-row {
+    height: auto;
+    margin-bottom: 0;
+}
+
+.form-label {
+    width: 22;
+    padding-top: 1;
+    color: $text-muted;
+}
+
+.form-row Input, .form-row Select {
+    width: 1fr;
+}
+
+.search-dialog {
+    width: 90;
+    height: 28;
+}
+
+#search-results {
+    height: 1fr;
+}
+
+/* ── Insights / settings / system extras ───────────────── */
+
+#insights-row, #settings-panels {
+    height: auto;
+}
+
+#insights-panel {
+    width: 1fr;
+}
+
+#stats-panel {
+    width: 48;
+}
+
+#efficacy-table {
+    height: auto;
+    max-height: 12;
+}
+
+#prefs-panel, #global-panel {
+    width: 1fr;
+}
+
+#vacation-table, #quality-table {
+    height: auto;
+}
+
+#scheduler-panel {
+    width: 52;
+}

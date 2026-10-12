@@ -234,3 +234,62 @@ class TestFullLifecycle:
         # Check
         resp = client.post("/api/v1/clusters/1/check")
         assert resp.status_code == 200
+
+
+class TestCheckAllIsolation:
+    """One crashing cluster must not undo — or block — the others' check."""
+
+    def _two_clusters(self, client):
+        for name in ("First", "Second"):
+            assert client.post("/api/v1/clusters", json={"name": name}).status_code == 201
+
+    def test_crash_in_one_cluster_keeps_earlier_clusters_committed(self, app, client, monkeypatch):
+        from greenhouse_core.models import ActivityEvent
+        from greenhouse_server.services.irrigation import IrrigationService
+
+        self._two_clusters(client)
+        original = IrrigationService.check_cluster
+
+        def flaky(self, cluster_id):
+            if cluster_id == 2:
+                raise RuntimeError("boom")
+            # Stand-in for an actuation side effect the cooldown relies on.
+            self._repo.add_activity_event("irrigation", "cluster", "probe", "ran", entity_id=cluster_id)
+            return original(self, cluster_id)
+
+        monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
+        resp = client.post("/api/v1/check")
+        assert resp.status_code == 200, resp.text
+        by_id = {r["cluster_id"]: r for r in resp.json()["results"]}
+        assert by_id[2]["action"] == "error"
+        assert "boom" in by_id[2]["notes"]
+        assert by_id[1]["action"] != "error"
+
+        with app.state.session_factory() as session:
+            probes = session.query(ActivityEvent).filter_by(code="probe").all()
+            assert [p.entity_id for p in probes] == [1]
+
+        alerts = client.get("/api/v1/alerts", params={"status": "open", "cluster_id": 2}).json()["items"]
+        assert [a["code"] for a in alerts] == ["check_failed"]
+        assert alerts[0]["severity"] == "error"
+
+    def test_failure_alert_resolves_on_next_success(self, client, monkeypatch):
+        from greenhouse_server.services.irrigation import IrrigationService
+
+        self._two_clusters(client)
+        original = IrrigationService.check_cluster
+        fail = {"on": True}
+
+        def flaky(self, cluster_id):
+            if cluster_id == 2 and fail["on"]:
+                raise RuntimeError("boom")
+            return original(self, cluster_id)
+
+        monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
+        client.post("/api/v1/check")
+        assert client.get("/api/v1/alerts", params={"status": "open", "cluster_id": 2}).json()["items"]
+        fail["on"] = False
+        client.post("/api/v1/check")
+        assert not client.get("/api/v1/alerts", params={"status": "open", "cluster_id": 2}).json()["items"]
+        resolved = client.get("/api/v1/alerts", params={"status": "resolved", "cluster_id": 2}).json()["items"]
+        assert [a["code"] for a in resolved] == ["check_failed"]

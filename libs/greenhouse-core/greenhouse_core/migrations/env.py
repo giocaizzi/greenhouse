@@ -20,7 +20,10 @@ config = context.config
 if config.config_file_name is not None:
     from logging.config import fileConfig
 
-    fileConfig(config.config_file_name)
+    # Keep loggers created before migrations run (every app module imported
+    # ahead of `init_db`) enabled — the default `disable_existing_loggers=True`
+    # silently muted the whole server for the life of the process.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 

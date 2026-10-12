@@ -62,7 +62,16 @@ class PumpWatcherService:
         clock: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
         monitor: DeviceHealthMonitor | None = None,
+        stop_requested: Callable[[], bool] | None = None,
     ):
+        """Build a watcher.
+
+        ``stop_requested`` lets the server's shutdown cut the watch short: it
+        is checked before every poll, and the scheduler wires ``sleep`` to an
+        event wait so a shutdown wakes the watcher immediately. On
+        interruption the watcher returns ``outcome="interrupted"`` without
+        actuating — the caller decides what happens to the still-running pump.
+        """
         self._repo = repo
         self._registry = registry
         self._poll = max(0.1, float(poll_seconds))
@@ -71,6 +80,7 @@ class PumpWatcherService:
         self._clock = clock
         self._sleep = sleep
         self._monitor = monitor
+        self._stop_requested = stop_requested or (lambda: False)
 
     def watch(
         self,
@@ -90,8 +100,10 @@ class PumpWatcherService:
 
         Returns:
             A dict describing the outcome: ``{"outcome": "completed"
-            | "tripped" | "abandoned", "polls": int, "read_failures": int,
-            "alarm_raw": ..., "elapsed_seconds": float}``.
+            | "tripped" | "abandoned" | "interrupted", "polls": int,
+            "read_failures": int, "alarm_raw": ..., "elapsed_seconds": float}``.
+            ``interrupted`` means ``stop_requested`` fired (server shutdown)
+            before the cycle ended; the pump was NOT touched.
         """
         cluster_id = irrigator.cluster_id
         started_at = started_at if started_at is not None else int(time.time())
@@ -103,6 +115,14 @@ class PumpWatcherService:
         last_failure_msg: str | None = None
 
         while True:
+            if self._stop_requested():
+                return {
+                    "outcome": "interrupted",
+                    "polls": polls,
+                    "read_failures": consecutive_failures,
+                    "alarm_raw": None,
+                    "elapsed_seconds": self._clock() - (deadline - duration_seconds),
+                }
             now = self._clock()
             if now >= deadline:
                 return {

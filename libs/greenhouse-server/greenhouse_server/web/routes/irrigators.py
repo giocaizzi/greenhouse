@@ -7,9 +7,9 @@ import json
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from greenhouse_core.devices import UnknownDeviceModel
 from greenhouse_core.repository import IrrigatorExistsError
-from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster
+from greenhouse_server.deps import DeviceRegistryDep, NtfyNotifierDep, RepoDep, require_cluster
+from greenhouse_server.services.manual_control import ManualActionError, manual_log, manual_start, manual_stop
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 
@@ -177,42 +177,45 @@ def _get_irrigator_or_404(repo: RepoDep, irrigator_id: int):
     return irr
 
 
+def _action_result(request: Request, action: str, run) -> HTMLResponse:
+    """Run a shared manual action and render the HX result partial.
+
+    Refusals the JSON API reports as 409 (caps) / 502 (device failure) are
+    rendered as a failed result in the action slot, as device failures always
+    were; missing registry / unknown model stay HTTP 503.
+    """
+    try:
+        success, message = True, run()
+    except ManualActionError as exc:
+        if exc.status_code == 503:
+            raise HTTPException(503, exc.detail) from exc
+        success, message = False, exc.detail
+    return templates.TemplateResponse(
+        request,
+        "partials/_irrigator_action_result.html",
+        base_context(request, success=success, message=message, action=action),
+    )
+
+
 @router.post("/irrigators/{irrigator_id}/start")
 def start_irrigator(
     request: Request,
     irrigator_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
+    notifier: NtfyNotifierDep,
     minutes: str = Form(""),
 ):
+    # Same code path as POST /api/v1/irrigators/{id}/start: caps, dry-run
+    # watcher, event row and notification (the web route used to skip them).
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    if registry is None:
-        raise HTTPException(503, "No device registry configured")
     mins: int | None = None
     if minutes.strip():
         try:
             mins = int(minutes)
         except ValueError as exc:
             raise HTTPException(400, "Invalid minutes") from exc
-
-    try:
-        adapter = registry.get_irrigator(irr)
-    except UnknownDeviceModel as exc:
-        raise HTTPException(503, str(exc)) from exc
-    success, message = adapter.start(irr, mins)
-    repo.add_irrigation_event(
-        irrigator_id=irr.id,
-        action="start" if success else "attempted",
-        duration_minutes=mins,
-        triggered_by="manual",
-        notes=message,
-    )
-    repo.session.commit()
-    return templates.TemplateResponse(
-        request,
-        "partials/_irrigator_action_result.html",
-        base_context(request, success=success, message=message, action="start"),
-    )
+    return _action_result(request, "start", lambda: manual_start(repo, registry, notifier, irr, mins, via="web UI"))
 
 
 @router.post("/irrigators/{irrigator_id}/stop")
@@ -221,27 +224,10 @@ def stop_irrigator(
     irrigator_id: int,
     repo: RepoDep,
     registry: DeviceRegistryDep,
+    notifier: NtfyNotifierDep,
 ):
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    if registry is None:
-        raise HTTPException(503, "No device registry configured")
-    try:
-        adapter = registry.get_irrigator(irr)
-    except UnknownDeviceModel as exc:
-        raise HTTPException(503, str(exc)) from exc
-    success, message = adapter.stop(irr)
-    repo.add_irrigation_event(
-        irrigator_id=irr.id,
-        action="stop" if success else "attempted",
-        triggered_by="manual",
-        notes=message,
-    )
-    repo.session.commit()
-    return templates.TemplateResponse(
-        request,
-        "partials/_irrigator_action_result.html",
-        base_context(request, success=success, message=message, action="stop"),
-    )
+    return _action_result(request, "stop", lambda: manual_stop(repo, registry, notifier, irr, via="web UI"))
 
 
 @router.get("/irrigators/{irrigator_id}/log-manual")
@@ -255,16 +241,18 @@ def log_manual_submit(
     request: Request,
     irrigator_id: int,
     repo: RepoDep,
+    notifier: NtfyNotifierDep,
     minutes: int = Form(...),
     notes: str = Form(""),
 ):
     irr = _get_irrigator_or_404(repo, irrigator_id)
-    repo.add_irrigation_event(
-        irrigator_id=irr.id,
-        action="manual",
-        duration_minutes=minutes,
-        triggered_by="manual",
-        notes=notes or None,
-    )
-    repo.session.commit()
+    try:
+        manual_log(repo, notifier, irr, minutes, notes or None)
+    except ManualActionError as e:
+        return templates.TemplateResponse(
+            request,
+            "irrigators/log_manual.html",
+            base_context(request, irrigator=irr, error=e.detail, minutes=minutes, notes=notes),
+            status_code=e.status_code,
+        )
     return RedirectResponse(url=f"/clusters/{irr.cluster_id}#irrigators", status_code=303)
