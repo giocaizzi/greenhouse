@@ -35,7 +35,7 @@ import os
 import stat
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 
 import httpx
 import pytest
@@ -55,6 +55,9 @@ from fake_data import (
 from golden import GOLDEN_DIR, UPDATE_ENV_VAR, assert_golden_json, to_canonical_json
 from greenhouse_cli.client import IrrigationClient, ServerError
 from greenhouse_cli.main import app
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator, Mapping
 
 # Every test runs under clean_env + render-stable rich/typer settings (fixture from test_contract_help).
 pytestmark = pytest.mark.usefixtures("stable_cli_env")
@@ -108,7 +111,18 @@ class Case:
     xdg: bool = True  # False → $XDG_CONFIG_HOME unset, token lives under $HOME/.config
 
 
-def C(case_id: str, *argv: str, **kw: Any) -> Case:  # noqa: N802 — table-builder shorthand
+class CaseOptions(TypedDict, total=False):
+    """The optional :class:`Case` fields a case-table row sets."""
+
+    routes: dict[tuple[str, str], object]
+    env: dict[str, str | None]
+    input: str | None
+    token_file: str | None
+    files: tuple[str, ...]
+    xdg: bool
+
+
+def C(case_id: str, *argv: str, **kw: Unpack[CaseOptions]) -> Case:  # noqa: N802 — table-builder shorthand
     """Build a :class:`Case` tersely for the case table."""
     return Case(case_id, argv, **kw)
 
@@ -747,7 +761,7 @@ class ClientCase:
     response: Any = None  # None → echo body
 
 
-def M(case_id: str, method: str, *args: Any, response: Any = None, **kwargs: Any) -> ClientCase:  # noqa: N802
+def M(case_id: str, method: str, *args: object, response: object = None, **kwargs: object) -> ClientCase:  # noqa: N802
     """Build a :class:`ClientCase` tersely for the case table."""
     return ClientCase(case_id, method, args, kwargs, response)
 
@@ -878,10 +892,23 @@ CONSTRUCTOR_CASES: dict[str, dict[str, Any]] = {
 # ─────────────────────────── recording harness ───────────────────────────
 
 
+# A canned answer: ``(status, body)``, a :class:`Raw` response, or a :class:`Raise` transport error.
+Spec = tuple[int, object] | Raw | Raise
+
+
+class _ClientInit(TypedDict, total=False):
+    """The ``httpx.Client`` keyword arguments ``IrrigationClient`` passes (the recorder reads three of them)."""
+
+    base_url: str
+    timeout: float
+    headers: Mapping[str, str] | None
+    transport: httpx.BaseTransport | None
+
+
 class Recorder:
     """Serves canned responses and records every client construction and request."""
 
-    def __init__(self, routes: dict[tuple[str, str], Any] | None = None, default: Any = None):
+    def __init__(self, routes: dict[tuple[str, str], Any] | None = None, default: Spec | None = None) -> None:
         """Answer from ``routes`` (or ``default``; None echoes the body) and start with empty logs."""
         self.routes = routes or {}
         self.default = default  # None → echo body
@@ -914,7 +941,7 @@ class Recorder:
         return _respond(spec, request)
 
 
-def _respond(spec: Any, request: httpx.Request) -> httpx.Response:
+def _respond(spec: Spec, request: httpx.Request) -> httpx.Response:
     if isinstance(spec, Raise):
         raise getattr(httpx, spec.exc)(spec.message, request=request)
     if isinstance(spec, Raw):
@@ -926,12 +953,12 @@ def _respond(spec: Any, request: httpx.Request) -> httpx.Response:
 
 
 @pytest.fixture
-def recorder_slot(monkeypatch):
+def recorder_slot(monkeypatch: pytest.MonkeyPatch) -> dict[str, Recorder]:
     """Patch ``httpx.Client.__init__`` to inject the current recorder's MockTransport (all else untouched)."""
     slot: dict[str, Recorder] = {}
-    original_init = httpx.Client.__init__
+    original_init: Callable[..., None] = httpx.Client.__init__
 
-    def patched_init(self, *args, **kwargs):
+    def patched_init(self: httpx.Client, *args: object, **kwargs: Unpack[_ClientInit]) -> None:
         rec = slot["current"]
         headers = kwargs.get("headers") or {}
         rec.clients.append(
@@ -949,7 +976,7 @@ def recorder_slot(monkeypatch):
 
 
 @contextlib.contextmanager
-def _case_dir(base: Path, name: str):
+def _case_dir(base: Path, name: str) -> Iterator[Path]:
     path = base / name.replace("/", "_")
     path.mkdir(parents=True)
     with contextlib.chdir(path):
@@ -1007,7 +1034,8 @@ def run_cli_case(case: Case, base: Path, slot: dict[str, Recorder]) -> dict[str,
             "token_file_after": _token_state(token_path),
             "files": {name: Path(name).read_text(encoding="utf-8") for name in case.files if Path(name).exists()},
         }
-        return json.loads(_scrub(json.dumps(entry, ensure_ascii=False), home))
+        scrubbed: dict[str, Any] = json.loads(_scrub(json.dumps(entry, ensure_ascii=False), home))
+        return scrubbed
 
 
 def _call_client(client: IrrigationClient, case: ClientCase) -> dict[str, Any]:
@@ -1070,7 +1098,7 @@ def build_all(base: Path, slot: dict[str, Recorder]) -> dict[str, Any]:
     }
 
 
-def _golden_entry(section: str, key: str) -> Any:
+def _golden_entry(section: str, key: str) -> object:
     path = GOLDEN_DIR / GOLDEN
     if not path.exists():
         pytest.fail(f"golden file missing: {path} (create it with {UPDATE_ENV_VAR}=1)")
@@ -1090,13 +1118,13 @@ def _command_of(argv: tuple[str, ...], leaves: set[tuple[str, ...]]) -> tuple[st
 # ─────────────────────────── tests ───────────────────────────
 
 
-def test_case_ids_are_unique():
+def test_case_ids_are_unique() -> None:
     """Case ids are unique, so each golden entry maps to exactly one case."""
     assert len({c.id for c in CLI_CASES}) == len(CLI_CASES)
     assert len({c.id for c in CLIENT_CASES}) == len(CLIENT_CASES)
 
 
-def test_every_cli_command_has_a_case():
+def test_every_cli_command_has_a_case() -> None:
     """Derived from the live Typer tree: adding a command without a golden case fails here."""
     leaves = set(leaf_command_paths())
     covered = {_command_of(c.argv, leaves) for c in CLI_CASES} - {None}
@@ -1104,7 +1132,7 @@ def test_every_cli_command_has_a_case():
     assert not missing, f"CLI commands without a contract case: {missing}"
 
 
-def test_every_client_method_has_a_case():
+def test_every_client_method_has_a_case() -> None:
     """Every public client method has exactly one golden case, and no case names a missing method."""
     public = {name for name, _ in inspect.getmembers(IrrigationClient, inspect.isfunction) if not name.startswith("_")}
     covered = {c.method for c in CLIENT_CASES}
@@ -1112,13 +1140,13 @@ def test_every_client_method_has_a_case():
     assert covered - public == set()
 
 
-def test_requests_and_output_golden(recorder_slot, tmp_path):
+def test_requests_and_output_golden(recorder_slot: dict[str, Recorder], tmp_path: Path) -> None:
     """Single writer of the golden: every CLI case, client method case and constructor case."""
     assert_golden_json(GOLDEN, build_all(tmp_path / "cases", recorder_slot))
 
 
 @pytest.mark.parametrize("case", CLI_CASES, ids=lambda c: c.id)
-def test_cli_case(recorder_slot, tmp_path, case):
+def test_cli_case(recorder_slot: dict[str, Recorder], tmp_path: Path, case: Case) -> None:
     """Each CLI case matches its golden entry."""
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         pytest.skip("golden is (re)written by test_requests_and_output_golden")
@@ -1127,7 +1155,7 @@ def test_cli_case(recorder_slot, tmp_path, case):
 
 
 @pytest.mark.parametrize("case", CLIENT_CASES, ids=lambda c: c.id)
-def test_client_case(recorder_slot, case):
+def test_client_case(recorder_slot: dict[str, Recorder], case: ClientCase) -> None:
     """Each client case matches its golden entry."""
     if os.environ.get(UPDATE_ENV_VAR) == "1":
         pytest.skip("golden is (re)written by test_requests_and_output_golden")
@@ -1135,7 +1163,7 @@ def test_client_case(recorder_slot, case):
     assert to_canonical_json(actual) == to_canonical_json(_golden_entry("client", case.id))
 
 
-def test_exit_code_contract(recorder_slot, tmp_path):
+def test_exit_code_contract(recorder_slot: dict[str, Recorder], tmp_path: Path) -> None:
     """Readable summary of the exit-code contract (the golden holds the exact bytes)."""
     by_id = {c.id: c for c in CLI_CASES}
     expected = {
@@ -1159,7 +1187,7 @@ def test_exit_code_contract(recorder_slot, tmp_path):
     assert refused["stdout"] == ""
 
 
-def test_real_connection_refused(monkeypatch):
+def test_real_connection_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """No mock: a refused TCP connect surfaces as ``Error: Cannot connect to server: …`` and exit 1."""
     monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://127.0.0.1:1")
     result = runner.invoke(app, ["health"], prog_name=PROG)

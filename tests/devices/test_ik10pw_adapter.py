@@ -5,6 +5,7 @@ These exercise the adapters directly against the one shared
 because that is how the gateway constructs its single cloud client.
 """
 
+from collections.abc import Iterator
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -26,7 +27,7 @@ LOCAL_LEFT_TIME = 42  # DP 104 in the canned local status
 LOCAL_WORK_STATUS = 2  # DP 106 in the canned local status
 
 
-def _make_irrigator(device_type="rainpoint.ik10pw"):
+def _make_irrigator(device_type: str = "rainpoint.ik10pw") -> Irrigator:
     return Irrigator(
         id=1,
         cluster_id=1,
@@ -37,7 +38,7 @@ def _make_irrigator(device_type="rainpoint.ik10pw"):
     )
 
 
-def _make_sensor():
+def _make_sensor() -> Sensor:
     return Sensor(
         id=1,
         cluster_id=1,
@@ -50,7 +51,7 @@ def _make_sensor():
 
 
 @pytest.fixture
-def fake_cloud(fake_tuya_env):
+def fake_cloud(fake_tuya_env: None) -> Iterator[MagicMock]:
     """Patch ``tinytuya.Cloud`` so the gateway never hits a real network."""
     del fake_tuya_env  # side-effect fixture (fake Tuya credentials in the environment)
     with patch("greenhouse_core.devices.tinytuya.Cloud") as cloud_class:
@@ -60,20 +61,20 @@ def fake_cloud(fake_tuya_env):
 
 
 @pytest.fixture
-def gateway(fake_cloud):
+def gateway(fake_cloud: MagicMock) -> DeviceGateway:
     """Provide a gateway built from the fake Tuya environment and the patched Cloud."""
     del fake_cloud  # side-effect fixture (tinytuya.Cloud is patched)
     return DeviceGateway()
 
 
 @pytest.fixture
-def adapter(gateway):
+def adapter(gateway: DeviceGateway) -> IK10PWAdapter:
     """Provide an IK10PW adapter on the test gateway."""
     return IK10PWAdapter(gateway)
 
 
 @pytest.fixture
-def registry(gateway):
+def registry(gateway: DeviceGateway) -> DeviceRegistry:
     """Provide the default registry on the test gateway."""
     return build_default_registry(gateway)
 
@@ -81,7 +82,7 @@ def registry(gateway):
 class TestIK10PWAdapterActuation:
     """The adapter's cloud actuation path delegates to ``transport.send_command``."""
 
-    def test_on_sends_switch_true(self, fake_cloud, adapter):
+    def test_on_sends_switch_true(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """``on`` sends the switch-true Cloud command and reports success."""
         fake_cloud.sendcommand.return_value = {"success": True}
         success, msg = adapter.on(_make_irrigator())
@@ -92,7 +93,7 @@ class TestIK10PWAdapterActuation:
         assert commands[0]["code"] == "switch"
         assert commands[0]["value"] is True
 
-    def test_off_sends_switch_false(self, fake_cloud, adapter):
+    def test_off_sends_switch_false(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """``off`` sends the switch-false Cloud command and reports success."""
         fake_cloud.sendcommand.return_value = {"success": True}
         success, msg = adapter.off(_make_irrigator())
@@ -103,14 +104,14 @@ class TestIK10PWAdapterActuation:
         assert commands[0]["code"] == "switch"
         assert commands[0]["value"] is False
 
-    def test_start_without_duration_just_turns_on(self, fake_cloud, adapter):
+    def test_start_without_duration_just_turns_on(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """An unbounded start is just a switch-on."""
         fake_cloud.sendcommand.return_value = {"success": True}
         success, msg = adapter.start(_make_irrigator(), minutes=None)
         assert success
         assert "ON" in msg
 
-    def test_start_with_duration_sets_dp_then_switches_on(self, fake_cloud, adapter):
+    def test_start_with_duration_sets_dp_then_switches_on(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """Successful local Duration write → cloud switch ON."""
         fake_cloud.sendcommand.return_value = {"success": True}
         with patch.object(adapter, "_set_duration_local", return_value=(True, "Duration set to 300s")):
@@ -120,7 +121,7 @@ class TestIK10PWAdapterActuation:
         assert "5 min" in msg
         fake_cloud.sendcommand.assert_called_once()
 
-    def test_start_refuses_when_local_duration_fails(self, fake_cloud, adapter):
+    def test_start_refuses_when_local_duration_fails(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """Local DP write fails → the bounded start is refused before any Cloud ON."""
         fake_cloud.sendcommand.return_value = {"success": True}
         with patch.object(adapter, "_set_duration_local", return_value=(False, "Connection refused")):
@@ -130,7 +131,7 @@ class TestIK10PWAdapterActuation:
         assert "keep-alive is not supported in the server" in msg
         fake_cloud.sendcommand.assert_not_called()
 
-    def test_actuation_failure_propagates(self, fake_cloud, adapter):
+    def test_actuation_failure_propagates(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """A Cloud failure is reported as ``(False, message)``."""
         fake_cloud.sendcommand.return_value = {"success": False, "msg": "Device offline"}
         success, msg = adapter.on(_make_irrigator())
@@ -138,7 +139,7 @@ class TestIK10PWAdapterActuation:
         assert not success
         assert "failed" in msg.lower()
 
-    def test_actuation_network_exception_propagates(self, fake_cloud, adapter):
+    def test_actuation_network_exception_propagates(self, fake_cloud: MagicMock, adapter: IK10PWAdapter) -> None:
         """A network error during actuation propagates to the caller."""
         fake_cloud.sendcommand.side_effect = ConnectionError("Network unreachable")
         with pytest.raises(ConnectionError):
@@ -148,7 +149,9 @@ class TestIK10PWAdapterActuation:
 class TestIK10PWAdapterStatus:
     """``status`` reads cloud when local isn't reachable."""
 
-    def test_status_parses_cloud_response(self, fake_cloud, gateway, adapter):
+    def test_status_parses_cloud_response(
+        self, fake_cloud: MagicMock, gateway: DeviceGateway, adapter: IK10PWAdapter
+    ) -> None:
         """``status`` parses the Cloud status into named fields."""
         fake_cloud.getstatus.return_value = {
             "success": True,
@@ -185,7 +188,7 @@ class TestAlarmParser:
             ({"unexpected": "shape"}, False),
         ],
     )
-    def test_alarm_parser(self, value, expected):
+    def test_alarm_parser(self, value: object, *, expected: bool) -> None:
         """Each supported alarm-DP shape decodes to the expected no-water flag."""
         assert alarm_indicates_no_water(value) is expected
 
@@ -193,12 +196,12 @@ class TestAlarmParser:
 class TestIK10PWReadHealth:
     """``read_health`` wraps the local DP 105 read into a :class:`DeviceHealthState`."""
 
-    def _make_local_status(self, *, dps: dict) -> MagicMock:
+    def _make_local_status(self, *, dps: dict[str, object]) -> MagicMock:
         fake_local = MagicMock()
         fake_local.status.return_value = {"dps": dps}
         return fake_local
 
-    def test_no_water_alarm_surfaces(self, gateway, adapter):
+    def test_no_water_alarm_surfaces(self, gateway: DeviceGateway, adapter: IK10PWAdapter) -> None:
         """A set alarm bit surfaces as the no-water health alarm."""
         fake_local = self._make_local_status(dps={"1": True, "104": 42, "105": 1, "106": 2})
         with patch.object(gateway, "open_local", return_value=fake_local):
@@ -212,7 +215,7 @@ class TestIK10PWReadHealth:
         assert state.raw["work_status"] == LOCAL_WORK_STATUS
         assert state.raw["source"] == "local"
 
-    def test_clear_alarm(self, gateway, adapter):
+    def test_clear_alarm(self, gateway: DeviceGateway, adapter: IK10PWAdapter) -> None:
         """A clear alarm DP yields no alarms."""
         fake_local = self._make_local_status(dps={"1": True, "105": 0})
         with patch.object(gateway, "open_local", return_value=fake_local):
@@ -222,7 +225,7 @@ class TestIK10PWReadHealth:
         assert HealthAlarm.NO_WATER not in state.alarms
         assert state.raw["alarm_raw"] == 0
 
-    def test_missing_dp(self, gateway, adapter):
+    def test_missing_dp(self, gateway: DeviceGateway, adapter: IK10PWAdapter) -> None:
         """A missing alarm DP yields no alarms rather than an error."""
         fake_local = self._make_local_status(dps={"1": True})
         with patch.object(gateway, "open_local", return_value=fake_local):
@@ -232,7 +235,7 @@ class TestIK10PWReadHealth:
         assert HealthAlarm.NO_WATER not in state.alarms
         assert state.raw["alarm_raw"] is None
 
-    def test_local_failure_marks_offline(self, gateway, adapter):
+    def test_local_failure_marks_offline(self, gateway: DeviceGateway, adapter: IK10PWAdapter) -> None:
         """A failed local connection marks the device offline."""
         with patch.object(gateway, "open_local", side_effect=ConnectionError("no route")):
             state = adapter.read_health(_make_irrigator())
@@ -245,15 +248,15 @@ class TestIK10PWReadHealth:
 class TestRegistry:
     """Smoke checks: the registry yields the expected concrete adapters."""
 
-    def test_registry_resolves_the_irrigator_model_key(self, registry: DeviceRegistry):
+    def test_registry_resolves_the_irrigator_model_key(self, registry: DeviceRegistry) -> None:
         """The irrigator model key resolves to the IK10PW adapter."""
         assert isinstance(registry.get_irrigator(_make_irrigator("rainpoint.ik10pw")), IK10PWAdapter)
 
-    def test_registry_resolves_the_sensor_model_key(self, registry: DeviceRegistry):
+    def test_registry_resolves_the_sensor_model_key(self, registry: DeviceRegistry) -> None:
         """The sensor model key resolves to the TR301Z adapter."""
         assert isinstance(registry.get_sensor(_make_sensor()), TR301ZAdapter)
 
-    def test_health_state_is_typed(self, adapter):
+    def test_health_state_is_typed(self, adapter: IK10PWAdapter) -> None:
         """``read_health`` returns a typed ``DeviceHealthState``."""
         state = adapter.read_health(_make_irrigator())
         assert isinstance(state, DeviceHealthState)
