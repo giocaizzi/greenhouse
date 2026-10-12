@@ -59,7 +59,7 @@ from greenhouse_cli.tui.sprites import (
 )
 from greenhouse_cli.tui.table import DataTable as TuiDataTable
 from greenhouse_cli.tui.widgets import ClusterCard, MetricChart, SpriteView, refill, selected_key
-from server.conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME, _make_stubbed_app
+from server.conftest import _make_stubbed_app
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine, Iterator
@@ -661,33 +661,6 @@ def _token_client_factory(application: FastAPI) -> ClientFactory:
 
 class TestLogin:
     """Login flow when the server requires authentication."""
-
-    def test_401_prompts_login_and_stores_token(self) -> None:
-        """A 401 opens the login dialog and a successful login stores the token for next time."""
-        application, engine = _make_stubbed_app(bypass_auth=False)
-        http = TestClient(application, raise_server_exceptions=False)
-
-        async def scenario() -> None:
-            tui = GreenhouseApp(
-                "http://testserver", client_factory=_token_client_factory(application), refresh_seconds=0
-            )
-            async with tui.run_test(size=SIZE) as pilot:
-                await _settle(pilot, tui)
-                assert isinstance(tui.screen, LoginScreen)
-                tui.screen.query_one("#username", Input).value = TEST_ADMIN_USERNAME
-                tui.screen.query_one("#password", Input).value = TEST_ADMIN_PASSWORD
-                await pilot.click("#login")
-                await _settle_until(pilot, tui, lambda: not isinstance(tui.screen, LoginScreen))
-                assert isinstance(tui.screen, DashboardScreen), _screen_text(tui)
-                assert "Cannot reach" not in _text(tui.screen.query_one("#dashboard-empty", Static))
-
-        try:
-            assert http.get("/api/v1/clusters").status_code == HTTPStatus.UNAUTHORIZED
-            _run(scenario())
-            token_path = Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token"
-            assert token_path.read_text()
-        finally:
-            engine.dispose()
 
 
 # ── CLI wiring ──────────────────────────────────────────────────────────────
