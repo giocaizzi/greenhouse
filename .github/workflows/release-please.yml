@@ -21,7 +21,29 @@ jobs:
           app-id: ${{ secrets.RP_APP_ID }}
           private-key: ${{ secrets.RP_APP_KEY }}
       - uses: googleapis/release-please-action@v5
+        id: rp
         with:
           token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # release-please bumps the pyproject versions but not uv.lock, which records
+      # each workspace package's own version (its TOML updater cannot select a
+      # [[package]] entry by name, only by position). Refresh the lock on the release
+      # PR branch so a plain `uv run` does not rewrite it after the release merges.
+      - if: ${{ steps.rp.outputs.prs_created == 'true' }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(steps.rp.outputs.pr).headBranchName }}
+          token: ${{ steps.app-token.outputs.token }}
+      - if: ${{ steps.rp.outputs.prs_created == 'true' }}
+        uses: astral-sh/setup-uv@v7
+      - if: ${{ steps.rp.outputs.prs_created == 'true' }}
+        name: Refresh uv.lock on the release PR
+        run: |
+          uv lock
+          if ! git diff --quiet -- uv.lock; then
+            git config user.name "release-please[bot]"
+            git config user.email "release-please[bot]@users.noreply.github.com"
+            git commit -m "chore: refresh uv.lock" -- uv.lock
+            git push
+          fi
