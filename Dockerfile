@@ -53,7 +53,7 @@ COPY --from=builder --chown=app:app /app/libs /app/libs
 RUN mkdir -p /app/data && chown -R app:app /app/data
 VOLUME ["/app/data"]
 
-USER app
+USER 1000:1000
 
 EXPOSE 8000
 
