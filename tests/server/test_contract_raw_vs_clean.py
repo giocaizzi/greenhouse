@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import time_machine
@@ -27,16 +28,26 @@ from golden import FROZEN_INSTANT, FROZEN_TS, assert_golden_json
 from server.conftest import run_core_job
 from server.test_contract_pipeline import Pipeline
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
 STEADY = (45.0, 46.0, 45.0, 44.0, 45.0, 46.0, 45.0, 44.0, 45.0)
 SPIKE = 5.0
 IMPOSSIBLE = 150.0
 
 
+class SpikyPipeline(Pipeline):
+    """A :class:`Pipeline` that also remembers the ids ``spiky`` seeded."""
+
+    ids: dict[str, int]
+
+
 @pytest.fixture
-def spiky(clean_env, frozen_clock):
+def spiky(clean_env: Path, frozen_clock: time_machine.Traveller) -> Iterator[SpikyPipeline]:
     """A pipeline whose sensors carry a Hampel spike and an impossible reading."""
     del clean_env, frozen_clock  # requested only for their side effects
-    p = Pipeline()
+    p = SpikyPipeline()
     # Devices are registered (and the sensor→plant assignment opened) two days
     # earlier, so the assignment-aware plant chart covers every seeded reading.
     with time_machine.travel(FROZEN_INSTANT - timedelta(days=2), tick=False):
@@ -67,11 +78,11 @@ def spiky(clean_env, frozen_clock):
     p.close()
 
 
-def _soil_points(chart: dict) -> list[float]:
+def _soil_points(chart: dict[str, Any]) -> list[float]:
     return [value for ds in chart["datasets"] for _ts, value in ds["points"]]
 
 
-def _views(p) -> dict:
+def _views(p: SpikyPipeline) -> dict[str, Any]:
     """Every raw and cleaned read surface, fetched in the order the contract pins (the dry run logs a decision)."""
     return {
         "chart": p.call("GET", "/api/v1/clusters/1/chart-data?hours=24&metric=soil_moisture")["response"],
@@ -84,7 +95,7 @@ def _views(p) -> dict:
     }
 
 
-def _assert_raw_side_keeps_the_spike(p, views: dict) -> None:
+def _assert_raw_side_keeps_the_spike(p: SpikyPipeline, views: dict[str, Any]) -> None:
     """Archive / display surfaces read raw rows."""
     chart, plant_chart, history = views["chart"], views["plant_chart"], views["history"]
     quality, status = views["quality"], views["status"]
@@ -101,7 +112,7 @@ def _assert_raw_side_keeps_the_spike(p, views: dict) -> None:
     assert status_latest == {p.ids["sensor_id"]: SPIKE, p.ids["second_sensor_id"]: IMPOSSIBLE}
 
 
-def _assert_cleaned_side_ignores_it(p, views: dict, decision_log: dict) -> None:
+def _assert_cleaned_side_ignores_it(p: SpikyPipeline, views: dict[str, Any], decision_log: dict[str, Any]) -> None:
     """Judgement surfaces read the cleaned view."""
     status, dry_run, monitor = views["status"], views["dry_run"], views["monitor"]
     snapshot_min = 44.0
@@ -126,7 +137,7 @@ def _assert_cleaned_side_ignores_it(p, views: dict, decision_log: dict) -> None:
     assert monitor_soil[p.ids["second_sensor_id"]] == (None, "no_data")
 
 
-def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
+def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky: SpikyPipeline) -> None:
     """Raw views keep the spike and cleaned views ignore it."""
     p = spiky
     v = _views(p)
@@ -150,7 +161,7 @@ def test_raw_views_keep_the_spike_and_cleaned_views_ignore_it(spiky):
     )
 
 
-def test_anomaly_scan_sees_what_cleaning_masks(spiky):
+def test_anomaly_scan_sees_what_cleaning_masks(spiky: SpikyPipeline) -> None:
     """The ``sensor_drift`` scan reads raw rows, so it flags the very spike the snapshot ignored."""
     rows_before = spiky.db_rows()["alerts"]
     assert rows_before == []
@@ -159,7 +170,7 @@ def test_anomaly_scan_sees_what_cleaning_masks(spiky):
     assert [(a["code"], a["entity_id"]) for a in alerts] == [("sensor_drift", spiky.ids["sensor_id"])]
 
 
-def test_monitor_cleans_over_a_window_long_enough_for_the_spike_filter(spiky):
+def test_monitor_cleans_over_a_window_long_enough_for_the_spike_filter(spiky: SpikyPipeline) -> None:
     """``/monitor`` cleans the decision snapshot's 24 h window, then keeps its 2 h slice.
 
     It used to clean only the 2 h slice: at a 30-min cadence that is 4 samples
