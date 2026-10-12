@@ -4,7 +4,7 @@ Behavior-preserving refactor of greenhouse on branch `claude/focused-hawking-7to
 `fa89e94`. The safety net (characterization + golden tests, mutation-hardened) was frozen at the local tag
 `refactor-gate1` before any production code moved. 566 commits before this report: 246 `refactor`, 169 `docs`, 37 `fix` (labeled behavior
 changes), 35 `test`, 35 `build`, 24 merges, 10 `chore`, plus `types`/`style`/`ci` and one revert. Details of every bug,
-quirk and labeled change: `REFACTOR_NOTES.md`. Sections 1–7 describe the refactor as of `fa89e94`; section 8 covers the
+quirk and labeled change: `docs/wip/REFACTOR_NOTES.md`. Sections 1–7 describe the refactor as of `fa89e94`; section 8 covers the
 **bug-fix fold-in** that followed in the same PR (#108) and fixed the bugs the refactor had recorded, then the switch to
 every ruff rule and to type-checked tests (§8.5); section 9 lists what is still open. At the PR head the branch has 840
 commits (47 merges).
@@ -73,7 +73,7 @@ Route-level commits and inline 404s; string-matching on error text; auth's priva
 dead code (≈30 groups, one commit each with grep evidence); refactor-process ids in comments; every radon D–F block.
 
 ## 5. Behavior changes (all labeled `fix(drift|consistency)`, owner-approved)
-Full table with locations, pinning tests and commits: `REFACTOR_NOTES.md` → "Labeled behavior changes landed".
+Full table with locations, pinning tests and commits: `docs/wip/REFACTOR_NOTES.md` → "Labeled behavior changes landed".
 - **Drift (one rule per pair, API wins):** web create/update of irrigators/sensors handles duplicate ids (409) and the
   plant-in-cluster rule; one window/404 wording; web check badge uses the API `has_alerts` rule; vacation POST rejects a
   reversed window (400); plant dashboard shows "never"/real age; vacation times in the timezone preference everywhere;
@@ -143,7 +143,7 @@ D: merged at `3b75817`, then its two review rounds and the TUI table fix through
 
 ### 8.2 Fixed, by area
 
-Full table (what changed, where, pinning test): `REFACTOR_NOTES.md` → "Labeled behavior changes landed" →
+Full table (what changed, where, pinning test): `docs/wip/REFACTOR_NOTES.md` → "Labeled behavior changes landed" →
 "Bug-fix fold-in".
 
 | Area | Fixed | Commits |
@@ -249,9 +249,9 @@ its own branch, merged into a staging branch, gated, and pushed only when the wh
 ### 9.1 Open bugs
 
 - None. Every bug the refactor recorded is fixed, the last follow-up included: a stale `local_key` after a re-pair is
-  refreshed from the Cloud on tinytuya error 914 and persisted (`380dbcd`). `REFACTOR_NOTES.md` → "Observed bugs not
+  refreshed from the Cloud on tinytuya error 914 and persisted (`380dbcd`). `docs/wip/REFACTOR_NOTES.md` → "Observed bugs not
   fixed" now holds only documented-design notes.
-- Small leftovers: the cleanup candidates in `REFACTOR_NOTES.md` → "Dead-code and cleanup candidates".
+- Small leftovers: the cleanup candidates in `docs/wip/REFACTOR_NOTES.md` → "Dead-code and cleanup candidates".
 
 ### 9.2 Dependencies
 

@@ -132,7 +132,7 @@ Commands: top-level `status`, `irrigate`, `check`, `monitor`, `sync`, `learn`, `
 - **Device types are validated on write** against the registry's model keys (`rainpoint.ik10pw`, `tuya.tr301z`): an unknown new or changed type is a 422 listing the known keys; an unchanged stored type is left alone. Data migration `a1d3f5b7c902` rewrote legacy values (`tuya_cloud`, `soil_moisture`, …) on upgrade.
 - **Database migrations are Alembic-only.** A database created before Alembic (tables present, no `alembic_version`) is no longer patched up at startup — it fails with "table … already exists" and must be compared with head and stamped by hand (`alembic stamp head`). Old open `pump_dry_run` alerts from before the pump-alert unification are no longer auto-resolved at startup; resolve them through the inbox.
 - `migrations/versions/*` are frozen history — add a new revision, never edit an old one.
-- Recorded-but-unfixed bugs and their pinning tests are listed in `REFACTOR_NOTES.md` ("Observed bugs not fixed"); a test named `*_current_behavior*` pins one of them. Fixing one is a labeled behavior change that updates exactly that test (renamed to the fixed behavior). The bugs already fixed, with their commits and tests, are under "Labeled behavior changes landed".
+- Recorded-but-unfixed bugs and their pinning tests are listed in `docs/wip/REFACTOR_NOTES.md` ("Observed bugs not fixed"); a test named `*_current_behavior*` pins one of them. Fixing one is a labeled behavior change that updates exactly that test (renamed to the fixed behavior). The bugs already fixed, with their commits and tests, are under "Labeled behavior changes landed".
 
 ## Conventions
 

@@ -32,7 +32,7 @@ in parentheses (B-n, S-n, D-n, OD-n) are labels kept only because test docstring
 - **OD3** Remove all legacy compatibility code (pump-dry-run alert migration, `tuya_cloud`/`tuya_local` device-type
   aliases, pre-Alembic DB repair, `IRRIGATION_CHECK_INTERVAL_HOURS`) as labeled commits.
 - **OD4** A manual stop records action `"stop"`. Existing rows are unchanged.
-- **OD5** The `refactor/` working folder was deleted at the end; only `REFACTOR_NOTES.md` and `REFACTOR_REPORT.md` stay. The
+- **OD5** The `refactor/` working folder was deleted at the end; only `docs/wip/REFACTOR_NOTES.md` and `docs/wip/REFACTOR_REPORT.md` stay. The
   strict list moves to `[tool.mypy] files`, sizecheck moves to `scripts/`, and the Makefile is updated.
 - **Drift confirmations** (2026-10-03):
   - D8: vacation times are parsed and displayed in the `timezone` preference on every interface.
@@ -289,7 +289,7 @@ Server, CLI, TUI and test infrastructure:
 #### Not behavior changes (same batch)
 
 - `fix(deps)` `8f79282` / `build(deps)` `364e284` / `ci` `677986c`: dependency upgrades, declared dependencies and the
-  CI `static` job — see `REFACTOR_REPORT.md` → "Bug-fix fold-in".
+  CI `static` job — see `docs/wip/REFACTOR_REPORT.md` → "Bug-fix fold-in".
 - `refactor` `f86ae95` (gates → `services/actuation_gates.py`), `ea0726a` (DP parsers and log folding →
   `devices/datapoints.py`, re-exported from `gateway`), `0ff00ba` (lazy package re-exports, `greenhouse_core/_lazy.py`:
   `import greenhouse_core.constants` from ~650 ms to 15–25 ms), `d3d0ec3` (pump-watcher jobs →
@@ -394,6 +394,6 @@ Gate 0 on `a1b2622`, Python 3.11.15: **1182 passed, 2 warnings, 1168 s**; total 
    cancelled at teardown (Textual cache path).
 
 Added by the safety net, on purpose: `InsecureKeyLengthWarning` from `tests/server/test_contract_auth.py` (short test
-HMAC key). Current runs report 9–10 warnings in total; see the `REFACTOR_REPORT.md` final gate. Since the server
+HMAC key). Current runs report 9–10 warnings in total; see the `docs/wip/REFACTOR_REPORT.md` final gate. Since the server
 fixtures became a global plugin (`450eded`), a core-only run imports `TestClient` too, so it also shows Starlette's
 httpx deprecation warning once per worker.
