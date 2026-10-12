@@ -152,7 +152,7 @@ Full table (what changed, where, pinning test): `REFACTOR_NOTES.md` → "Labeled
 | Actuation pipeline | B-4 effective caps on every start (gate order health → caps → dry run → start); B-6 gate blocks written to `decision_logs`; forced run = manual + leak check + stopped at shutdown; manual minutes ≥ 1; stop-all reports refusals; vacation-exhausted primary code | `5a31855`, `f86ae95`, `89ea6de`, `6088984`, `a982946`, `60e5926`, `ccf2c4b`, `d2399c7`, `f4188bc` |
 | Leak check / pump watcher | every manual start checked (after run + settle; skipped without minutes); B-23 time-bounded "done" scan; negative watch duration | `3d7f906`, `31cb427`, `e145090`, `b14be8d` |
 | Device health / alerts | B-3 sensor offline after sync interval + 30 min; B-5 re-opened alerts notify; B-9 cache rebuilt from open alerts at startup; B-10 `water_warning` = soil dry (no SENSOR_FAULT; old alerts resolved); per-device commits and lost-alert recovery | `c13b1a0`, `a2fb694`, `28dfcaf`, `6920994`, `8a57601`, `df518dd`, `00eccfc` |
-| Devices / ingress / sync / weather | silent swallows logged; SIGTERM OFF once; per-DP parse errors skipped; DP 111 `"false"` parsed as True (new bug); log rows store `water_warning`; B-21 humidity-only readings stored; B-20 paginated `getdevicelog` (+ cursor/failure guards); forecast hours ≤ 0 and cache key; `/monitor` spike filter | `8b02de9`, `951e657`, `b61fd0e`, `1634816`, `73ee467`, `08a66d7`, `b79190e`, `aff73a1`, `6d20838`, `3770bb8`, `0bb8944` |
+| Devices / ingress / sync / weather | silent swallows logged; SIGTERM OFF once; per-DP parse errors skipped; DP 111 `"false"` parsed as True (new bug); log rows store `water_warning`; B-21 humidity-only readings stored; B-20 paginated `getdevicelog` (+ cursor/failure guards); forecast hours ≤ 0 and cache key; `/monitor` spike filter; stale `local_key` after a re-pair refreshed on tinytuya error 914 and persisted | `8b02de9`, `951e657`, `b61fd0e`, `1634816`, `73ee467`, `08a66d7`, `b79190e`, `aff73a1`, `6d20838`, `3770bb8`, `0bb8944`, `380dbcd` |
 | API | B-11 masked `local_key` (irrigators, sensors, web form); B-15 PATCH null semantics; nonexistent default cluster 404; B-22 real status age; cluster / plant delete cascades; unknown device type 422 (validated only on change); NaN / Infinity refused | `578929e`, `a859ecd`, `ac8bcc1`, `7836e76`, `78abbc5`, `5eb5a90`, `4c4e833`, `4bc7823`, `c8e91f7`, `fdef0bc`, `a27d209`, `51994c7` |
 | Web | missing-alert ack/resolve 404; non-numeric form 400; unknown-cluster irrigate 404; error format by `Accept` (+ 405 `Allow`); footer clock timezone; no operational banners for anonymous viewers; plant form dependency | `3662b49`, `f0570bb`, `293ceaf`, `fdd0c3a`, `40a1df9`, `ba44321`, `9140079`, `aac74ba` |
 | Auth / security / settings | B-12 constant-time MCP token; empty/whitespace token = unset (503), bearer only; `WWW-Authenticate` on JSON 401; corrupt hash → False, unknown user costs a verify; `GREENHOUSE_X`-only secrets + startup warning; ntfy URL validated, credentials redacted; bind `127.0.0.1`; swallowed startup failures logged | `fb8617f`, `6910279`, `3216b6d`, `440bfeb`, `6d1a1a6`, `67e3520`, `2792a7a`, `e269c39`, `f3df4e8`, `db2b659`, `66dca03`, `b388380`, `87fcc6d`, `5d86105` |
@@ -248,11 +248,10 @@ its own branch, merged into a staging branch, gated, and pushed only when the wh
 
 ### 9.1 Open bugs
 
-- Every bug the refactor recorded is fixed; what is left is in `REFACTOR_NOTES.md` → "Observed bugs not fixed".
-- A stale `local_key` in an irrigator's config after re-pairing is not recovered automatically (tinytuya error 914
-  could drive a Cloud key refresh and retry) — `devices/gateway.py`.
-- Small leftovers: the `tr301z.py` docstring names `OFFLINE_AFTER_MINUTES` for sensors; the cleanup candidates in
-  `REFACTOR_NOTES.md` → "Dead-code and cleanup candidates".
+- None. Every bug the refactor recorded is fixed, the last follow-up included: a stale `local_key` after a re-pair is
+  refreshed from the Cloud on tinytuya error 914 and persisted (`380dbcd`). `REFACTOR_NOTES.md` → "Observed bugs not
+  fixed" now holds only documented-design notes.
+- Small leftovers: the cleanup candidates in `REFACTOR_NOTES.md` → "Dead-code and cleanup candidates".
 
 ### 9.2 Dependencies
 

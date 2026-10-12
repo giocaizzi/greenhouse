@@ -137,7 +137,7 @@ Patterns to know:
 - **`irrigator start`** takes an optional duration (`--minutes`, ≥ 1; 0 or negative → 422) and bypasses the engine (cooldown, quiet hours, leak hold) — it's the manual escape hatch. It still refuses (exit 1) when:
   - a per-day cap would be exceeded — `--max-events` / `--daily-cap` from the cluster config, else the global default (`config global set`) — HTTP 409;
   - the global dry run is on (`prefs set --dry-run-global`) — HTTP 409 `global dry run is on: irrigator not started`;
-  - the device refuses the start — HTTP 502; for the IK10PW that includes an unreachable local Duration DP (wrong `--device-ip` / `--local-key`, network): a timed start is refused before the pump is switched on;
+  - the device refuses the start — HTTP 502; for the IK10PW that includes an unreachable local Duration DP (wrong `--device-ip`, network, or a `--local-key` the Tuya Cloud cannot correct): a timed start is refused before the pump is switched on. A key that went stale because the device was re-paired is refreshed from the Cloud (at most hourly per device), saved, and the start retried;
   - the start could not be recorded — HTTP 500; the server stopped the pump again.
 
   With `--minutes` it arms the dry-run pump watcher and a post-watering leak check, due once the run has ended plus a 25-minute settle (never sooner than 30 min); without `--minutes` the device timer bounds the run, and there is no watcher and no leak check (the activity log records `leak_check_skipped`). If the server shuts down mid-run, a manual start is left running on the device timer. Document this to the user when you reach for it.

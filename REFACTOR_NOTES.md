@@ -192,6 +192,7 @@ Test files are under `tests/` (`server/` = `tests/server/`).
 | A non-positive forecast window returns no forecast and makes no request (it sliced from the end). | `services/weather.py` | `server/test_contract_weather.py::test_non_positive_hours_returns_none_without_a_request` | `6d20838` |
 | The forecast cache is keyed by the requested hours. | `services/weather.py` | `server/test_contract_weather.py::test_forecast_cache_is_keyed_by_hours` | `3770bb8` |
 | `/monitor` cleans over `SNAPSHOT_LOOKBACK_HOURS` and then takes the 2 h slice, so the spike filter applies (one glitch no longer reads `very_dry`). | `services/irrigation._monitor_readings` | `server/test_contract_raw_vs_clean.py::test_monitor_cleans_over_a_window_long_enough_for_the_spike_filter`, goldens `orchestration/raw_vs_clean.json`, `tui/screens/cluster_1_insights.txt` | `0bb8944` |
+| **A stale `local_key` after a re-pair is recovered.** A local call answered with tinytuya error 914 ("Check device key or version") makes ONE Cloud `getdevices` lookup; only a different Cloud key retries the local call, once (IK10PW Duration DP 102 write, DP 105 health read, generic status read — all through `DeviceGateway.run_local`; the Cloud switch ON is still sent once, after a successful Duration write). At most one lookup per device per `LOCAL_KEY_REFRESH_INTERVAL_SECONDS` (1 h; a cold lookup counts), so steady state stays Cloud-free. The new key supersedes the stale config value in-process (an operator-entered new key still wins) and is persisted to `config['local_key']` by the now-wired `on_key_discovered` hook (`services/device_keys`, own session on a background thread; cold lookups are persisted too). Responses keep the mask. WARNING on the refresh, INFO on a new key / its persistence, never the key. | `devices/gateway.run_local`, `devices/local_keys.py`, IK10PW / generic adapters, `services/device_keys.py`, `app._init_tuya`, `constants.py` | `devices/test_gateway_key_refresh.py`, `server/test_local_key_persistence.py` | `380dbcd` |
 
 #### API
 
@@ -302,15 +303,11 @@ Server, CLI, TUI and test infrastructure:
 ## Observed bugs not fixed (open)
 
 Every bug the refactor recorded is fixed and listed under "Labeled behavior changes landed" above (package D's
-engine, CLI, TUI and test-infrastructure items included). What remains are the follow-ups below.
+engine, CLI, TUI and test-infrastructure items included, the stale-`local_key` follow-up, `380dbcd`, and the
+`tr301z.py` sensor-staleness docstring, `8da0aa7`). What remains are the notes below.
 
 ### Follow-ups (outside every fix package)
 
-- **A stale `local_key` in an irrigator's stored config after re-pairing is not recovered automatically.** The gateway
-  uses the configured key; tinytuya error 914 could drive a Cloud key refresh and retry. *Where:*
-  `devices/gateway.py::DeviceGateway.resolve_local_key`. *Pinned:* not pinned.
-- **`tr301z.py` docstring** still names `OFFLINE_AFTER_MINUTES` for sensor staleness; sensors use the sync interval +
-  `SENSOR_OFFLINE_GRACE_MINUTES` since B-3 (comment only).
 - **A manual start without `minutes`** switches the pump on with the device's own timer as the only bound: no dry-run
   watcher (it needs a deadline) and no leak check (`leak_check_skipped` says why). Documented design, listed so it is
   not mistaken for a gap.
