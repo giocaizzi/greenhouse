@@ -38,9 +38,9 @@ if TYPE_CHECKING:
 
 TABLE_COUNT = 17
 
-# sha256 of "\n".join(DDL statements), recorded at the original baseline (main @ a1b2622, hence "PHASE0").
+# sha256 of "\n".join(DDL statements), re-recorded for SQLAlchemy 2.1 (FLOAT -> DOUBLE).
 PHASE0_DDL_SHA256 = (
-    "40ff3b9d7746546d477fdfc3127f95afa8cac48b953592029f08b476e88c833c"  # gitleaks:allow — content hash, not a secret
+    "f5f7ba5ea573a4522b58991db67e133c75a4a3b1725718e325131518c5779c50"  # gitleaks:allow — content hash, not a secret
 )
 
 ALEMBIC_HEAD = "a1d3f5b7c902"
@@ -178,7 +178,9 @@ def _reflect(engine: Engine) -> dict[str, Any]:
             "columns": [
                 {
                     "name": c["name"],
-                    "type": str(c["type"]),
+                    # SQLAlchemy 2.1 renders ``Float`` as DOUBLE in new DDL; the migrations
+                    # (frozen) still create FLOAT. SQLite gives both REAL affinity.
+                    "type": str(c["type"]).replace("DOUBLE", "FLOAT"),
                     "nullable": c["nullable"],
                     "default": c["default"],
                     "primary_key": c["primary_key"],
