@@ -15,6 +15,7 @@ new log rows and a live save, nor exactly one new row (mutation survivor
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -22,18 +23,33 @@ from golden import FROZEN_TS
 from greenhouse_core.devices.gateway import group_logs_by_timestamp
 from greenhouse_core.sync import sync_sensor_data
 
+if TYPE_CHECKING:
+    import time_machine
+
+    from greenhouse_core.devices.gateway import DeviceGateway
+    from greenhouse_core.repository import IrrigationRepository
+
+_Logs = list[dict[str, Any]]
+
 STATS_KEYS = ["total_synced", "total_new", "total_live", "errors"]
 
 
 class _Gateway:
     """Minimal recording gateway: canned logs / live readings per device id."""
 
-    def __init__(self, *, logs: dict | None = None, live: dict | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        logs: dict[str, _Logs | BaseException] | None = None,
+        live: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
         self.logs = logs or {}
         self.live = live or {}
         self.calls: list[tuple[str, str]] = []
 
-    def get_device_logs(self, device_id, since_ms=None, hours=24, max_records=100):
+    def get_device_logs(
+        self, device_id: str, since_ms: int | None = None, hours: int = 24, max_records: int = 100
+    ) -> _Logs:
         del since_ms, hours, max_records  # signature mirrors the real one; unused by this fake
         self.calls.append(("get_device_logs", device_id))
         value = self.logs.get(device_id, [])
@@ -41,19 +57,24 @@ class _Gateway:
             raise value
         return value
 
-    def group_logs_by_timestamp(self, logs, tolerance_ms=5000):
+    def group_logs_by_timestamp(self, logs: _Logs, tolerance_ms: int = 5000) -> _Logs:
         return group_logs_by_timestamp(logs, tolerance_ms)
 
-    def get_live_reading(self, device_id):
+    def get_live_reading(self, device_id: str) -> dict[str, Any]:
         self.calls.append(("get_live_reading", device_id))
         return self.live.get(device_id, {})
 
 
-def _log(ts: int, key: str, value) -> dict:
+def _as_gateway(gw: _Gateway) -> DeviceGateway:
+    """Hand the recording fake to the sync loop, which calls only the three methods it implements."""
+    return cast("DeviceGateway", gw)
+
+
+def _log(ts: int, key: str, value: object) -> dict[str, Any]:
     return {"timestamp_ms": ts * 1000, "timestamp": ts, "code": key, "raw_value": value, "key": key, "value": value}
 
 
-def _sync_lines(caplog) -> list[tuple[str, str]]:
+def _sync_lines(caplog: pytest.LogCaptureFixture) -> list[tuple[str, str]]:
     return [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "greenhouse_core.sync"]
 
 
@@ -68,7 +89,9 @@ def _sync_lines(caplog) -> list[tuple[str, str]]:
         (0, {}, "up to date"),
     ],
 )
-def test_per_sensor_summary_line(tmp_db, caplog, n_logs, live, summary):
+def test_per_sensor_summary_line(
+    tmp_db: IrrigationRepository, caplog: pytest.LogCaptureFixture, n_logs: int, live: dict[str, float], summary: str
+) -> None:
     """Each sensor's sync summary line reports new log rows and the live read exactly."""
     cluster_id = tmp_db.add_cluster("Bench")
     tmp_db.add_sensor(
@@ -79,18 +102,20 @@ def test_per_sensor_summary_line(tmp_db, caplog, n_logs, live, summary):
     gw = _Gateway(logs={"dev_p": logs}, live={"dev_p": live})
 
     with caplog.at_level(logging.INFO, logger="greenhouse_core.sync"):
-        stats = sync_sensor_data(tmp_db, gw)
+        stats = sync_sensor_data(tmp_db, _as_gateway(gw))
 
     assert _sync_lines(caplog) == [("INFO", "[Bench] Syncing 1 sensor(s)..."), ("INFO", f"  Probe: {summary}")]
     assert stats == {"total_synced": n_logs, "total_new": n_logs, "total_live": 1 if live else 0, "errors": []}
 
 
-def test_stats_key_order_without_clusters(tmp_db):
+def test_stats_key_order_without_clusters(tmp_db: IrrigationRepository) -> None:
     """Sync stats keep their key order even with no clusters."""
-    assert list(sync_sensor_data(tmp_db, _Gateway())) == STATS_KEYS
+    assert list(sync_sensor_data(tmp_db, _as_gateway(_Gateway()))) == STATS_KEYS
 
 
-def test_stats_key_order_and_failure_isolation(tmp_db, frozen_clock, caplog):
+def test_stats_key_order_and_failure_isolation(
+    tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller, caplog: pytest.LogCaptureFixture
+) -> None:
     """One sensor's failure is recorded and does not stop the others."""
     del frozen_clock  # side-effect fixture (the clock is frozen)
     cluster_id = tmp_db.add_cluster("Bench")
@@ -107,7 +132,7 @@ def test_stats_key_order_and_failure_isolation(tmp_db, frozen_clock, caplog):
     )
 
     with caplog.at_level(logging.INFO, logger="greenhouse_core.sync"):
-        stats = sync_sensor_data(tmp_db, gw)
+        stats = sync_sensor_data(tmp_db, _as_gateway(gw))
 
     assert list(stats) == STATS_KEYS
     assert stats == {"total_synced": 2, "total_new": 2, "total_live": 1, "errors": ["Broken: 'result'"]}

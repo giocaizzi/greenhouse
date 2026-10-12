@@ -21,6 +21,7 @@ from __future__ import annotations
 import time
 import warnings
 from datetime import datetime
+from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 import pydantic
@@ -28,19 +29,23 @@ import pytest
 
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.logic.decision import Action, IrrigationDecision, Reason, TriggerCode
+from greenhouse_core.models import EventAction, TriggeredBy
 from greenhouse_core.plant_db import get_plant_database
+
+if TYPE_CHECKING:
+    from greenhouse_core.repository import IrrigationRepository
 
 
 def _ts(year: int, month: int, day: int, hour: int, tz: str = "UTC") -> int:
     return int(datetime(year, month, day, hour, tzinfo=ZoneInfo(tz)).timestamp())
 
 
-def _freeze(monkeypatch, ts: int) -> None:
+def _freeze(monkeypatch: pytest.MonkeyPatch, ts: int) -> None:
     """Pin ``time.time()`` process-wide. Call before seeding sensor data."""
     monkeypatch.setattr("time.time", lambda: ts)
 
 
-def _add_soil(db, cluster_id: int, moisture: float, *, device_id: str = "fake_soil_a") -> int:
+def _add_soil(db: IrrigationRepository, cluster_id: int, moisture: float, *, device_id: str = "fake_soil_a") -> int:
     sid = db.add_sensor(
         cluster_id=cluster_id,
         tuya_device_id=device_id,
@@ -53,7 +58,7 @@ def _add_soil(db, cluster_id: int, moisture: float, *, device_id: str = "fake_so
 
 
 @pytest.fixture
-def logic(tmp_db):
+def logic(tmp_db: IrrigationRepository) -> IrrigationLogic:
     """Provide an engine on the test database and the bundled plant database."""
     return IrrigationLogic(tmp_db, get_plant_database())
 
@@ -65,7 +70,9 @@ class TestNoWindowsAllowAllHours:
     gates actuation (issue #83). Night protection is delegated to quiet hours.
     """
 
-    def test_alocasia_no_windows_does_not_skip_at_14h(self, tmp_db, logic, monkeypatch):
+    def test_alocasia_no_windows_does_not_skip_at_14h(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Alocasia at 14:00 with no windows must NOT skip with OUTSIDE_WINDOW.
 
         Soil is held *moderately* dry (35%) — below the adequate band but above
@@ -84,7 +91,9 @@ class TestNoWindowsAllowAllHours:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.OUTSIDE_WINDOW not in codes
 
-    def test_alocasia_no_windows_no_window_skip_at_08h(self, tmp_db, logic, monkeypatch):
+    def test_alocasia_no_windows_no_window_skip_at_08h(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """At 08:00 with no windows, OUTSIDE_WINDOW must not appear either."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 8))
         cluster_id = tmp_db.add_cluster("Indoor Tropical")
@@ -97,7 +106,9 @@ class TestNoWindowsAllowAllHours:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.OUTSIDE_WINDOW not in codes
 
-    def test_unknown_species_no_windows_does_not_skip(self, tmp_db, logic, monkeypatch):
+    def test_unknown_species_no_windows_does_not_skip(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """No species + no category + no windows → no OUTSIDE_WINDOW gate at any hour."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 5))
         cluster_id = tmp_db.add_cluster("Mystery Plant Cluster")
@@ -115,7 +126,9 @@ class TestNoWindowsAllowAllHours:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.OUTSIDE_WINDOW not in codes
 
-    def test_dry_soil_no_windows_midday_no_quiet_hours_irrigates(self, tmp_db, logic, monkeypatch):
+    def test_dry_soil_no_windows_midday_no_quiet_hours_irrigates(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Dry soil + no windows + 13:00 local + no quiet hours → irrigate, no OUTSIDE_WINDOW.
 
         Directly exercises the #83 fix: previously the preferred-hours fallback
@@ -140,7 +153,9 @@ class TestNoWindowsAllowAllHours:
 class TestSeasonalMultiplier:
     """``season_frequency_multiplier{,_outdoor}`` is consumed by the engine."""
 
-    def test_indoor_tropical_winter_emits_seasonal_hold(self, tmp_db, logic, monkeypatch):
+    def test_indoor_tropical_winter_emits_seasonal_hold(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Indoor Monstera in January → tropical winter multiplier 0.5x → SEASONAL_HOLD emitted."""
         # 08:00 is inside tropical preferred window (07-10) so the window rule
         # does not pre-empt the seasonal multiplier path.
@@ -155,7 +170,9 @@ class TestSeasonalMultiplier:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.SEASONAL_HOLD in codes
 
-    def test_outdoor_fruit_tree_summer_emits_seasonal_boost(self, tmp_db, logic, monkeypatch):
+    def test_outdoor_fruit_tree_summer_emits_seasonal_boost(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Outdoor loquat in July → species-level outdoor 1.5x summer → SEASONAL_BOOST emitted."""
         # Loquat has preferred_water_hours_local=[5,9]; pick 07:00 to stay inside.
         _freeze(monkeypatch, _ts(2026, 7, 15, 7))
@@ -169,7 +186,9 @@ class TestSeasonalMultiplier:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.SEASONAL_BOOST in codes
 
-    def test_unknown_species_unknown_category_uses_builtin_indoor(self, tmp_db, logic, monkeypatch):
+    def test_unknown_species_unknown_category_uses_builtin_indoor(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """No species + no category → builtin DEFAULT_SEASON_MULTIPLIER_INDOOR → winter 0.5x → SEASONAL_HOLD."""
         # 08:00 in January — inside the global default 06-10 window so the
         # window rule does not pre-empt; the engine reaches the seasonal step.
@@ -189,7 +208,9 @@ class TestSeasonalMultiplier:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.SEASONAL_HOLD in codes
 
-    def test_winter_multiplier_lengthens_interval(self, tmp_db, logic, monkeypatch):
+    def test_winter_multiplier_lengthens_interval(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Indoor tropical: winter (0.5x frequency) → interval STRICTLY GREATER than spring baseline.
 
         Multiplier semantics are *frequency x baseline* — water 0.5x as often
@@ -227,7 +248,9 @@ class TestSeasonalMultiplier:
             f"interval should DOUBLE (got {winter_decision.interval_hours / baseline_interval:.2f}\u00d7)"
         )
 
-    def test_seasonal_reason_keeps_reasons_a_list(self, tmp_db, logic, monkeypatch):
+    def test_seasonal_reason_keeps_reasons_a_list(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Regression: the seasonal rule must append to ``reasons``, not rebind it to a tuple.
 
         A tuple in the ``list[Reason]`` field made every ``model_dump`` emit
@@ -251,7 +274,9 @@ class TestSeasonalMultiplier:
         assert [r["code"] for r in payload["reasons"]] == [r.code.value for r in decision.reasons]
         decision.add_reason(code=TriggerCode.VACATION_ACTIVE, message="later rule")  # must not raise
 
-    def test_seasonal_multiplier_with_quiet_hours_bypass(self, tmp_db, logic, monkeypatch):
+    def test_seasonal_multiplier_with_quiet_hours_bypass(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Regression: off-season + forced run during quiet hours must not crash ``_finalize``.
 
         ``_finalize`` appends ``MANUAL_OVERRIDE_QUIET_HOURS`` after the seasonal
@@ -271,7 +296,9 @@ class TestSeasonalMultiplier:
         assert TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS in codes
         assert decision.decision_log_id is not None
 
-    def test_quiet_hours_skip_at_night(self, tmp_db, logic, monkeypatch):
+    def test_quiet_hours_skip_at_night(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Cluster inside the global quiet window must SKIP with QUIET_HOURS code."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))  # 02:00 UTC, inside 0..5
         cluster_id = tmp_db.add_cluster("Indoor Late Night", environment="indoor")
@@ -286,7 +313,9 @@ class TestSeasonalMultiplier:
         assert decision.action.value == "skip"
         assert decision.primary_code == TriggerCode.QUIET_HOURS
 
-    def test_quiet_hours_cluster_override_disables(self, tmp_db, logic, monkeypatch):
+    def test_quiet_hours_cluster_override_disables(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """``start == end`` at the cluster level disables an inherited global window."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))
         cluster_id = tmp_db.add_cluster("Outdoor Night Run", environment="outdoor")
@@ -302,7 +331,9 @@ class TestSeasonalMultiplier:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.QUIET_HOURS not in codes
 
-    def test_quiet_hours_bypass_attaches_override_warning(self, tmp_db, logic, monkeypatch):
+    def test_quiet_hours_bypass_attaches_override_warning(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """``bypass_quiet_hours=True`` skips the SKIP but logs the override reason."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))
         cluster_id = tmp_db.add_cluster("Indoor Manual Override", environment="indoor")
@@ -317,7 +348,9 @@ class TestSeasonalMultiplier:
         codes = [r.code for r in decision.reasons]
         assert TriggerCode.MANUAL_OVERRIDE_QUIET_HOURS in codes
 
-    def test_cooldown_beats_quiet_hours(self, tmp_db, logic, monkeypatch):
+    def test_cooldown_beats_quiet_hours(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Cooldown is the earlier gate — it must take precedence over quiet hours."""
         _freeze(monkeypatch, _ts(2026, 5, 14, 2))
         cluster_id = tmp_db.add_cluster("Indoor Cooldown First", environment="indoor")
@@ -330,8 +363,8 @@ class TestSeasonalMultiplier:
         )
         tmp_db.add_irrigation_event(
             irrigator_id=irrigator_id,
-            action="start",
-            triggered_by="auto",
+            action=EventAction.START,
+            triggered_by=TriggeredBy.AUTO,
             duration_minutes=3,
             timestamp=int(time.time()) - 3600,
         )
@@ -341,7 +374,9 @@ class TestSeasonalMultiplier:
         assert decision is not None
         assert decision.primary_code == TriggerCode.COOLDOWN
 
-    def test_summer_multiplier_shortens_interval(self, tmp_db, logic, monkeypatch):
+    def test_summer_multiplier_shortens_interval(
+        self, tmp_db: IrrigationRepository, logic: IrrigationLogic, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Outdoor fruit tree: summer (1.5x frequency) → interval STRICTLY LESS than spring baseline.
 
         Multiplier semantics are *frequency x baseline* — water 1.5x as often
@@ -382,21 +417,22 @@ class TestSeasonalMultiplier:
 class TestDecisionAssignmentValidation:
     """IrrigationDecision re-validates assignments (validate_assignment=True)."""
 
-    def _decision(self):
+    def _decision(self) -> IrrigationDecision:
         return IrrigationDecision(
             cluster_id=1, evaluated_at=0, action=Action.SKIP, duration_minutes=0, interval_hours=12, confidence=0.5
         )
 
-    def test_tuple_reasons_are_coerced_to_list(self):
+    def test_tuple_reasons_are_coerced_to_list(self) -> None:
         """Assigning a tuple of reasons is coerced to a list by validation."""
         decision = self._decision()
-        decision.reasons = (Reason(code=TriggerCode.SEASONAL_HOLD, message="x"),)
+        # A tuple on purpose: validate_assignment must coerce it to the declared list.
+        decision.reasons = cast("list[Reason]", (Reason(code=TriggerCode.SEASONAL_HOLD, message="x"),))
         assert isinstance(decision.reasons, list)
         decision.add_reason(code=TriggerCode.SEASONAL_BOOST, message="y")  # would AttributeError on a tuple
         assert [r.code for r in decision.reasons] == [TriggerCode.SEASONAL_HOLD, TriggerCode.SEASONAL_BOOST]
 
-    def test_wrong_type_fails_at_the_assignment(self):
+    def test_wrong_type_fails_at_the_assignment(self) -> None:
         """Assigning a wrongly typed value fails at the assignment, not later."""
         decision = self._decision()
         with pytest.raises(pydantic.ValidationError):
-            decision.duration_minutes = "a lot"
+            decision.duration_minutes = cast("int", "a lot")  # wrong type on purpose: validation must refuse it
