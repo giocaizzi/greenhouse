@@ -75,8 +75,10 @@ class TR301ZAdapter(TuyaSensorAdapter):
         decision engine acts on (WATER_WARNING → irrigate); it is a soil
         condition, not a device-health alarm, so it only appears in ``raw``.
         ``last_seen_ts`` is the reading timestamp, so the monitor derives
-        :attr:`HealthAlarm.DEVICE_OFFLINE` from staleness (``OFFLINE_AFTER_MINUTES``)
-        without any device round-trip. A missing row reads as offline.
+        :attr:`HealthAlarm.DEVICE_OFFLINE` from staleness without any device
+        round-trip: one sync interval plus ``SENSOR_OFFLINE_GRACE_MINUTES``, since
+        only the sync job writes the row (``OFFLINE_AFTER_MINUTES`` is the
+        irrigators' live-read window). A missing row reads as offline.
         """
         del sensor  # everything needed is on the persisted row
         now = int(time.time())
