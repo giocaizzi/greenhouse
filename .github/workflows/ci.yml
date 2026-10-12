@@ -7,6 +7,8 @@ on:
     # pull_request reads this workflow from the PR's BASE branch, so this filter
     # must be present on both main and each release/* branch to take effect.
     branches: [main, "release/**"]
+  push:
+    branches: [main]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -103,6 +105,9 @@ jobs:
     needs: detect-changes
     if: needs.detect-changes.outputs.code == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -175,3 +180,17 @@ jobs:
             exit 1
           fi
           echo "All upstream jobs OK (success or skipped)."
+      # Local parity: the same `make check` a developer runs. Skipped with the
+      # rest on release-please mechanical-only changes.
+      - if: needs.detect-changes.outputs.code == 'true'
+        uses: actions/checkout@v7
+      - if: needs.detect-changes.outputs.code == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - if: needs.detect-changes.outputs.code == 'true'
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - if: needs.detect-changes.outputs.code == 'true'
+        run: uv sync && make check
