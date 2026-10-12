@@ -72,7 +72,7 @@ def stop_unrecorded_start(
         stop_ok, stop_msg = adapter.stop(irrigator)
     except Exception as exc:  # noqa: BLE001 — reported in the ERROR line below
         stop_ok, stop_msg = False, f"adapter.stop raised: {exc}"
-    logger.exception(
+    logger.error(
         "Could not record the start of irrigator %d; compensating stop: stop_ok=%s (%s)",
         irrigator_id,
         stop_ok,
@@ -674,10 +674,10 @@ class IrrigationService:
     def _record_check_failure(self, cluster_id: int, cluster_name: str, exc: Exception) -> CheckResult:
         """Roll back the crashed cluster alone, log it, raise ``check_failed`` and commit.
 
-        Called from inside the ``except`` block, so ``logger.exception`` still sees the exception.
+        Called from inside the ``except`` block; the exception is passed explicitly so the traceback is kept.
         """
         self._repo.rollback()
-        logger.exception("Check failed for cluster %s", cluster_id)
+        logger.error("Check failed for cluster %s", cluster_id, exc_info=exc)
         self._repo.upsert_alert(
             f"{CHECK_FAILED_ALERT_CODE}:cluster:{cluster_id}",
             SOURCE_IRRIGATION,
