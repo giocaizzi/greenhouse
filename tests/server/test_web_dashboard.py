@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_dashboard_empty_state(client):
+
+def test_dashboard_empty_state(client: TestClient) -> None:
     """Dashboard empty state."""
     resp = client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -12,7 +14,7 @@ def test_dashboard_empty_state(client):
     assert "Create cluster" in resp.text
 
 
-def test_dashboard_lists_seeded_cluster(seeded_client):
+def test_dashboard_lists_seeded_cluster(seeded_client: TestClient) -> None:
     """Dashboard lists seeded cluster."""
     resp = seeded_client.get("/")
     assert resp.status_code == HTTPStatus.OK
@@ -21,7 +23,7 @@ def test_dashboard_lists_seeded_cluster(seeded_client):
     assert 'hx-get="/clusters/1/card-fragment"' in resp.text
 
 
-def test_card_fragment_renders_plant_sensor_link(seeded_client):
+def test_card_fragment_renders_plant_sensor_link(seeded_client: TestClient) -> None:
     """The new card fragment shows the plant species + linked sensor with the ↳ arrow."""
     resp = seeded_client.get("/clusters/1/card-fragment")
     assert resp.status_code == HTTPStatus.OK
@@ -31,13 +33,13 @@ def test_card_fragment_renders_plant_sensor_link(seeded_client):
     assert "↳" in resp.text
 
 
-def test_card_fragment_404_for_missing_cluster(client):
+def test_card_fragment_404_for_missing_cluster(client: TestClient) -> None:
     """Card fragment 404 for missing cluster."""
     resp = client.get("/clusters/9999/card-fragment")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_dashboard_includes_chart_assets(client):
+def test_dashboard_includes_chart_assets(client: TestClient) -> None:
     """Dashboard includes chart assets."""
     resp = client.get("/")
     text_lc = resp.text.lower()

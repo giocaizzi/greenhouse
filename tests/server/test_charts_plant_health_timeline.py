@@ -3,6 +3,7 @@
 import time
 from http import HTTPStatus
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ HEALTH_THRESHOLDS = {"good": 80.0, "ok": 50.0}  # the timeline's score bands
 MAX_HEALTH_SCORE = 100.0
 
 
-def test_health_timeline_empty_no_readings(seeded_client):
+def test_health_timeline_empty_no_readings(seeded_client: TestClient) -> None:
     """Plant with no moisture readings returns an empty points list."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
     assert resp.status_code == HTTPStatus.OK
@@ -27,13 +28,13 @@ def test_health_timeline_empty_no_readings(seeded_client):
     assert {key: body["thresholds"][key] for key in HEALTH_THRESHOLDS} == HEALTH_THRESHOLDS
 
 
-def test_health_timeline_404_unknown_plant(client):
+def test_health_timeline_404_unknown_plant(client: TestClient) -> None:
     """Health timeline 404 unknown plant."""
     resp = client.get("/api/v1/plants/9999/health-timeline")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_health_timeline_point_structure(seeded_client):
+def test_health_timeline_point_structure(seeded_client: TestClient) -> None:
     """Each point is a (unix_timestamp, score) tuple with score in [0, 100]."""
     resp = seeded_client.get("/api/v1/plants/1/health-timeline")
     assert resp.status_code == HTTPStatus.OK
@@ -42,7 +43,7 @@ def test_health_timeline_point_structure(seeded_client):
         assert 0.0 <= score <= MAX_HEALTH_SCORE
 
 
-def test_health_timeline_points_match_seeded_readings(app):
+def test_health_timeline_points_match_seeded_readings(app: FastAPI) -> None:
     """Seed N days of readings and assert points length matches."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)

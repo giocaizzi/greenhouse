@@ -3,20 +3,23 @@
 import time
 from http import HTTPStatus
 
+import pytest
+from fastapi.testclient import TestClient
+
 from greenhouse_core import utils
 
 
 class TestVacationListPage:
     """Tests for vacation list page."""
 
-    def test_renders_empty_state(self, client):
+    def test_renders_empty_state(self, client: TestClient) -> None:
         """Renders empty state."""
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert "Vacation" in resp.text
         assert "No vacation windows" in resp.text
 
-    def test_renders_form(self, client):
+    def test_renders_form(self, client: TestClient) -> None:
         """Renders form."""
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
@@ -29,7 +32,7 @@ class TestVacationListPage:
 class TestVacationCreate:
     """Tests for vacation create."""
 
-    def test_create_via_form_redirects(self, client):
+    def test_create_via_form_redirects(self, client: TestClient) -> None:
         """Create via form redirects."""
         now = int(time.time())
         resp = client.post(
@@ -43,7 +46,7 @@ class TestVacationCreate:
         assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/vacation"
 
-    def test_created_window_shows_in_list(self, client):
+    def test_created_window_shows_in_list(self, client: TestClient) -> None:
         """Created window shows in list."""
         now = int(time.time())
         client.post(
@@ -54,7 +57,7 @@ class TestVacationCreate:
         assert resp.status_code == HTTPStatus.OK
         assert "scheduled" in resp.text
 
-    def test_create_with_iso_date_strings(self, client):
+    def test_create_with_iso_date_strings(self, client: TestClient) -> None:
         """Create with ISO date strings."""
         resp = client.post(
             "/vacation",
@@ -63,7 +66,9 @@ class TestVacationCreate:
         )
         assert resp.status_code == HTTPStatus.SEE_OTHER
 
-    def test_iso_dates_are_midnight_in_the_timezone_preference(self, client, monkeypatch):
+    def test_iso_dates_are_midnight_in_the_timezone_preference(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """D8: a date means midnight in the ``timezone`` preference (the zone the page displays), not UTC."""
         monkeypatch.setattr(utils, "_display_timezone", "Europe/Rome")
         resp = client.post(
@@ -79,7 +84,7 @@ class TestVacationCreate:
         assert 'value="2026-05-01"' in page
         assert 'value="2026-05-10"' in page
 
-    def test_active_window_shows_banner(self, client):
+    def test_active_window_shows_banner(self, client: TestClient) -> None:
         """Active window shows banner."""
         now = int(time.time())
         client.post(
@@ -95,7 +100,7 @@ class TestVacationCreate:
 class TestVacationDelete:
     """Tests for vacation delete."""
 
-    def test_delete_redirects(self, client):
+    def test_delete_redirects(self, client: TestClient) -> None:
         """Delete redirects."""
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 100), "ends_at": str(now + 200)})
@@ -103,7 +108,7 @@ class TestVacationDelete:
         assert resp.status_code == HTTPStatus.SEE_OTHER
         assert resp.headers["location"] == "/vacation"
 
-    def test_delete_removes_window(self, client):
+    def test_delete_removes_window(self, client: TestClient) -> None:
         """Delete removes window."""
         now = int(time.time())
         client.post("/vacation", data={"starts_at": str(now + 100), "ends_at": str(now + 200)})
@@ -111,7 +116,7 @@ class TestVacationDelete:
         resp = client.get("/vacation")
         assert "No vacation windows" in resp.text
 
-    def test_delete_not_found_returns_404(self, client):
+    def test_delete_not_found_returns_404(self, client: TestClient) -> None:
         """Delete not found returns 404."""
         resp = client.post("/vacation/9999/delete")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -120,7 +125,7 @@ class TestVacationDelete:
 class TestVacationWaterBudget:
     """Tests for vacation water budget."""
 
-    def _make_cluster_with_capacity(self, client, reservoir_l, flow_rate_l_per_min):
+    def _make_cluster_with_capacity(self, client: TestClient, reservoir_l: float, flow_rate_l_per_min: float) -> None:
         client.post("/api/v1/clusters", json={"name": "Budget Cluster"})
         client.post(
             "/api/v1/clusters/1/irrigator",
@@ -133,7 +138,7 @@ class TestVacationWaterBudget:
             },
         )
 
-    def test_budget_readout_shown_for_capacity_cluster(self, client):
+    def test_budget_readout_shown_for_capacity_cluster(self, client: TestClient) -> None:
         """A cluster with capacity + an active vacation renders the budget readout."""
         self._make_cluster_with_capacity(client, reservoir_l=20.0, flow_rate_l_per_min=1.0)
         now = int(time.time())
@@ -148,7 +153,7 @@ class TestVacationWaterBudget:
         # 20 * 0.95 = 19.0 usable, daily 19/11 days ~ 1.73; just assert the usable marker.
         assert "19.0 L" in resp.text
 
-    def test_no_budget_readout_without_capacity(self, client):
+    def test_no_budget_readout_without_capacity(self, client: TestClient) -> None:
         """A cluster with no capacity configured renders no budget readout, no crash."""
         client.post("/api/v1/clusters", json={"name": "Plain Cluster"})
         client.post(
@@ -161,14 +166,14 @@ class TestVacationWaterBudget:
         assert resp.status_code == HTTPStatus.OK
         assert "Water budget" not in resp.text
 
-    def test_no_budget_readout_without_any_window(self, client):
+    def test_no_budget_readout_without_any_window(self, client: TestClient) -> None:
         """With capacity but no scheduled/active window, no budget readout (no crash)."""
         self._make_cluster_with_capacity(client, reservoir_l=20.0, flow_rate_l_per_min=1.0)
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert "Water budget" not in resp.text
 
-    def test_budget_readout_for_future_scheduled_window(self, client):
+    def test_budget_readout_for_future_scheduled_window(self, client: TestClient) -> None:
         """A future (scheduled, not yet active) window also drives the budget readout."""
         self._make_cluster_with_capacity(client, reservoir_l=20.0, flow_rate_l_per_min=1.0)
         now = int(time.time())
@@ -181,7 +186,7 @@ class TestVacationWaterBudget:
 class TestVacationBannerInBase:
     """Tests for vacation banner in base."""
 
-    def test_active_vacation_shows_banner_on_other_pages(self, client):
+    def test_active_vacation_shows_banner_on_other_pages(self, client: TestClient) -> None:
         """Active vacation window triggers the banner in _base.html on every page."""
         now = int(time.time())
         client.post(

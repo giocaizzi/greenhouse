@@ -3,8 +3,10 @@
 import time
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def _create_window(client, *, starts_offset=3600, ends_offset=7200):
+
+def _create_window(client: TestClient, *, starts_offset: int = 3600, ends_offset: int = 7200) -> int:
     now = int(time.time())
     resp = client.post(
         "/vacation",
@@ -18,7 +20,7 @@ def _create_window(client, *, starts_offset=3600, ends_offset=7200):
 class TestVacationEditPage:
     """Tests for vacation edit page."""
 
-    def test_renders_form_with_existing_values(self, client):
+    def test_renders_form_with_existing_values(self, client: TestClient) -> None:
         """Renders form with existing values."""
         _create_window(client)
         resp = client.get("/vacation/1/edit")
@@ -29,14 +31,14 @@ class TestVacationEditPage:
         assert 'name="contact_email"' in resp.text
         assert 'name="notes"' in resp.text
 
-    def test_edit_link_appears_on_list(self, client):
+    def test_edit_link_appears_on_list(self, client: TestClient) -> None:
         """Edit link appears on list."""
         _create_window(client)
         resp = client.get("/vacation")
         assert resp.status_code == HTTPStatus.OK
         assert "/vacation/1/edit" in resp.text
 
-    def test_inputs_have_matching_labels_a11y(self, client):
+    def test_inputs_have_matching_labels_a11y(self, client: TestClient) -> None:
         """Inputs have matching labels a11y."""
         _create_window(client)
         resp = client.get("/vacation/1/edit")
@@ -45,7 +47,7 @@ class TestVacationEditPage:
             assert f'for="{field}"' in resp.text
             assert f'id="{field}"' in resp.text
 
-    def test_unknown_window_returns_404(self, client):
+    def test_unknown_window_returns_404(self, client: TestClient) -> None:
         """Unknown window returns 404."""
         resp = client.get("/vacation/9999/edit")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -54,7 +56,7 @@ class TestVacationEditPage:
 class TestVacationUpdate:
     """Tests for vacation update."""
 
-    def test_update_persists_and_redirects(self, client):
+    def test_update_persists_and_redirects(self, client: TestClient) -> None:
         """Update persists and redirects."""
         _create_window(client)
         resp = client.post(
@@ -75,7 +77,7 @@ class TestVacationUpdate:
         assert "neighbor@example.com" in listed.text
         assert "Watering by hand" in listed.text
 
-    def test_update_iso_dates_round_trip(self, client):
+    def test_update_iso_dates_round_trip(self, client: TestClient) -> None:
         """Update ISO dates round trip."""
         _create_window(client)
         resp = client.post(
@@ -90,7 +92,7 @@ class TestVacationUpdate:
         assert "2030-06-01" in form.text
         assert "2030-06-10" in form.text
 
-    def test_update_rejects_end_before_start(self, client):
+    def test_update_rejects_end_before_start(self, client: TestClient) -> None:
         """Update rejects end before start."""
         _create_window(client)
         resp = client.post(
@@ -100,7 +102,7 @@ class TestVacationUpdate:
         )
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_update_rejects_bad_date(self, client):
+    def test_update_rejects_bad_date(self, client: TestClient) -> None:
         """Update rejects bad date."""
         _create_window(client)
         resp = client.post(
@@ -110,7 +112,7 @@ class TestVacationUpdate:
         )
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_update_unknown_window_returns_404(self, client):
+    def test_update_unknown_window_returns_404(self, client: TestClient) -> None:
         """Update unknown window returns 404."""
         resp = client.post(
             "/vacation/9999/edit",

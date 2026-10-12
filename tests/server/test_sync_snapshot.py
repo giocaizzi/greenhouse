@@ -9,15 +9,19 @@ soil moisture follows invariant #2 — the driest plant drives the call.
 """
 
 import time
+from typing import cast
 
 import pytest
 
+from greenhouse_core.devices import DeviceGateway
+from greenhouse_core.models import Sensor
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services import sync as sync_module
 from greenhouse_server.services.sync import SyncService
 
 
 @pytest.fixture
-def cluster_with_two_sensors(tmp_db):
+def cluster_with_two_sensors(tmp_db: IrrigationRepository) -> tuple[int, int, int]:
     """Cluster with a dry sensor and a wet one; returns (cluster_id, dry_id, wet_id)."""
     cluster_id = tmp_db.add_cluster("Two Sensor Cluster")
     dry_id = tmp_db.add_sensor(
@@ -37,14 +41,16 @@ def cluster_with_two_sensors(tmp_db):
     return cluster_id, dry_id, wet_id
 
 
-def _service(repo):
+def _service(repo: IrrigationRepository) -> SyncService:
     return SyncService(repo, registry=None, cloud=None)
 
 
 class TestClusterSnapshot:
     """Tests for cluster snapshot."""
 
-    def test_soil_moisture_is_the_driest_sensor(self, tmp_db, cluster_with_two_sensors):
+    def test_soil_moisture_is_the_driest_sensor(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """Invariant #2 — not "whichever sensor came back first from the DB"."""
         cluster_id, dry_id, wet_id = cluster_with_two_sensors
         now = int(time.time())
@@ -54,9 +60,12 @@ class TestClusterSnapshot:
 
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
+        assert snapshot is not None
         assert snapshot["soil_moisture"] == pytest.approx(24.0)
 
-    def test_temperature_is_averaged_across_sensors(self, tmp_db, cluster_with_two_sensors):
+    def test_temperature_is_averaged_across_sensors(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """Temperature is averaged across sensors."""
         cluster_id, dry_id, wet_id = cluster_with_two_sensors
         now = int(time.time())
@@ -66,9 +75,12 @@ class TestClusterSnapshot:
 
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
+        assert snapshot is not None
         assert snapshot["temperature"] == pytest.approx(22.0)
 
-    def test_snapshot_uses_the_latest_value_per_sensor(self, tmp_db, cluster_with_two_sensors):
+    def test_snapshot_uses_the_latest_value_per_sensor(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """Snapshot uses the latest value per sensor."""
         cluster_id, dry_id, wet_id = cluster_with_two_sensors
         now = int(time.time())
@@ -79,9 +91,12 @@ class TestClusterSnapshot:
 
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
+        assert snapshot is not None
         assert snapshot["soil_moisture"] == pytest.approx(35.0)
 
-    def test_spike_reading_does_not_become_the_snapshot(self, tmp_db, cluster_with_two_sensors):
+    def test_spike_reading_does_not_become_the_snapshot(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """The snapshot feeds actuation, so it reads the cleaned view (invariant #10)."""
         cluster_id, dry_id, wet_id = cluster_with_two_sensors
         now = int(time.time())
@@ -93,9 +108,13 @@ class TestClusterSnapshot:
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
         plateau_floor = 50.0  # the dry sensor's settled readings sit at 54-56 %; the 2 % spike is far below
+        assert snapshot is not None
+        assert snapshot["soil_moisture"] is not None
         assert snapshot["soil_moisture"] >= plateau_floor
 
-    def test_sensor_without_readings_is_skipped(self, tmp_db, cluster_with_two_sensors):
+    def test_sensor_without_readings_is_skipped(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """Sensor without readings is skipped."""
         cluster_id, dry_id, _wet_id = cluster_with_two_sensors
         tmp_db.add_sensor_reading(sensor_id=dry_id, timestamp=int(time.time()) - 60, soil_moisture=42.0)
@@ -103,22 +122,27 @@ class TestClusterSnapshot:
 
         snapshot = _service(tmp_db).ensure_fresh_and_read(cluster_id)
 
+        assert snapshot is not None
         assert snapshot["soil_moisture"] == pytest.approx(42.0)
 
-    def test_no_readings_returns_none(self, tmp_db, cluster_with_two_sensors):
+    def test_no_readings_returns_none(
+        self, tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int]
+    ) -> None:
         """No readings returns none."""
         cluster_id, _dry_id, _wet_id = cluster_with_two_sensors
 
         assert _service(tmp_db).ensure_fresh_and_read(cluster_id) is None
 
-    def test_no_sensors_returns_none(self, tmp_db):
+    def test_no_sensors_returns_none(self, tmp_db: IrrigationRepository) -> None:
         """No sensors returns none."""
         cluster_id = tmp_db.add_cluster("Empty Cluster")
 
         assert _service(tmp_db).ensure_fresh_and_read(cluster_id) is None
 
 
-def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two_sensors, monkeypatch):
+def test_freshness_is_judged_on_the_newest_soil_reading(
+    tmp_db: IrrigationRepository, cluster_with_two_sensors: tuple[int, int, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A fresh row without soil (humidity-only live read) must not hide a stale soil value from the re-sync.
 
     The engine dates a soil sensor by its newest soil reading, so the freshness check must too.
@@ -131,12 +155,14 @@ def test_freshness_is_judged_on_the_newest_soil_reading(tmp_db, cluster_with_two
     tmp_db.session.commit()
     synced: list[str] = []
 
-    def record_sync(_repo, _gateway, sensor, hours):
+    def record_sync(_repo: IrrigationRepository, _gateway: DeviceGateway, sensor: Sensor, hours: int) -> None:
         del hours  # SyncService passes it by keyword
         synced.append(sensor.name)
 
     monkeypatch.setattr(sync_module, "sync_single_sensor", record_sync)
 
-    SyncService(tmp_db, registry=None, cloud=object()).ensure_fresh_and_read(cluster_id)
+    # Any non-None gateway enables the force-sync path; ``sync_single_sensor`` is stubbed, so it is never used.
+    placeholder_gateway = cast("DeviceGateway", object())
+    SyncService(tmp_db, registry=None, cloud=placeholder_gateway).ensure_fresh_and_read(cluster_id)
 
     assert synced == ["Dry Plant Sensor"]

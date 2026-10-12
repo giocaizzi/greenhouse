@@ -3,13 +3,17 @@
 import json as _json
 from http import HTTPStatus
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from greenhouse_core.models import EVENT_ACTION_START, TRIGGERED_BY_AUTO
 from greenhouse_core.repository import IrrigationRepository
 
 
 class TestPlantCRUD:
     """Tests for plant CRUD."""
 
-    def test_add_and_list(self, client):
+    def test_add_and_list(self, client: TestClient) -> None:
         """Add and list."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.post(
@@ -23,19 +27,19 @@ class TestPlantCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert len(resp.json()) == 1
 
-    def test_add_to_nonexistent_cluster(self, client):
+    def test_add_to_nonexistent_cluster(self, client: TestClient) -> None:
         """Add to nonexistent cluster."""
         resp = client.post("/api/v1/clusters/999/plants", json={"species": "Test"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_list_empty_cluster(self, client):
+    def test_list_empty_cluster(self, client: TestClient) -> None:
         """List empty cluster."""
         client.post("/api/v1/clusters", json={"name": "Empty"})
         resp = client.get("/api/v1/clusters/1/plants")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json() == []
 
-    def test_sync_plants(self, seeded_client):
+    def test_sync_plants(self, seeded_client: TestClient) -> None:
         """Sync plants."""
         resp = seeded_client.post("/api/v1/plants/sync", json={})
         assert resp.status_code == HTTPStatus.OK
@@ -43,7 +47,7 @@ class TestPlantCRUD:
         assert data["synced"] >= 1
         assert isinstance(data["errors"], list)
 
-    def test_update_species_and_water_needs(self, client):
+    def test_update_species_and_water_needs(self, client: TestClient) -> None:
         """Update species and water needs."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
@@ -59,7 +63,7 @@ class TestPlantCRUD:
         assert data["species"] == "Boston Fern"
         assert data["water_needs"] == "medium"
 
-    def test_update_wrong_cluster_returns_404(self, client):
+    def test_update_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Update wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -67,13 +71,13 @@ class TestPlantCRUD:
         resp = client.put("/api/v1/clusters/2/plants/1", json={"species": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_not_found(self, client):
+    def test_update_not_found(self, client: TestClient) -> None:
         """Update not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.put("/api/v1/clusters/1/plants/999", json={"species": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_detaches_sensor(self, client):
+    def test_delete_detaches_sensor(self, client: TestClient) -> None:
         """Delete detaches sensor."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
@@ -92,7 +96,7 @@ class TestPlantCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["plant_id"] is None
 
-    def test_delete_wrong_cluster_returns_404(self, client):
+    def test_delete_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Delete wrong cluster returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -100,7 +104,7 @@ class TestPlantCRUD:
         resp = client.delete("/api/v1/clusters/2/plants/1")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_not_found(self, client):
+    def test_delete_not_found(self, client: TestClient) -> None:
         """Delete not found."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         resp = client.delete("/api/v1/clusters/1/plants/999")
@@ -110,14 +114,15 @@ class TestPlantCRUD:
 class TestPlantMove:
     """POST /api/v1/plants/{plant_id}/move — relocate a plant between clusters."""
 
-    def _seed_two_clusters_one_plant(self, client):
+    def _seed_two_clusters_one_plant(self, client: TestClient) -> int:
         client.post("/api/v1/clusters", json={"name": "Source"})
         client.post("/api/v1/clusters", json={"name": "Target"})
         resp = client.post("/api/v1/clusters/1/plants", json={"species": "Fern"})
         assert resp.status_code == HTTPStatus.CREATED
-        return resp.json()["id"]
+        plant_id: int = resp.json()["id"]
+        return plant_id
 
-    def test_move_happy_path(self, client):
+    def test_move_happy_path(self, client: TestClient) -> None:
         """Move happy path."""
         plant_id = self._seed_two_clusters_one_plant(client)
         target_cluster_id = 2
@@ -132,7 +137,7 @@ class TestPlantMove:
         assert [p["id"] for p in client.get("/api/v1/clusters/2/plants").json()] == [plant_id]
         assert client.get("/api/v1/clusters/1/plants").json() == []
 
-    def test_move_missing_plant_returns_404(self, client):
+    def test_move_missing_plant_returns_404(self, client: TestClient) -> None:
         """Move missing plant returns 404."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post("/api/v1/clusters", json={"name": "C2"})
@@ -140,20 +145,20 @@ class TestPlantMove:
         assert resp.status_code == HTTPStatus.NOT_FOUND
         assert "plant" in resp.json()["detail"].lower()
 
-    def test_move_missing_target_cluster_returns_404(self, client):
+    def test_move_missing_target_cluster_returns_404(self, client: TestClient) -> None:
         """Move missing target cluster returns 404."""
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 999})
         assert resp.status_code == HTTPStatus.NOT_FOUND
         assert "cluster" in resp.json()["detail"].lower()
 
-    def test_move_same_cluster_returns_400(self, client):
+    def test_move_same_cluster_returns_400(self, client: TestClient) -> None:
         """Move same cluster returns 400."""
         plant_id = self._seed_two_clusters_one_plant(client)
         resp = client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 1})
         assert resp.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_move_writes_plant_moved_activity_event(self, app, client):
+    def test_move_writes_plant_moved_activity_event(self, app: FastAPI, client: TestClient) -> None:
         """Move writes plant moved activity event."""
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(f"/api/v1/plants/{plant_id}/move", json={"target_cluster_id": 2})
@@ -172,13 +177,14 @@ class TestPlantMove:
             rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
             moved_rows = [r for r in rows if r.code == "plant_moved"]
             assert len(moved_rows) == 1
+            assert moved_rows[0].payload_json is not None
             assert _json.loads(moved_rows[0].payload_json) == {
                 "from_cluster_id": 1,
                 "to_cluster_id": 2,
                 "sensor_ids": [],
             }
 
-    def test_move_reassigns_plant_sensors_to_target_cluster(self, client):
+    def test_move_reassigns_plant_sensors_to_target_cluster(self, client: TestClient) -> None:
         """Moving a plant moves its attached sensors with it.
 
         A sensor attached to the plant is a probe in its soil — it must
@@ -219,7 +225,7 @@ class TestPlantMove:
         source_sensors = client.get("/api/v1/clusters/1/sensors").json()
         assert [s["tuya_device_id"] for s in source_sensors] == ["fake_tuya_device_eeff0011"]
 
-    def test_move_sensor_readings_follow_via_sensor(self, app, client):
+    def test_move_sensor_readings_follow_via_sensor(self, app: FastAPI, client: TestClient) -> None:
         """After a move the plant's historical readings appear under the new cluster.
 
         SensorReading rows key off sensor_id, so once the sensor moves with
@@ -250,7 +256,7 @@ class TestPlantMove:
             assert [s.id for s in repo.get_sensors_in_cluster(2)] == [1]
             assert repo.get_sensors_in_cluster(1) == []
 
-    def test_move_activity_payload_lists_moved_sensor_ids(self, app, client):
+    def test_move_activity_payload_lists_moved_sensor_ids(self, app: FastAPI, client: TestClient) -> None:
         """The plant_moved activity payload must list which sensors travelled."""
         plant_id = self._seed_two_clusters_one_plant(client)
         client.post(
@@ -269,13 +275,14 @@ class TestPlantMove:
             repo = IrrigationRepository(session)
             rows = repo.list_activity_events(entity_type="plant", entity_id=plant_id)
             moved_rows = [r for r in rows if r.code == "plant_moved"]
+            assert moved_rows[0].payload_json is not None
             assert _json.loads(moved_rows[0].payload_json) == {
                 "from_cluster_id": 1,
                 "to_cluster_id": 2,
                 "sensor_ids": [1],
             }
 
-    def test_move_preserves_decision_logs_on_old_cluster(self, app, client):
+    def test_move_preserves_decision_logs_on_old_cluster(self, app: FastAPI, client: TestClient) -> None:
         """Decision logs written BEFORE the move stay attached to the original cluster."""
         plant_id = self._seed_two_clusters_one_plant(client)
 
@@ -304,7 +311,7 @@ class TestPlantMove:
             assert len(repo.list_decision_logs(cluster_id=1)) == 1
             assert repo.list_decision_logs(cluster_id=2) == []
 
-    def test_move_preserves_irrigation_events_on_old_cluster(self, app, client):
+    def test_move_preserves_irrigation_events_on_old_cluster(self, app: FastAPI, client: TestClient) -> None:
         """Irrigation events written before a move stay with the original cluster.
 
         Irrigation events written BEFORE the move stay attached to irrigators
@@ -320,9 +327,9 @@ class TestPlantMove:
             repo = IrrigationRepository(session)
             repo.add_irrigation_event(
                 irrigator_id=1,
-                action="start",
+                action=EVENT_ACTION_START,
                 duration_minutes=5,
-                triggered_by="auto",
+                triggered_by=TRIGGERED_BY_AUTO,
                 notes="pre-move event",
             )
             session.commit()
@@ -336,7 +343,7 @@ class TestPlantMove:
             assert len(events) == 1
             assert events[0].irrigator.cluster_id == 1  # still on the source cluster
 
-    def test_move_preserves_plant_health_history(self, app, client):
+    def test_move_preserves_plant_health_history(self, app: FastAPI, client: TestClient) -> None:
         """Plant health snapshots survive a move.
 
         plant_health_daily snapshots are keyed by plant_id and must still
@@ -371,7 +378,7 @@ class TestPlantMove:
 class TestListAllPlantsTopLevel:
     """Tests for list all plants top level."""
 
-    def test_list_empty(self, client):
+    def test_list_empty(self, client: TestClient) -> None:
         """GET /plants with no plants returns empty list and null cursor."""
         resp = client.get("/api/v1/plants")
         assert resp.status_code == HTTPStatus.OK
@@ -379,7 +386,7 @@ class TestListAllPlantsTopLevel:
         assert data["plants"] == []
         assert data["next_cursor"] is None
 
-    def test_list_across_clusters(self, client):
+    def test_list_across_clusters(self, client: TestClient) -> None:
         """GET /plants returns every plant regardless of cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -390,7 +397,7 @@ class TestListAllPlantsTopLevel:
         species = sorted(p["species"] for p in resp.json()["plants"])
         assert species == ["Fern", "Monstera"]
 
-    def test_filter_by_cluster_id(self, client):
+    def test_filter_by_cluster_id(self, client: TestClient) -> None:
         """cluster_id query param restricts results to one cluster."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters", json={"name": "B"})
@@ -400,7 +407,7 @@ class TestListAllPlantsTopLevel:
         species = [p["species"] for p in resp.json()["plants"]]
         assert species == ["Monstera"]
 
-    def test_filter_by_category(self, client):
+    def test_filter_by_category(self, client: TestClient) -> None:
         """Category query param restricts results to one category."""
         client.post("/api/v1/clusters", json={"name": "A"})
         client.post("/api/v1/clusters/1/plants", json={"species": "Fern", "category": "tropical"})
@@ -409,7 +416,7 @@ class TestListAllPlantsTopLevel:
         species = [p["species"] for p in resp.json()["plants"]]
         assert species == ["Cactus"]
 
-    def test_pagination_with_cursor(self, client):
+    def test_pagination_with_cursor(self, client: TestClient) -> None:
         """Limit + cursor walks the rows id-ascending."""
         client.post("/api/v1/clusters", json={"name": "A"})
         for n in range(5):
@@ -431,7 +438,7 @@ class TestListAllPlantsTopLevel:
         assert len(data3["plants"]) == 1
         assert data3["next_cursor"] is None
 
-    def test_limit_validation(self, client):
+    def test_limit_validation(self, client: TestClient) -> None:
         """Limit must be 1..500."""
         resp = client.get("/api/v1/plants?limit=0")
         assert resp.status_code == HTTPStatus.UNPROCESSABLE_ENTITY

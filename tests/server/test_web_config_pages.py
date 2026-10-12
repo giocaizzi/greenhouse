@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_config_renders_on_unified_detail_page(seeded_client):
+
+def test_config_renders_on_unified_detail_page(seeded_client: TestClient) -> None:
     """The legacy /config URL now 301s to the inline #config section on detail."""
     resp = seeded_client.get("/clusters/1/config", follow_redirects=False)
     assert resp.status_code == HTTPStatus.MOVED_PERMANENTLY
@@ -19,7 +21,7 @@ def test_config_renders_on_unified_detail_page(seeded_client):
     assert "smart" in resp.text
 
 
-def test_save_config_redirects_to_inline_section(seeded_client):
+def test_save_config_redirects_to_inline_section(seeded_client: TestClient) -> None:
     """Save config redirects to inline section."""
     resp = seeded_client.post(
         "/clusters/1/config",
@@ -33,7 +35,7 @@ def test_save_config_redirects_to_inline_section(seeded_client):
     assert 'value="5"' in resp2.text
 
 
-def test_config_section_hidden_without_irrigator(client):
+def test_config_section_hidden_without_irrigator(client: TestClient) -> None:
     """Irrigation config is gated on actuation — a sensor-only cluster hides it.
 
     Mode/duration/interval/quiet-hours/windows only mean something with an
@@ -45,7 +47,7 @@ def test_config_section_hidden_without_irrigator(client):
     assert 'id="config"' not in resp.text
 
 
-def test_config_form_renders_inherit_state_with_irrigator(client):
+def test_config_form_renders_inherit_state_with_irrigator(client: TestClient) -> None:
     """With an irrigator and no config row, every field renders as inherited."""
     client.post("/clusters", data={"name": "Empty", "environment": "indoor"}, follow_redirects=False)
     resp = client.post(
@@ -61,7 +63,7 @@ def test_config_form_renders_inherit_state_with_irrigator(client):
     assert "↳" in resp.text
 
 
-def test_save_config_quiet_hours(seeded_client):
+def test_save_config_quiet_hours(seeded_client: TestClient) -> None:
     """Quiet hours field accepts hour-of-day values and persists them."""
     resp = seeded_client.post(
         "/clusters/1/config",

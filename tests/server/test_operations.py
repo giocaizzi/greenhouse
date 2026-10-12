@@ -3,16 +3,20 @@
 import datetime as _dt
 from http import HTTPStatus
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from greenhouse_core.constants import LEAK_ALERT_CODE
-from greenhouse_core.models import ActivityEvent
+from greenhouse_core.models import ENTITY_CLUSTER, ENTITY_SENSOR, SOURCE_IRRIGATION, SOURCE_LEAK, ActivityEvent
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.irrigation import IrrigationService
+from greenhouse_server.services.irrigation import CheckResult, IrrigationService
 
 
 class TestIrrigate:
     """Tests for irrigate."""
 
-    def test_dry_run(self, seeded_client):
+    def test_dry_run(self, seeded_client: TestClient) -> None:
         """Dry run."""
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
         assert resp.status_code == HTTPStatus.OK
@@ -21,17 +25,17 @@ class TestIrrigate:
         assert "reason" in data
         assert "confidence" in data
 
-    def test_irrigate_not_found(self, client):
+    def test_irrigate_not_found(self, client: TestClient) -> None:
         """Irrigate not found."""
         resp = client.post("/api/v1/clusters/999/irrigate", json={"dry_run": True})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_irrigate_with_temp_override(self, seeded_client):
+    def test_irrigate_with_temp_override(self, seeded_client: TestClient) -> None:
         """Irrigate with temp override."""
         resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"temp_override": 30.0, "dry_run": True})
         assert resp.status_code == HTTPStatus.OK
 
-    def test_irrigate_blocked_by_quiet_hours(self, seeded_client):
+    def test_irrigate_blocked_by_quiet_hours(self, seeded_client: TestClient) -> None:
         """When quiet hours cover the current time, /irrigate returns SKIP with QUIET_HOURS."""
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
@@ -46,7 +50,7 @@ class TestIrrigate:
         codes = [r["code"] for r in data.get("reasons", [])]
         assert "quiet_hours" in codes
 
-    def test_irrigate_force_bypasses_quiet_hours(self, seeded_client):
+    def test_irrigate_force_bypasses_quiet_hours(self, seeded_client: TestClient) -> None:
         """``force=true`` runs the engine; the decision logs the override warning."""
         hour = _dt.datetime.now(_dt.UTC).hour
         end = (hour + 1) % 24
@@ -69,17 +73,17 @@ class TestIrrigate:
 class TestLeakHold:
     """End-to-end: a confirmed leak holds /irrigate until the alert is resolved."""
 
-    def _raise_leak(self, app, cluster_id: int = 1, sensor_id: int = 1):
+    def _raise_leak(self, app: FastAPI, cluster_id: int = 1, sensor_id: int = 1) -> int:
         session = app.state.session_factory()
         repo = IrrigationRepository(session)
         alert = repo.upsert_alert(
             dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{sensor_id}",
-            source="leak",
+            source=SOURCE_LEAK,
             code=LEAK_ALERT_CODE,
             title="Possible leak or stuck valve detected",
             message="Test Sensor: soil moisture still rising after irrigation (latest=78.0%)",
             severity="critical",
-            entity_type="sensor",
+            entity_type=ENTITY_SENSOR,
             entity_id=sensor_id,
             cluster_id=cluster_id,
         )
@@ -88,7 +92,7 @@ class TestLeakHold:
         session.close()
         return alert_id
 
-    def test_irrigate_is_held_by_an_open_leak_alert(self, seeded_client, app):
+    def test_irrigate_is_held_by_an_open_leak_alert(self, seeded_client: TestClient, app: FastAPI) -> None:
         """Irrigate is held by an open leak alert."""
         self._raise_leak(app)
 
@@ -99,7 +103,7 @@ class TestLeakHold:
         assert data["action"] == "skip"
         assert "leak_hold" in [r["code"] for r in data["reasons"]]
 
-    def test_force_does_not_bypass_the_leak_hold(self, seeded_client, app):
+    def test_force_does_not_bypass_the_leak_hold(self, seeded_client: TestClient, app: FastAPI) -> None:
         """Force does not bypass the leak hold."""
         self._raise_leak(app)
 
@@ -109,7 +113,7 @@ class TestLeakHold:
         assert data["action"] == "skip"
         assert "leak_hold" in [r["code"] for r in data["reasons"]]
 
-    def test_resolving_the_alert_releases_the_hold(self, seeded_client, app):
+    def test_resolving_the_alert_releases_the_hold(self, seeded_client: TestClient, app: FastAPI) -> None:
         """Resolving the alert releases the hold."""
         alert_id = self._raise_leak(app)
 
@@ -122,7 +126,7 @@ class TestLeakHold:
 class TestMonitor:
     """Tests for monitor."""
 
-    def test_monitor(self, seeded_client):
+    def test_monitor(self, seeded_client: TestClient) -> None:
         """Monitor."""
         resp = seeded_client.get("/api/v1/clusters/1/monitor")
         assert resp.status_code == HTTPStatus.OK
@@ -130,7 +134,7 @@ class TestMonitor:
         assert data["cluster_name"] == "Test Cluster"
         assert isinstance(data["sensors"], list)
 
-    def test_monitor_not_found(self, client):
+    def test_monitor_not_found(self, client: TestClient) -> None:
         """Monitor not found."""
         resp = client.get("/api/v1/clusters/999/monitor")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -139,7 +143,7 @@ class TestMonitor:
 class TestCheck:
     """Tests for check."""
 
-    def test_check_single(self, seeded_client):
+    def test_check_single(self, seeded_client: TestClient) -> None:
         """Check single."""
         resp = seeded_client.post("/api/v1/clusters/1/check")
         assert resp.status_code == HTTPStatus.OK
@@ -147,7 +151,7 @@ class TestCheck:
         assert data["cluster_id"] == 1
         assert "action" in data
 
-    def test_check_all(self, seeded_client):
+    def test_check_all(self, seeded_client: TestClient) -> None:
         """Check all."""
         resp = seeded_client.post("/api/v1/check")
         assert resp.status_code == HTTPStatus.OK
@@ -155,7 +159,7 @@ class TestCheck:
         assert isinstance(data["results"], list)
         assert "has_alerts" in data
 
-    def test_check_not_found(self, client):
+    def test_check_not_found(self, client: TestClient) -> None:
         """Check not found."""
         resp = client.post("/api/v1/clusters/999/check")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -164,7 +168,7 @@ class TestCheck:
 class TestLearn:
     """Tests for learn."""
 
-    def test_learn(self, seeded_client):
+    def test_learn(self, seeded_client: TestClient) -> None:
         """Learn."""
         resp = seeded_client.get("/api/v1/clusters/1/learn")
         assert resp.status_code == HTTPStatus.OK
@@ -172,7 +176,7 @@ class TestLearn:
         assert data["cluster_name"] == "Test Cluster"
         assert "report" in data
 
-    def test_learn_not_found(self, client):
+    def test_learn_not_found(self, client: TestClient) -> None:
         """Learn not found."""
         resp = client.get("/api/v1/clusters/999/learn")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -181,7 +185,7 @@ class TestLearn:
 class TestStats:
     """Tests for stats."""
 
-    def test_stats(self, seeded_client):
+    def test_stats(self, seeded_client: TestClient) -> None:
         """Stats."""
         resp = seeded_client.get("/api/v1/clusters/1/stats")
         assert resp.status_code == HTTPStatus.OK
@@ -189,18 +193,18 @@ class TestStats:
         assert data["cluster_name"] == "Test Cluster"
         assert "total_events" in data
 
-    def test_stats_custom_days(self, seeded_client):
+    def test_stats_custom_days(self, seeded_client: TestClient) -> None:
         """Stats custom days."""
         resp = seeded_client.get("/api/v1/clusters/1/stats?days=30")
         assert resp.status_code == HTTPStatus.OK
 
-    def test_stats_export(self, seeded_client):
+    def test_stats_export(self, seeded_client: TestClient) -> None:
         """Stats export."""
         resp = seeded_client.get("/api/v1/clusters/1/stats/export")
         assert resp.status_code == HTTPStatus.OK
         assert resp.headers["content-type"] == "text/csv; charset=utf-8"
 
-    def test_stats_not_found(self, client):
+    def test_stats_not_found(self, client: TestClient) -> None:
         """Stats not found."""
         resp = client.get("/api/v1/clusters/999/stats")
         assert resp.status_code == HTTPStatus.NOT_FOUND
@@ -209,7 +213,7 @@ class TestStats:
 class TestHealth:
     """Tests for health."""
 
-    def test_health(self, client):
+    def test_health(self, client: TestClient) -> None:
         """Health."""
         resp = client.get("/api/v1/health")
         assert resp.status_code == HTTPStatus.OK
@@ -221,7 +225,7 @@ class TestHealth:
 class TestSchedulerRoutes:
     """Tests for scheduler routes."""
 
-    def test_list_jobs(self, client):
+    def test_list_jobs(self, client: TestClient) -> None:
         """List jobs."""
         resp = client.get("/api/v1/scheduler/jobs")
         assert resp.status_code == HTTPStatus.OK
@@ -236,7 +240,7 @@ class TestSchedulerRoutes:
 class TestFullLifecycle:
     """Tests for full lifecycle."""
 
-    def test_create_to_irrigate(self, client):
+    def test_create_to_irrigate(self, client: TestClient) -> None:
         """Full lifecycle: create cluster → add plant → sensor → irrigator → config → irrigate."""
         # Setup
         client.post("/api/v1/clusters", json={"name": "Lifecycle Test"})
@@ -275,22 +279,24 @@ class TestFullLifecycle:
 class TestCheckAllIsolation:
     """One crashing cluster must not undo — or block — the others' check."""
 
-    def _two_clusters(self, client):
+    def _two_clusters(self, client: TestClient) -> None:
         for name in ("First", "Second"):
             assert client.post("/api/v1/clusters", json={"name": name}).status_code == HTTPStatus.CREATED
 
-    def test_crash_in_one_cluster_keeps_earlier_clusters_committed(self, app, client, monkeypatch):
+    def test_crash_in_one_cluster_keeps_earlier_clusters_committed(
+        self, app: FastAPI, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Crash in one cluster keeps earlier clusters committed."""
         self._two_clusters(client)
         original = IrrigationService.check_cluster
         failing_cluster = 2
 
-        def flaky(self, cluster_id):
+        def flaky(self: IrrigationService, cluster_id: int) -> CheckResult:
             if cluster_id == failing_cluster:
                 msg = "boom"
                 raise RuntimeError(msg)
             # Stand-in for an actuation side effect the cooldown relies on.
-            self._repo.add_activity_event("irrigation", "cluster", "probe", "ran", entity_id=cluster_id)
+            self._repo.add_activity_event(SOURCE_IRRIGATION, ENTITY_CLUSTER, "probe", "ran", entity_id=cluster_id)
             return original(self, cluster_id)
 
         monkeypatch.setattr(IrrigationService, "check_cluster", flaky)
@@ -309,14 +315,14 @@ class TestCheckAllIsolation:
         assert [a["code"] for a in alerts] == ["check_failed"]
         assert alerts[0]["severity"] == "error"
 
-    def test_failure_alert_resolves_on_next_success(self, client, monkeypatch):
+    def test_failure_alert_resolves_on_next_success(self, client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
         """Failure alert resolves on next success."""
         self._two_clusters(client)
         original = IrrigationService.check_cluster
         fail = {"on": True}
         failing_cluster = 2
 
-        def flaky(self, cluster_id):
+        def flaky(self: IrrigationService, cluster_id: int) -> CheckResult:
             if cluster_id == failing_cluster and fail["on"]:
                 msg = "boom"
                 raise RuntimeError(msg)

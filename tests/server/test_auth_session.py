@@ -3,24 +3,29 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.auth import _session_from_app
-from greenhouse_server.deps import get_session
+from greenhouse_server.state import get_session
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_ADMIN_USERNAME
 from .test_auth import _build_app
 
+if TYPE_CHECKING:
+    from fastapi import FastAPI
+    from sqlalchemy.orm import Session
 
-def _counting_factory(app):
+
+def _counting_factory(app: FastAPI) -> list[object]:
     """Wrap ``app.state.session_factory`` so every opened session is recorded."""
     real = app.state.session_factory
     opened: list[object] = []
 
-    def factory():
-        session = real()
+    def factory() -> Session:
+        session: Session = real()
         opened.append(session)
         return session
 
@@ -28,7 +33,7 @@ def _counting_factory(app):
     return opened
 
 
-def test_protected_api_request_opens_one_session():
+def test_protected_api_request_opens_one_session() -> None:
     """Protected API request opens one session."""
     app, _ = _build_app()
     with TestClient(app) as client:
@@ -42,12 +47,12 @@ def test_protected_api_request_opens_one_session():
     assert len(opened) == 1
 
 
-def test_auth_dependency_and_handler_share_the_session():
+def test_auth_dependency_and_handler_share_the_session() -> None:
     """Auth dependency and handler share the session."""
     assert _session_from_app is get_session
 
 
-def test_anonymous_pages_hide_the_operational_banners_signed_in_pages_show_them(app_real_auth):
+def test_anonymous_pages_hide_the_operational_banners_signed_in_pages_show_them(app_real_auth: FastAPI) -> None:
     """Dry-run / paused banners describe the system: only a signed-in viewer sees them."""
     session = app_real_auth.state.session_factory()
     IrrigationRepository(session).update_preferences(dry_run_global=True, scheduler_paused=True)

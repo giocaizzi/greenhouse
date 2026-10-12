@@ -3,12 +3,14 @@
 import time
 from http import HTTPStatus
 
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from greenhouse_core.repository import IrrigationRepository
 
 
-def test_rationale_panel_renders_without_decisions(seeded_client):
+def test_rationale_panel_renders_without_decisions(seeded_client: TestClient) -> None:
     """Cluster detail renders the rationale panel even with no decision logs."""
     resp = seeded_client.get("/clusters/1")
     assert resp.status_code == HTTPStatus.OK
@@ -16,7 +18,7 @@ def test_rationale_panel_renders_without_decisions(seeded_client):
     assert "No decisions yet" in resp.text
 
 
-def test_rationale_panel_after_irrigate(seeded_client):
+def test_rationale_panel_after_irrigate(seeded_client: TestClient) -> None:
     """After a decision is written the rationale rows appear."""
     # Trigger a decision log via the irrigate endpoint
     resp = seeded_client.post("/api/v1/clusters/1/irrigate", json={"dry_run": True, "no_sync": True})
@@ -29,7 +31,7 @@ def test_rationale_panel_after_irrigate(seeded_client):
     assert 'class="rationale__row"' in resp.text
 
 
-def test_rationale_panel_seeded_directly(seeded_client, app):
+def test_rationale_panel_seeded_directly(seeded_client: TestClient, app: FastAPI) -> None:
     """Seed a DecisionLog directly via the repository and verify rendering."""
     with Session(app.state.session_factory.kw["bind"]) as session:
         repo = IrrigationRepository(session)

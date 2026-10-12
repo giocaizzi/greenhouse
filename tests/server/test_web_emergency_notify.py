@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from http import HTTPStatus
+from typing import TYPE_CHECKING
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -15,8 +16,13 @@ from greenhouse_server.deps import get_device_gateway, get_device_registry
 
 from .test_notify import _RecordingNotifier
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
+    from fastapi import FastAPI
+
+
+def test_web_stop_all_sends_the_emergency_push(app: FastAPI, seeded_client: TestClient) -> None:
     """Web stop all sends the emergency push."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
@@ -27,7 +33,7 @@ def test_web_stop_all_sends_the_emergency_push(app, seeded_client):
     ]
 
 
-def test_web_and_api_stop_all_push_the_same_payload(app, seeded_client):
+def test_web_and_api_stop_all_push_the_same_payload(app: FastAPI, seeded_client: TestClient) -> None:
     """Web and API stop all push the same payload."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
@@ -38,7 +44,7 @@ def test_web_and_api_stop_all_push_the_same_payload(app, seeded_client):
     assert rec.irrigations[0] == rec.irrigations[1]
 
 
-def test_web_stop_all_respects_the_emergency_preference(app, seeded_client):
+def test_web_stop_all_respects_the_emergency_preference(app: FastAPI, seeded_client: TestClient) -> None:
     """Web stop all respects the emergency preference."""
     rec = _RecordingNotifier()
     app.state.ntfy_notifier = rec
@@ -47,7 +53,7 @@ def test_web_stop_all_respects_the_emergency_preference(app, seeded_client):
     assert rec.irrigations == []
 
 
-def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path):
+def test_web_stop_all_without_a_preferences_row_does_not_block_the_page(tmp_path: Path) -> None:
     """The notify gate's uncommitted preferences seed must not hold SQLite's write lock for the chrome."""
     url = f"sqlite:///{tmp_path}/g.db"
     app = create_app(Settings(db_url=url, enable_scheduler=False, auth_enabled=False), engine=create_engine(url))

@@ -4,7 +4,7 @@ import time
 from http import HTTPStatus
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -20,7 +20,7 @@ SPIKE_FREE_AFTER_PCT_CEILING = 35.0
 SPIKE_FREE_SCORE_CEILING = 25.0
 
 
-def _make_client():
+def _make_client() -> tuple[TestClient, Engine]:
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     settings = Settings(db_url="sqlite://", enable_scheduler=False, auth_enabled=False)
     app = create_app(settings, engine=engine)
@@ -29,7 +29,7 @@ def _make_client():
     return TestClient(app, raise_server_exceptions=False), engine
 
 
-def _seed_cluster_with_devices(client) -> None:
+def _seed_cluster_with_devices(client: TestClient) -> None:
     """Cluster 1 with one TR301Z sensor and one IK10PW irrigator ("Eff Pump"), created through the API."""
     client.post("/api/v1/clusters", json={"name": "Efficacy Cluster"})
     client.post(
@@ -42,10 +42,11 @@ def _seed_cluster_with_devices(client) -> None:
     )
 
 
-def _seed_ten_point_rise(engine, event_ts: int, duration: int) -> None:
+def _seed_ten_point_rise(engine: Engine, event_ts: int, duration: int) -> None:
     """Soil at 30 % before an automatic start at ``event_ts``, 40-41 % after it."""
     with Session(engine) as session:
         sensor = session.get(Sensor, 1)
+        assert sensor is not None
         irrigator_id = 1
 
         session.add(SensorReading(sensor_id=sensor.id, timestamp=event_ts - 900, soil_moisture=30.0))
@@ -68,12 +69,12 @@ def _seed_ten_point_rise(engine, event_ts: int, duration: int) -> None:
 class TestClusterEfficacy:
     """Tests for cluster efficacy."""
 
-    def test_not_found(self, client):
+    def test_not_found(self, client: TestClient) -> None:
         """Not found."""
         resp = client.get("/api/v1/clusters/999/efficacy")
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_empty_cluster(self, seeded_client):
+    def test_empty_cluster(self, seeded_client: TestClient) -> None:
         """Empty cluster."""
         resp = seeded_client.get("/api/v1/clusters/1/efficacy")
         assert resp.status_code == HTTPStatus.OK
@@ -82,7 +83,7 @@ class TestClusterEfficacy:
         assert data["days"] == DEFAULT_EFFICACY_DAYS
         assert data["items"] == []
 
-    def test_scored_event_with_moisture_rise(self):
+    def test_scored_event_with_moisture_rise(self) -> None:
         """10% moisture rise after an irrigation event → positive score."""
         client, engine = _make_client()
         try:
@@ -109,7 +110,7 @@ class TestClusterEfficacy:
         finally:
             engine.dispose()
 
-    def test_spike_reading_does_not_inflate_the_score(self):
+    def test_spike_reading_does_not_inflate_the_score(self) -> None:
         """Efficacy is rise x 5, so one glitch sample is worth 100 phantom points.
 
         The event below is a dud — moisture sat at 30% before and after — with a
@@ -148,7 +149,7 @@ class TestClusterEfficacy:
             client.close()
             engine.dispose()
 
-    def test_score_formula(self):
+    def test_score_formula(self) -> None:
         """Exactly 20% rise should yield score 100."""
         client, engine = _make_client()
         try:
@@ -182,7 +183,7 @@ class TestClusterEfficacy:
         finally:
             engine.dispose()
 
-    def test_days_query_param(self, seeded_client):
+    def test_days_query_param(self, seeded_client: TestClient) -> None:
         """Days query param."""
         days = 30
         resp = seeded_client.get(f"/api/v1/clusters/1/efficacy?days={days}")
@@ -190,7 +191,7 @@ class TestClusterEfficacy:
         assert resp.json()["days"] == days
 
 
-def test_days_is_bounded_like_the_web_page(seeded_client):
+def test_days_is_bounded_like_the_web_page(seeded_client: TestClient) -> None:
     """D17: the API rejects ``days`` above 365 (422), as the web efficacy page always did."""
     assert seeded_client.get("/api/v1/clusters/1/efficacy?days=365").status_code == HTTPStatus.OK
     assert seeded_client.get("/api/v1/clusters/1/efficacy?days=366").status_code == HTTPStatus.UNPROCESSABLE_ENTITY

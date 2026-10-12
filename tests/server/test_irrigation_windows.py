@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
 
 
-def _make_cluster(client):
+def _make_cluster(client: TestClient) -> int:
     resp = client.post("/api/v1/clusters", json={"name": "Window Cluster"})
     assert resp.status_code == HTTPStatus.CREATED
-    return resp.json()["id"]
+    cluster_id: int = resp.json()["id"]
+    return cluster_id
 
 
-def test_list_returns_empty_for_new_cluster(client):
+def test_list_returns_empty_for_new_cluster(client: TestClient) -> None:
     """List returns empty for new cluster."""
     cid = _make_cluster(client)
     resp = client.get(f"/api/v1/clusters/{cid}/windows")
@@ -21,7 +26,7 @@ def test_list_returns_empty_for_new_cluster(client):
     assert body["windows"] == []
 
 
-def test_create_window(client):
+def test_create_window(client: TestClient) -> None:
     """Create window."""
     cid = _make_cluster(client)
     window = {"start_hour": 6, "end_hour": 10, "weekday_mask": 127, "label": "Morning"}
@@ -32,7 +37,7 @@ def test_create_window(client):
     assert {key: body[key] for key in window} == window
 
 
-def test_update_window(client):
+def test_update_window(client: TestClient) -> None:
     """Update window."""
     cid = _make_cluster(client)
     original = {"start_hour": 6, "end_hour": 10}
@@ -47,7 +52,7 @@ def test_update_window(client):
     assert body["label"] == update["label"]
 
 
-def test_delete_window(client):
+def test_delete_window(client: TestClient) -> None:
     """Delete window."""
     cid = _make_cluster(client)
     create = client.post(f"/api/v1/clusters/{cid}/windows", json={"start_hour": 6, "end_hour": 10})
@@ -59,7 +64,7 @@ def test_delete_window(client):
     assert listed == []
 
 
-def test_create_rejects_invalid_hours(client):
+def test_create_rejects_invalid_hours(client: TestClient) -> None:
     """Create rejects invalid hours."""
     cid = _make_cluster(client)
     resp = client.post(f"/api/v1/clusters/{cid}/windows", json={"start_hour": 25, "end_hour": 5})
@@ -68,7 +73,7 @@ def test_create_rejects_invalid_hours(client):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_create_rejects_invalid_mask(client):
+def test_create_rejects_invalid_mask(client: TestClient) -> None:
     """Create rejects invalid mask."""
     cid = _make_cluster(client)
     resp = client.post(
@@ -83,7 +88,7 @@ def test_create_rejects_invalid_mask(client):
     assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_window_404_on_other_cluster(client):
+def test_window_404_on_other_cluster(client: TestClient) -> None:
     """Window 404 on other cluster."""
     a = _make_cluster(client)
     b = _make_cluster(client)

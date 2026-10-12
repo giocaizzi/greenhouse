@@ -15,6 +15,7 @@ must stay silent. Issue #103: an empty baseline window was read as "soil was at
 
 import json
 import time
+from collections.abc import Iterator
 
 import pytest
 from sqlalchemy import create_engine
@@ -23,13 +24,14 @@ from sqlalchemy.pool import StaticPool
 
 from greenhouse_core.constants import LEAK_ALERT_CODE, LEAK_HOLD_HOURS
 from greenhouse_core.database import init_db
+from greenhouse_core.models import ENTITY_SENSOR, SOURCE_ANOMALY, SOURCE_LEAK, Alert
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.leak import LeakDetectionService
 
 
 @pytest.fixture
-def db_session():
+def db_session() -> Iterator[Session]:
     """A session on a fresh, Alembic-migrated in-memory database."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     init_db(engine)
@@ -39,19 +41,19 @@ def db_session():
 
 
 @pytest.fixture
-def repo(db_session):
+def repo(db_session: Session) -> IrrigationRepository:
     """A repository on the test's migrated session."""
     return IrrigationRepository(db_session)
 
 
 @pytest.fixture
-def plant_db():
+def plant_db() -> PlantDatabase:
     """The curated plant database."""
     return PlantDatabase()
 
 
 @pytest.fixture
-def seeded(repo):
+def seeded(repo: IrrigationRepository) -> tuple[int, int, int]:
     """Seed cluster, sensor, irrigator; return (cluster_id, sensor_id, irrigator_id)."""
     cluster_id = repo.add_cluster("Leak Test Cluster")
     sensor_id = repo.add_sensor(cluster_id, "fake_sensor_leak", "Soil Sensor", "tuya.tr301z", {})
@@ -61,12 +63,19 @@ def seeded(repo):
 
 
 @pytest.fixture
-def started_at():
+def started_at() -> int:
     """Start timestamp far enough in the past that both windows are closed."""
     return int(time.time()) - 2000
 
 
-def _seed(repo, sensor_id, started_at, *, before=(), after=()):
+def _seed(
+    repo: IrrigationRepository,
+    sensor_id: int,
+    started_at: int,
+    *,
+    before: tuple[float, ...] = (),
+    after: tuple[float, ...] = (),
+) -> None:
     """Write a baseline and an after-window series around ``started_at``.
 
     ``before`` samples are spread backwards on a 30-minute grid (the baseline
@@ -80,14 +89,16 @@ def _seed(repo, sensor_id, started_at, *, before=(), after=()):
     repo.session.commit()
 
 
-def _leak_alerts(repo, cluster_id):
+def _leak_alerts(repo: IrrigationRepository, cluster_id: int) -> list[Alert]:
     return [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == LEAK_ALERT_CODE]
 
 
 class TestInsufficientData:
     """No data, thin data, or no baseline → silence. Never a hold."""
 
-    def test_no_readings_at_all_produces_no_alert(self, repo, plant_db, seeded, started_at):
+    def test_no_readings_at_all_produces_no_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """No readings at all produces no alert."""
         cluster_id, _sensor_id, _irrigator_id = seeded
 
@@ -95,7 +106,9 @@ class TestInsufficientData:
 
         assert alerts == []
 
-    def test_empty_baseline_window_does_not_alert_on_normal_moisture(self, repo, plant_db, seeded, started_at):
+    def test_empty_baseline_window_does_not_alert_on_normal_moisture(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Regression for #103 — the bug that fired on every single cycle.
 
         Sensor rows land in SQLite at sync time (default every 3h), so the
@@ -111,7 +124,9 @@ class TestInsufficientData:
         assert alerts == []
         assert _leak_alerts(repo, cluster_id) == []
 
-    def test_too_few_after_samples_produces_no_alert(self, repo, plant_db, seeded, started_at):
+    def test_too_few_after_samples_produces_no_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Two post-irrigation samples cannot show a shape — stay silent."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 38.0), after=(70.0, 80.0))
@@ -120,7 +135,9 @@ class TestInsufficientData:
 
         assert alerts == []
 
-    def test_missing_baseline_does_not_release_an_existing_hold(self, repo, plant_db, seeded, started_at):
+    def test_missing_baseline_does_not_release_an_existing_hold(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """An inconclusive check must not resolve a hold an earlier check raised."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(), after=(97.0, 98.0, 99.0))
@@ -140,7 +157,9 @@ class TestInsufficientData:
 class TestSuccessfulIrrigation:
     """A dose that lands must never be reported as a leak."""
 
-    def test_jump_then_plateau_produces_no_alert(self, repo, plant_db, seeded, started_at):
+    def test_jump_then_plateau_produces_no_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """38% → 66% in one burst, then flat: the irrigation worked."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(66.0, 66.0, 65.0, 66.0))
@@ -149,7 +168,9 @@ class TestSuccessfulIrrigation:
 
         assert alerts == []
 
-    def test_jump_then_drain_back_produces_no_alert(self, repo, plant_db, seeded, started_at):
+    def test_jump_then_drain_back_produces_no_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Jump then drain back produces no alert."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(35.0, 36.0, 35.0), after=(72.0, 68.0, 64.0, 61.0))
@@ -158,7 +179,9 @@ class TestSuccessfulIrrigation:
 
         assert alerts == []
 
-    def test_slow_soak_below_the_rise_threshold_produces_no_alert(self, repo, plant_db, seeded, started_at):
+    def test_slow_soak_below_the_rise_threshold_produces_no_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Still climbing, but nowhere near a flood's worth of water."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(40.0, 40.0, 41.0), after=(44.0, 48.0, 52.0, 55.0))
@@ -171,7 +194,9 @@ class TestSuccessfulIrrigation:
 class TestLeakDetected:
     """The two shapes that are genuinely wrong."""
 
-    def test_never_settles_raises_critical_alert(self, repo, plant_db, seeded, started_at):
+    def test_never_settles_raises_critical_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Moisture still climbing when the window closes, 30pp+ over baseline."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
@@ -186,7 +211,9 @@ class TestLeakDetected:
         assert alert.cluster_id == cluster_id
         assert "still rising" in alert.message
 
-    def test_pinned_high_raises_alert_without_a_baseline(self, repo, plant_db, seeded, started_at):
+    def test_pinned_high_raises_alert_without_a_baseline(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """A probe stuck above 95% is wrong regardless of where it started."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(), after=(97.0, 98.0, 99.0))
@@ -196,7 +223,9 @@ class TestLeakDetected:
         assert len(alerts) == 1
         assert "pinned" in alerts[0].message
 
-    def test_single_pinned_sample_is_not_enough(self, repo, plant_db, seeded, started_at):
+    def test_single_pinned_sample_is_not_enough(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """One reading at the top of the range is a glitch, not a flood."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(50.0, 50.0, 50.0), after=(52.0, 51.0, 99.0))
@@ -205,13 +234,16 @@ class TestLeakDetected:
 
         assert alerts == []
 
-    def test_alert_payload_carries_the_evidence(self, repo, plant_db, seeded, started_at):
+    def test_alert_payload_carries_the_evidence(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Alert payload carries the evidence."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
 
         alerts = LeakDetectionService(repo, plant_db).check_after_irrigation(cluster_id, started_at)
 
+        assert alerts[0].payload_json is not None
         payload = json.loads(alerts[0].payload_json)
         assert payload["sensor_id"] == sensor_id
         assert payload["hold_hours"] == LEAK_HOLD_HOURS
@@ -223,7 +255,9 @@ class TestLeakDetected:
 class TestCleaningIsApplied:
     """The detector reads the same cleaned view as the decision engine."""
 
-    def test_outlier_spike_does_not_raise_an_alert(self, repo, plant_db, seeded, started_at):
+    def test_outlier_spike_does_not_raise_an_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """The exact #103 signature: one +4 sigma sample the anomaly scan flags as drift.
 
         Raw, the after-window averages ~45% against an empty-ish baseline and
@@ -237,7 +271,9 @@ class TestCleaningIsApplied:
 
         assert alerts == []
 
-    def test_sustained_rise_still_alerts(self, repo, plant_db, seeded, started_at):
+    def test_sustained_rise_still_alerts(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Counterpart to the spike case: a real climb survives cleaning."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 38.0), after=(52.0, 63.0, 71.0, 79.0))
@@ -250,7 +286,9 @@ class TestCleaningIsApplied:
 class TestHoldLifecycle:
     """What a finding does beyond the alert row."""
 
-    def test_activity_event_records_the_hold(self, repo, plant_db, seeded, started_at):
+    def test_activity_event_records_the_hold(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Activity event records the hold."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
@@ -264,7 +302,9 @@ class TestHoldLifecycle:
         assert hold_events[0].severity == "critical"
         assert f"{LEAK_HOLD_HOURS}h" in hold_events[0].message
 
-    def test_no_fake_irrigation_event_is_written(self, repo, plant_db, seeded, started_at):
+    def test_no_fake_irrigation_event_is_written(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """The hold is real now — it must not be faked as a schedule_updated row.
 
         The old implementation logged ``schedule_updated`` claiming a 24h
@@ -279,7 +319,9 @@ class TestHoldLifecycle:
 
         assert repo.get_recent_events(irrigator_id, hours=24) == []
 
-    def test_settled_sensor_resolves_its_open_alert(self, repo, plant_db, seeded, started_at):
+    def test_settled_sensor_resolves_its_open_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """A later well-behaved cycle releases the hold automatically."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
@@ -294,29 +336,31 @@ class TestHoldLifecycle:
 
         assert [a.status for a in _leak_alerts(repo, cluster_id)] == ["resolved"]
 
-    def test_clearing_touches_only_this_sensors_leak_alert(self, repo, plant_db, seeded, started_at):
+    def test_clearing_touches_only_this_sensors_leak_alert(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """A settled sensor resolves its own leak alert — not the neighbour's, not other codes."""
         cluster_id, sensor_id, _irrigator_id = seeded
         other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_3", "Neighbour Sensor", "tuya.tr301z", {})
         repo.upsert_alert(
             dedup_key=f"leak::{LEAK_ALERT_CODE}::{cluster_id}::sensor{other_id}",
-            source="leak",
+            source=SOURCE_LEAK,
             code=LEAK_ALERT_CODE,
             title="Possible leak or stuck valve detected",
             message="Neighbour Sensor: soil moisture pinned >95% (latest=99.0%)",
             severity="critical",
-            entity_type="sensor",
+            entity_type=ENTITY_SENSOR,
             entity_id=other_id,
             cluster_id=cluster_id,
         )
         repo.upsert_alert(
             dedup_key=f"anomaly::sensor_drift::{cluster_id}::sensor{sensor_id}",
-            source="anomaly",
+            source=SOURCE_ANOMALY,
             code="sensor_drift",
             title="Sensor drift",
             message="Soil Sensor: drifting",
             severity="warning",
-            entity_type="sensor",
+            entity_type=ENTITY_SENSOR,
             entity_id=sensor_id,
             cluster_id=cluster_id,
         )
@@ -335,7 +379,9 @@ class TestHoldLifecycle:
         assert by_entity[(LEAK_ALERT_CODE, other_id)] == "open"
         assert by_entity[("sensor_drift", sensor_id)] == "open"
 
-    def test_dedup_key_collapses_repeated_calls(self, repo, plant_db, seeded, started_at):
+    def test_dedup_key_collapses_repeated_calls(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Dedup key collapses repeated calls."""
         cluster_id, sensor_id, _irrigator_id = seeded
         _seed(repo, sensor_id, started_at, before=(38.0, 38.0, 37.0), after=(50.0, 65.0, 78.0))
@@ -354,7 +400,9 @@ class TestHoldLifecycle:
 class TestPerSensorScoping:
     """Tests for per sensor scoping."""
 
-    def test_only_the_offending_sensor_is_alerted(self, repo, plant_db, seeded, started_at):
+    def test_only_the_offending_sensor_is_alerted(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int], started_at: int
+    ) -> None:
         """Only the offending sensor is alerted."""
         cluster_id, sensor_id, _irrigator_id = seeded
         other_id = repo.add_sensor(cluster_id, "fake_sensor_leak_2", "Second Sensor", "tuya.tr301z", {})
@@ -372,7 +420,9 @@ class TestPerSensorScoping:
 class TestLongRunWindow:
     """A long manual run is judged over its run plus the settle time, not over the first 30 min."""
 
-    def test_wider_window_sees_the_soil_settle_after_a_long_run(self, repo, plant_db, seeded):
+    def test_wider_window_sees_the_soil_settle_after_a_long_run(
+        self, repo: IrrigationRepository, plant_db: PlantDatabase, seeded: tuple[int, int, int]
+    ) -> None:
         """Wider window sees the soil settle after a long run."""
         cluster_id, sensor_id, _irrigator_id = seeded
         started_at = int(time.time()) - 6000

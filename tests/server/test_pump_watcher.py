@@ -8,6 +8,8 @@ irrigation and aborts the pump on the first positive reading. Tests inject a
 
 import json
 import time as _time
+from collections.abc import Iterator
+from typing import Never
 
 import pytest
 from sqlalchemy import create_engine, select
@@ -16,13 +18,18 @@ from sqlalchemy.orm import Session
 from fake_devices import FakeIrrigatorAdapter
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
-from greenhouse_core.models import ENTITY_IRRIGATOR, SOURCE_HEALTH, SOURCE_PUMP, Alert, Base, Irrigator
+from greenhouse_core.models import (
+    ENTITY_IRRIGATOR,
+    EVENT_ACTION_ABORTED,
+    SOURCE_HEALTH,
+    SOURCE_PUMP,
+    Alert,
+    Base,
+    Irrigator,
+)
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
-from greenhouse_server.services.pump_watcher import (
-    EVENT_ACTION_ABORTED,
-    PumpWatcherService,
-)
+from greenhouse_server.services.pump_watcher import PumpWatcherService
 
 DRY_RUN_ALARM_DP = 105  # the IK10PW dry-run / water-shortage alarm DP
 
@@ -31,7 +38,7 @@ def _make_registry(adapter: FakeIrrigatorAdapter) -> DeviceRegistry:
     """Build a registry that resolves the canonical and the fake irrigator model keys to ``adapter``."""
     registry = DeviceRegistry()
     for key in ("rainpoint.ik10pw", "fake.irrigator"):
-        registry.register_irrigator(key, lambda a=adapter: a)
+        registry.register_irrigator(key, lambda: adapter)
     return registry
 
 
@@ -41,7 +48,7 @@ def _make_monitor(repo: IrrigationRepository) -> DeviceHealthMonitor:
 
 
 @pytest.fixture
-def repo():
+def repo() -> Iterator[IrrigationRepository]:
     """A repository on a fresh in-memory schema."""
     engine = create_engine("sqlite://", echo=False)
     Base.metadata.create_all(engine)
@@ -52,7 +59,7 @@ def repo():
 
 
 @pytest.fixture
-def irrigator(repo):
+def irrigator(repo: IrrigationRepository) -> Irrigator:
     """One IK10PW irrigator in a fresh cluster."""
     cluster_id = repo.add_cluster("Test Cluster")
     irrigator_id = repo.add_irrigator(
@@ -63,13 +70,15 @@ def irrigator(repo):
         config={},
     )
     repo.session.commit()
-    return repo.get_irrigator(irrigator_id)
+    irrigator = repo.get_irrigator(irrigator_id)
+    assert irrigator is not None
+    return irrigator
 
 
 class FakeClock:
     """Manually-advanced clock paired with a no-op sleep that records calls."""
 
-    def __init__(self, *, step: float = 1.0):
+    def __init__(self, *, step: float = 1.0) -> None:
         """Start at 0 and advance by ``step`` on every sleep."""
         self.now = 0.0
         self.step = step
@@ -119,7 +128,7 @@ def _make_fake_adapter(reads: list[DeviceHealthState]) -> FakeIrrigatorAdapter:
     script = list(reads)
     sentinel = script[-1] if script else adapter.health_state
 
-    def _read_health(irrigator):
+    def _read_health(irrigator: Irrigator) -> DeviceHealthState:
         adapter.calls.append(("read_health", irrigator.id))
         if script:
             return script.pop(0)
@@ -129,7 +138,7 @@ def _make_fake_adapter(reads: list[DeviceHealthState]) -> FakeIrrigatorAdapter:
     return adapter
 
 
-def _stop_calls(adapter: FakeIrrigatorAdapter) -> list[tuple]:
+def _stop_calls(adapter: FakeIrrigatorAdapter) -> list[tuple[object, ...]]:
     return [c for c in adapter.calls if c[0] == "stop"]
 
 
@@ -141,7 +150,7 @@ def _completed_alarms() -> list[DeviceHealthState]:
 class TestWatcherHappyPaths:
     """Tests for watcher happy paths."""
 
-    def test_completes_when_alarm_never_fires(self, repo, irrigator):
+    def test_completes_when_alarm_never_fires(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """No alarm bit set across the cycle → outcome=completed, pump untouched."""
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter(_completed_alarms())
@@ -164,7 +173,7 @@ class TestWatcherHappyPaths:
         assert all(e.action != EVENT_ACTION_ABORTED for e in events)
         assert repo.count_open_alerts() == 0
 
-    def test_completes_when_duration_is_zero(self, repo, irrigator):
+    def test_completes_when_duration_is_zero(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """Duration 0 means there's nothing to watch — exit immediately."""
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter(_completed_alarms())
@@ -187,7 +196,7 @@ class TestWatcherHappyPaths:
 class TestWatcherTrips:
     """Tests for watcher trips."""
 
-    def test_trips_on_alarm_after_warmup(self, repo, irrigator):
+    def test_trips_on_alarm_after_warmup(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """Alarm fires mid-cycle → pump stopped, alert raised, event logged."""
         clock = FakeClock(step=1.0)
         # 3 clean reads, then alarm. With step=1s and warmup=0, the alarm hits
@@ -232,7 +241,7 @@ class TestWatcherTrips:
         assert health_alerts[0].cluster_id == irrigator.cluster_id
         assert health_alerts[0].dedup_key == f"health:irrigator:{irrigator.id}:no_water"
 
-    def test_respects_warmup_window(self, repo, irrigator):
+    def test_respects_warmup_window(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """Alarm bit set from t=0 must not trip until warmup elapses."""
         clock = FakeClock(step=1.0)
         warmup = 5.0
@@ -255,7 +264,7 @@ class TestWatcherTrips:
         # 6th poll at clock>=5 trips. So polls should be >= 6.
         assert result["polls"] >= warmup + 1
 
-    def test_trip_records_payload_with_alarm_value(self, repo, irrigator):
+    def test_trip_records_payload_with_alarm_value(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """The activity event records the raw DP 105 value for forensics."""
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
@@ -276,6 +285,7 @@ class TestWatcherTrips:
         assert activity[0].severity == "critical"
         # Payload includes alarm_raw and irrigator_id
 
+        assert activity[0].payload_json is not None
         payload = json.loads(activity[0].payload_json)
         assert payload["alarm_raw"] == 1
         assert payload["irrigator_id"] == irrigator.id
@@ -285,7 +295,7 @@ class TestWatcherTrips:
 class TestWatcherDegradedSignals:
     """Tests for watcher degraded signals."""
 
-    def test_intermittent_read_failure_does_not_trip(self, repo, irrigator):
+    def test_intermittent_read_failure_does_not_trip(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """A single failed read recovers; the watcher does not stop the pump."""
         clock = FakeClock(step=1.0)
         reads = [
@@ -310,7 +320,7 @@ class TestWatcherDegradedSignals:
         assert result["outcome"] == "completed"
         assert _stop_calls(adapter) == []
 
-    def test_abandons_after_consecutive_failures(self, repo, irrigator):
+    def test_abandons_after_consecutive_failures(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """Persistent local-read failures abandon the watch without stopping the pump."""
         clock = FakeClock(step=1.0)
         max_failures = 3
@@ -338,16 +348,18 @@ class TestWatcherDegradedSignals:
 class TestWatcherTripSideEffectsAreRobust:
     """Tests for watcher trip side effects are robust."""
 
-    def test_trip_proceeds_even_if_irrigator_off_raises(self, repo, irrigator):
+    def test_trip_proceeds_even_if_irrigator_off_raises(
+        self, repo: IrrigationRepository, irrigator: Irrigator, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """If the stop call raises, the alert and event are still recorded."""
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
 
-        def _raising_stop(_irrigator):
+        def _raising_stop(_irrigator: Irrigator) -> Never:
             msg = "device offline"
             raise ConnectionError(msg)
 
-        adapter.stop = _raising_stop  # type: ignore[method-assign]
+        monkeypatch.setattr(adapter, "stop", _raising_stop)
         watcher = PumpWatcherService(
             repo,
             _make_registry(adapter),
@@ -374,7 +386,7 @@ class TestWatcherTripSideEffectsAreRobust:
 class TestWatcherRoutesThroughMonitor:
     """The watcher feeds its trip observation back into DeviceHealthMonitor."""
 
-    def test_trip_records_into_monitor_cache(self, repo, irrigator):
+    def test_trip_records_into_monitor_cache(self, repo: IrrigationRepository, irrigator: Irrigator) -> None:
         """After a trip, the monitor's cache reflects NO_WATER for the irrigator."""
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])
@@ -405,7 +417,7 @@ class TestWatcherRoutesThroughMonitor:
 class TestWatcherIrrigatorModel:
     """Tests for watcher irrigator model."""
 
-    def test_uses_irrigator_cluster_id_for_alert(self, repo):
+    def test_uses_irrigator_cluster_id_for_alert(self, repo: IrrigationRepository) -> None:
         """The alert is filed under the irrigator's cluster, not a hardcoded id."""
         cluster_a = repo.add_cluster("A")
         cluster_b = repo.add_cluster("B")
@@ -424,7 +436,8 @@ class TestWatcherIrrigatorModel:
             config={},
         )
         repo.session.commit()
-        irrigator_b: Irrigator = repo.get_irrigator(irrigator_b_id)
+        irrigator_b = repo.get_irrigator(irrigator_b_id)
+        assert irrigator_b is not None
 
         clock = FakeClock(step=1.0)
         adapter = _make_fake_adapter([_alarm(no_water=True, alarm_raw=1), *_completed_alarms()])

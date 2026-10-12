@@ -9,19 +9,22 @@ These guard two properties of the edit flow:
 import json
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
+
 from fake_data import FAKE_LOCAL_KEY
 from greenhouse_core.repository import IrrigationRepository
+from server.conftest import app_of
 
 SECRET_KEY = FAKE_LOCAL_KEY
 
 
-def _seed_local_irrigator(client, cluster_name="Local Cluster"):
+def _seed_local_irrigator(client: TestClient, cluster_name: str = "Local Cluster") -> int:
     """Create a cluster + IK10PW irrigator carrying a stored local key.
 
     Returns the cluster id.
     """
     resp = client.post("/api/v1/clusters", json={"name": cluster_name})
-    cluster_id = resp.json()["id"]
+    cluster_id: int = resp.json()["id"]
     resp = client.post(
         f"/clusters/{cluster_id}/irrigators",
         data={
@@ -37,17 +40,21 @@ def _seed_local_irrigator(client, cluster_name="Local Cluster"):
     return cluster_id
 
 
-def _stored_config(client, cluster_id):
+def _stored_config(client: TestClient, cluster_id: int) -> dict[str, object]:
     """Read the stored config from the DB: the API masks ``local_key`` (B-11)."""
-    session = client.app.state.session_factory()
+    app = app_of(client)
+    session = app.state.session_factory()
     try:
-        config = IrrigationRepository(session).get_irrigator_for_cluster(cluster_id).config
+        irrigator = IrrigationRepository(session).get_irrigator_for_cluster(cluster_id)
+        assert irrigator is not None
+        config = irrigator.config
     finally:
         session.close()
-    return json.loads(config) if isinstance(config, str) else (config or {})
+    stored: dict[str, object] = json.loads(config) if isinstance(config, str) else (config or {})
+    return stored
 
 
-def test_blank_local_key_preserves_stored_key(client):
+def test_blank_local_key_preserves_stored_key(client: TestClient) -> None:
     """Editing the name with a blank local_key must keep the stored key."""
     cluster_id = _seed_local_irrigator(client)
     assert _stored_config(client, cluster_id)["local_key"] == SECRET_KEY
@@ -69,7 +76,7 @@ def test_blank_local_key_preserves_stored_key(client):
     assert config["device_ip"] == "192.0.2.10"
 
 
-def test_nonblank_local_key_overrides_stored_key(client):
+def test_nonblank_local_key_overrides_stored_key(client: TestClient) -> None:
     """Submitting a new local_key replaces the stored one."""
     cluster_id = _seed_local_irrigator(client)
     resp = client.post(
@@ -86,7 +93,7 @@ def test_nonblank_local_key_overrides_stored_key(client):
     assert _stored_config(client, cluster_id)["local_key"] == "fake_local_key_rotated"
 
 
-def test_edit_page_does_not_leak_local_key(client):
+def test_edit_page_does_not_leak_local_key(client: TestClient) -> None:
     """The stored secret must never appear in the rendered edit page source."""
     cluster_id = _seed_local_irrigator(client)
     resp = client.get(f"/clusters/{cluster_id}/irrigators/edit")
@@ -97,7 +104,7 @@ def test_edit_page_does_not_leak_local_key(client):
     assert "Leave blank to keep the current key." in resp.text
 
 
-def test_submitting_the_mask_keeps_the_stored_key(client):
+def test_submitting_the_mask_keeps_the_stored_key(client: TestClient) -> None:
     """Typing/pasting the ``••••••••`` placeholder back into the field keeps the key, like the API."""
     cluster_id = _seed_local_irrigator(client)
     resp = client.post(

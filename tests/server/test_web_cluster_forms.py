@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_new_cluster_form_renders(client):
+
+def test_new_cluster_form_renders(client: TestClient) -> None:
     """New cluster form renders."""
     resp = client.get("/clusters/new")
     assert resp.status_code == HTTPStatus.OK
@@ -11,7 +13,7 @@ def test_new_cluster_form_renders(client):
     assert 'name="environment"' in resp.text
 
 
-def test_create_cluster_redirects_to_detail(client):
+def test_create_cluster_redirects_to_detail(client: TestClient) -> None:
     """Create cluster redirects to detail."""
     resp = client.post(
         "/clusters",
@@ -26,7 +28,7 @@ def test_create_cluster_redirects_to_detail(client):
     assert "Kitchen" in resp2.text
 
 
-def test_create_cluster_missing_name_fails(client):
+def test_create_cluster_missing_name_fails(client: TestClient) -> None:
     """Create cluster missing name fails."""
     resp = client.post("/clusters", data={"environment": "indoor"}, follow_redirects=False)
     # FastAPI's Form(...) treats missing required as 422

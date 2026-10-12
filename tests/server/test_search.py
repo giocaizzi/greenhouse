@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def _seed(client):
+
+def _seed(client: TestClient) -> None:
     """Seed a cluster, plant, sensor, and irrigator for search tests."""
     client.post("/api/v1/clusters", json={"name": "Living Room", "location": "Window sill"})
     client.post("/api/v1/clusters/1/plants", json={"species": "Monstera deliciosa", "notes": "tropical beauty"})
@@ -20,7 +22,7 @@ def _seed(client):
 class TestSearch:
     """Tests for search."""
 
-    def test_empty_query_returns_no_hits(self, client):
+    def test_empty_query_returns_no_hits(self, client: TestClient) -> None:
         """Empty query returns no hits."""
         _seed(client)
         resp = client.get("/api/v1/search?q=")
@@ -29,7 +31,7 @@ class TestSearch:
         assert data["hits"] == []
         assert data["query"] == ""
 
-    def test_cluster_match_by_name(self, client):
+    def test_cluster_match_by_name(self, client: TestClient) -> None:
         """Cluster match by name."""
         _seed(client)
         resp = client.get("/api/v1/search?q=living")
@@ -41,7 +43,7 @@ class TestSearch:
         assert cluster_hits[0]["href"] == "/clusters/1"
         assert cluster_hits[0]["sublabel"] == "Window sill"
 
-    def test_cluster_match_by_location(self, client):
+    def test_cluster_match_by_location(self, client: TestClient) -> None:
         """Cluster match by location."""
         _seed(client)
         resp = client.get("/api/v1/search?q=window")
@@ -51,7 +53,7 @@ class TestSearch:
         assert len(cluster_hits) == 1
         assert cluster_hits[0]["label"] == "Living Room"
 
-    def test_plant_match_by_species(self, client):
+    def test_plant_match_by_species(self, client: TestClient) -> None:
         """Plant match by species."""
         _seed(client)
         resp = client.get("/api/v1/search?q=monst")
@@ -63,7 +65,7 @@ class TestSearch:
         assert plant_hits[0]["href"] == "/clusters/1/plants/1"
         assert plant_hits[0]["sublabel"] == "Living Room"
 
-    def test_sensor_match_by_name(self, client):
+    def test_sensor_match_by_name(self, client: TestClient) -> None:
         """Sensor match by name."""
         _seed(client)
         resp = client.get("/api/v1/search?q=soil")
@@ -75,7 +77,7 @@ class TestSearch:
         assert sensor_hits[0]["href"] == "/clusters/1#sensor-1"
         assert sensor_hits[0]["sublabel"] == "Living Room"
 
-    def test_irrigator_match_by_name(self, client):
+    def test_irrigator_match_by_name(self, client: TestClient) -> None:
         """Irrigator match by name."""
         _seed(client)
         resp = client.get("/api/v1/search?q=drip")
@@ -86,7 +88,7 @@ class TestSearch:
         assert irr_hits[0]["label"] == "drip-1"
         assert irr_hits[0]["href"] == "/clusters/1#irrigator-1"
 
-    def test_case_insensitive(self, client):
+    def test_case_insensitive(self, client: TestClient) -> None:
         """Case insensitive."""
         _seed(client)
         resp_lower = client.get("/api/v1/search?q=monstera")
@@ -95,14 +97,14 @@ class TestSearch:
         hits_upper = [h for h in resp_upper.json()["hits"] if h["entity_type"] == "plant"]
         assert len(hits_lower) == len(hits_upper) == 1
 
-    def test_no_match_returns_empty(self, client):
+    def test_no_match_returns_empty(self, client: TestClient) -> None:
         """No match returns empty."""
         _seed(client)
         resp = client.get("/api/v1/search?q=xyznonexistent")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["hits"] == []
 
-    def test_limit_respected(self, client):
+    def test_limit_respected(self, client: TestClient) -> None:
         """Limit parameter caps results."""
         _seed(client)
         # Add more clusters to exceed limit
@@ -113,7 +115,7 @@ class TestSearch:
         assert resp.status_code == HTTPStatus.OK
         assert len(resp.json()["hits"]) <= limit
 
-    def test_query_echoed_back(self, client):
+    def test_query_echoed_back(self, client: TestClient) -> None:
         """Query echoed back."""
         _seed(client)
         resp = client.get("/api/v1/search?q=monst")

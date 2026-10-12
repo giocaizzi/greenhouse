@@ -3,9 +3,11 @@
 from http import HTTPStatus
 
 import pytest
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi.testclient import TestClient
 
 
-def test_history_page_renders(seeded_client):
+def test_history_page_renders(seeded_client: TestClient) -> None:
     """History page renders."""
     resp = seeded_client.get("/clusters/1/history?hours=24&limit=10")
     assert resp.status_code == HTTPStatus.OK
@@ -14,20 +16,20 @@ def test_history_page_renders(seeded_client):
     assert "Test Irrigator" in resp.text
 
 
-def test_history_404(client):
+def test_history_404(client: TestClient) -> None:
     """History 404."""
     resp = client.get("/clusters/9999/history")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def test_stats_page_renders(seeded_client):
+def test_stats_page_renders(seeded_client: TestClient) -> None:
     """Stats page renders."""
     resp = seeded_client.get("/clusters/1/stats?days=7")
     assert resp.status_code == HTTPStatus.OK
     assert "Stats" in resp.text
 
 
-def test_stats_export_returns_csv(seeded_client):
+def test_stats_export_returns_csv(seeded_client: TestClient) -> None:
     """Stats export returns CSV."""
     resp = seeded_client.get("/clusters/1/stats/export?days=7")
     assert resp.status_code == HTTPStatus.OK
@@ -37,14 +39,14 @@ def test_stats_export_returns_csv(seeded_client):
     assert "timestamp" in resp.text.splitlines()[0]
 
 
-def test_learn_page_renders(seeded_client):
+def test_learn_page_renders(seeded_client: TestClient) -> None:
     """Learn page renders."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
     assert "Insights" in resp.text
 
 
-def test_scheduler_page_renders(client):
+def test_scheduler_page_renders(client: TestClient) -> None:
     """Scheduler page renders."""
     resp = client.get("/scheduler")
     assert resp.status_code == HTTPStatus.OK
@@ -52,7 +54,7 @@ def test_scheduler_page_renders(client):
     assert "Scheduler" in resp.text
 
 
-def test_scheduler_delete_missing_job_returns_503(client):
+def test_scheduler_delete_missing_job_returns_503(client: TestClient) -> None:
     # scheduler is not running in tests → 503
     """Scheduler delete missing job returns 503."""
     resp = client.post("/scheduler/jobs/missing/delete")
@@ -67,7 +69,7 @@ def _job_row(html: str, job_id: str) -> str:
 
 
 @pytest.mark.usefixtures("running_scheduler")
-def test_scheduler_page_marks_paused_check_all(client):
+def test_scheduler_page_marks_paused_check_all(client: TestClient) -> None:
     """The scheduler page shows a paused check_all as paused.
 
     Regression: the page built job dicts without `paused`, so the row badge
@@ -82,7 +84,7 @@ def test_scheduler_page_marks_paused_check_all(client):
 
 
 @pytest.mark.usefixtures("running_scheduler")
-def test_scheduler_page_resume_restores_active(client):
+def test_scheduler_page_resume_restores_active(client: TestClient) -> None:
     """Scheduler page resume restores active."""
     client.post("/scheduler/pause", follow_redirects=False)
     assert client.post("/scheduler/resume", follow_redirects=False).status_code == HTTPStatus.SEE_OTHER
@@ -91,21 +93,21 @@ def test_scheduler_page_resume_restores_active(client):
     assert client.get("/api/v1/preferences").json()["scheduler_paused"] is False
 
 
-def test_scheduler_web_delete_refuses_core_job(client, running_scheduler):
+def test_scheduler_web_delete_refuses_core_job(client: TestClient, running_scheduler: BackgroundScheduler) -> None:
     """Scheduler web delete refuses core job."""
     resp = client.post("/scheduler/jobs/sensor_anomaly/delete")
     assert resp.status_code == HTTPStatus.CONFLICT
     assert running_scheduler.get_job("sensor_anomaly") is not None
 
 
-def test_scheduler_web_delete_adhoc_job(client, running_scheduler):
+def test_scheduler_web_delete_adhoc_job(client: TestClient, running_scheduler: BackgroundScheduler) -> None:
     """Scheduler web delete adhoc job."""
     running_scheduler.add_job(lambda: None, "date", run_date="2099-01-01", id="leak-check-1-123")
     assert client.post("/scheduler/jobs/leak-check-1-123/delete").status_code == HTTPStatus.OK
     assert client.post("/scheduler/jobs/leak-check-1-123/delete").status_code == HTTPStatus.NOT_FOUND
 
 
-def test_scheduler_page_hides_delete_for_core_jobs(client, running_scheduler):
+def test_scheduler_page_hides_delete_for_core_jobs(client: TestClient, running_scheduler: BackgroundScheduler) -> None:
     """Scheduler page hides delete for core jobs."""
     running_scheduler.add_job(lambda: None, "date", run_date="2099-01-01", id="leak-check-1-123", name="Leak")
     resp = client.get("/scheduler")

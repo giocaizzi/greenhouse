@@ -2,8 +2,10 @@
 
 from http import HTTPStatus
 
+from fastapi.testclient import TestClient
 
-def test_learn_page_renders_insight_cards(seeded_client):
+
+def test_learn_page_renders_insight_cards(seeded_client: TestClient) -> None:
     """Learn page renders insight cards."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
@@ -11,7 +13,7 @@ def test_learn_page_renders_insight_cards(seeded_client):
     assert 'class="insight' in resp.text
 
 
-def test_learn_page_no_pre_dump(seeded_client):
+def test_learn_page_no_pre_dump(seeded_client: TestClient) -> None:
     """Learn page no pre dump."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
@@ -19,7 +21,7 @@ def test_learn_page_no_pre_dump(seeded_client):
     assert 'class="report"' not in resp.text
 
 
-def test_learn_page_shows_forecast_section(seeded_client):
+def test_learn_page_shows_forecast_section(seeded_client: TestClient) -> None:
     """Learn page shows forecast section."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
@@ -27,7 +29,7 @@ def test_learn_page_shows_forecast_section(seeded_client):
     assert "Forecast" in resp.text
 
 
-def test_learn_page_empty_state(seeded_client):
+def test_learn_page_empty_state(seeded_client: TestClient) -> None:
     """When there are no insights, the empty-state block renders."""
     resp = seeded_client.get("/clusters/1/learn")
     assert resp.status_code == HTTPStatus.OK
@@ -35,7 +37,7 @@ def test_learn_page_empty_state(seeded_client):
     assert 'class="insight' in resp.text or "All good" in resp.text
 
 
-def test_learn_page_404_for_missing_cluster(client):
+def test_learn_page_404_for_missing_cluster(client: TestClient) -> None:
     """Learn page 404 for missing cluster."""
     resp = client.get("/clusters/9999/learn")
     assert resp.status_code == HTTPStatus.NOT_FOUND

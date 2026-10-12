@@ -34,8 +34,10 @@ from contextlib import contextmanager
 from http import HTTPStatus
 
 import pytest
+from apscheduler.schedulers.background import BackgroundScheduler
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
@@ -59,7 +61,7 @@ TEST_NTFY_TOKEN = "test-ntfy-token"  # noqa: S105 — fake test credential
 
 
 @contextmanager
-def override_repository(app) -> Iterator[IrrigationRepository]:
+def override_repository(app: FastAPI) -> Iterator[IrrigationRepository]:
     """Serve ``app``'s repository dependency from a fresh in-memory database; undo it on exit."""
     engine = create_engine("sqlite://", echo=False, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
@@ -72,6 +74,13 @@ def override_repository(app) -> Iterator[IrrigationRepository]:
         app.dependency_overrides.pop(get_repository, None)
         session.close()
         engine.dispose()
+
+
+def app_of(client: TestClient) -> FastAPI:
+    """The FastAPI application ``client`` drives (``TestClient.app`` is typed as a bare ASGI app)."""
+    application = client.app
+    assert isinstance(application, FastAPI)
+    return application
 
 
 def run_core_job(job_id: str) -> None:
@@ -100,13 +109,14 @@ class FakeDeviceWiring:
         # Register the production model keys the seed data uses (plus the
         # ``fake.*`` test keys); one fake is shared across keys so a test can
         # run the engine and inspect the same adapter.
+        irrigator, sensor = self.irrigator, self.sensor
         for key in ("rainpoint.ik10pw", "fake.irrigator"):
-            self.registry.register_irrigator(key, lambda adapter=self.irrigator: adapter)
+            self.registry.register_irrigator(key, lambda: irrigator)
         for key in ("tuya.tr301z", "fake.sensor"):
-            self.registry.register_sensor(key, lambda adapter=self.sensor: adapter)
+            self.registry.register_sensor(key, lambda: sensor)
 
 
-def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
+def _make_stubbed_app(*, bypass_auth: bool, **settings_override: object) -> tuple[FastAPI, Engine]:
     """Construct a create_app instance with the standard device/cloud stubs.
 
     When `bypass_auth=True` the require_user / require_web_user dependencies
@@ -121,7 +131,7 @@ def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    base = {
+    base: dict[str, object] = {
         "db_url": "sqlite://",
         "enable_scheduler": False,
         "auth_enabled": True,
@@ -146,7 +156,7 @@ def _make_stubbed_app(*, bypass_auth: bool, **settings_override):
 
 
 @pytest.fixture
-def app():
+def app() -> Iterator[FastAPI]:
     """Default app — auth bypassed for ergonomic test setup. See module docstring."""
     application, engine = _make_stubbed_app(bypass_auth=True)
     yield application
@@ -154,7 +164,7 @@ def app():
 
 
 @pytest.fixture
-def app_real_auth():
+def app_real_auth() -> Iterator[FastAPI]:
     """App with real auth enforcement. Used by tests that verify 401/redirect/login."""
     application, engine = _make_stubbed_app(bypass_auth=False)
     yield application
@@ -162,19 +172,19 @@ def app_real_auth():
 
 
 @pytest.fixture
-def client(app):
+def client(app: FastAPI) -> TestClient:
     """TestClient on the auth-bypassed app — drop-in for all existing tests."""
     return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
-def anonymous_client(app_real_auth):
+def anonymous_client(app_real_auth: FastAPI) -> TestClient:
     """TestClient on the real-auth app with no credentials — exercises 401 paths."""
     return TestClient(app_real_auth, raise_server_exceptions=False)
 
 
 @pytest.fixture
-def authed_real_client(app_real_auth):
+def authed_real_client(app_real_auth: FastAPI) -> TestClient:
     """TestClient on the real-auth app that has performed a real login."""
     tc = TestClient(app_real_auth, raise_server_exceptions=False)
     resp = tc.post(
@@ -187,7 +197,7 @@ def authed_real_client(app_real_auth):
 
 
 @pytest.fixture
-def auth_disabled_app():
+def auth_disabled_app() -> Iterator[FastAPI]:
     """App with auth_enabled=False — exercises the dev escape-hatch path."""
     application, engine = _make_stubbed_app(bypass_auth=False, auth_enabled=False)
     yield application
@@ -195,7 +205,7 @@ def auth_disabled_app():
 
 
 @pytest.fixture
-def running_scheduler(app):
+def running_scheduler(app: FastAPI) -> Iterator[BackgroundScheduler]:
     """Start the process-wide APScheduler for one test, without firing any job.
 
     Apps are built with ``enable_scheduler=False`` so the scheduler normally
@@ -216,7 +226,7 @@ def running_scheduler(app):
 
 
 @pytest.fixture
-def seeded_client(client):
+def seeded_client(client: TestClient) -> TestClient:
     """Client with a pre-populated cluster, plant, sensor, irrigator, and config."""
     # Create cluster
     resp = client.post("/api/v1/clusters", json={"name": "Test Cluster", "environment": "indoor"})

@@ -3,8 +3,10 @@
 import time
 from http import HTTPStatus
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from greenhouse_core.repository import IrrigationRepository
 from server.conftest import override_repository
 
 OVERLAY_HOURS = 72
@@ -13,7 +15,7 @@ POINT_ARITY = 2  # each point is [timestamp, value]
 LIGHT_ORIGINAL_MAX_LUX = 10_000.0
 
 
-def test_overlay_returns_valid_shape(seeded_client):
+def test_overlay_returns_valid_shape(seeded_client: TestClient) -> None:
     """Overlay endpoint returns 200 with the expected top-level keys."""
     resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
     assert resp.status_code == HTTPStatus.OK
@@ -25,7 +27,7 @@ def test_overlay_returns_valid_shape(seeded_client):
     assert isinstance(body["events"], list)
 
 
-def test_overlay_dataset_structure(seeded_client):
+def test_overlay_dataset_structure(seeded_client: TestClient) -> None:
     """Each dataset must have metric + points fields with values in range."""
     # Seed readings first via the app fixture by seeding directly through the engine
     resp = seeded_client.get(f"/api/v1/clusters/1/overlay?hours={OVERLAY_HOURS}")
@@ -41,13 +43,13 @@ def test_overlay_dataset_structure(seeded_client):
             assert 0.0 <= val <= NORMALISED_MAX
 
 
-def test_overlay_404_unknown_cluster(client):
+def test_overlay_404_unknown_cluster(client: TestClient) -> None:
     """Overlay 404 unknown cluster."""
     resp = client.get("/api/v1/clusters/9999/overlay")
     assert resp.status_code == HTTPStatus.NOT_FOUND
 
 
-def _seed_hourly_readings(repo) -> int:
+def _seed_hourly_readings(repo: IrrigationRepository) -> int:
     """Seed a combined sensor with five hourly soil / humidity / light readings; return the cluster id."""
     cluster_id = repo.add_cluster("Overlay Test")
     sensor_id = repo.add_sensor(
@@ -70,7 +72,7 @@ def _seed_hourly_readings(repo) -> int:
     return cluster_id
 
 
-def test_overlay_with_readings(app):
+def test_overlay_with_readings(app: FastAPI) -> None:
     """Seed readings and assert all three metric datasets are returned."""
     with override_repository(app) as repo:
         cluster_id = _seed_hourly_readings(repo)
