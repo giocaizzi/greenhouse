@@ -13,11 +13,13 @@ def test_clusters_list_empty(client: TestClient) -> None:
 
 
 def test_clusters_list_seeded(seeded_client: TestClient) -> None:
-    """Clusters list seeded."""
+    """Clusters list seeded, with edit and delete actions per row."""
     resp = seeded_client.get("/clusters")
     assert resp.status_code == HTTPStatus.OK
     assert "Test Cluster" in resp.text
     assert 'href="/clusters/1"' in resp.text
+    assert 'href="/clusters/1/edit"' in resp.text
+    assert 'hx-delete="/clusters/1"' in resp.text
 
 
 def test_cluster_detail_renders(seeded_client: TestClient) -> None:
