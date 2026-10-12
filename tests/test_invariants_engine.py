@@ -702,8 +702,8 @@ def test_inv10_short_series_spike_is_filtered(env: IrrigationRepository) -> None
 def test_inv11_hold_window_edge_is_exclusive(env: IrrigationRepository, age_s: int, *, held: bool) -> None:
     """Invariant #11: the hold lasts ``LEAK_HOLD_HOURS`` from ``last_seen_at``, exclusive at the edge.
 
-    (±60 s / ±600 s, acknowledge-still-holds, resolve-releases, force-does-not-bypass
-    are pinned in ``tests/test_leak_hold.py``.)
+    (The +60 s expiry is pinned in ``tests/test_leak_hold.py``; acknowledge-still-holds,
+    resolve-releases and force-does-not-bypass in the test below.)
     """
     cid, _, _ = _cluster(env)
     _raise_leak(env, cid, age_s=age_s)
