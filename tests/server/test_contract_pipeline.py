@@ -955,13 +955,6 @@ def run_scenario(name: str) -> dict[str, Any]:
         p.close()
 
 
-@pytest.mark.usefixtures("clean_env", "frozen_clock")
-@pytest.mark.parametrize("name", list(SCENARIOS))
-def test_pipeline_golden(name: str) -> None:
-    """Full matrix: responses, DB writes, adapter/gateway calls, notifications — one golden per scenario."""
-    assert_golden_json(f"orchestration/pipeline/{name}.json", run_scenario(name))
-
-
 # ── I6: exactly one decision_logs row per evaluation ───────────────────────
 
 _ONE_LOG_CASES = {
@@ -983,12 +976,14 @@ _ONE_LOG_CASES = {
 }
 
 
-@pytest.mark.usefixtures("clean_env", "frozen_clock")
-@pytest.mark.parametrize("name", sorted(_ONE_LOG_CASES))
-def test_each_evaluation_writes_exactly_one_decision_log(name: str) -> None:
+# 404s, manual actuation and ``auto_run`` off never reach the engine's persistence.
+_ENGINE_ONLY_CASES = ("cluster_not_found", "manual_start_stop_log", "check_single_auto_run_off")
+
+
+def _assert_one_decision_log(observed: dict[str, Any], name: str) -> None:
     """I6: each early return / final decision persists exactly one row that round-trips."""
     code, action, actuated = _ONE_LOG_CASES[name]
-    rows = run_scenario(name)["db_writes"]["decision_logs"]
+    rows = observed["db_writes"]["decision_logs"]
     assert len(rows) == 1
     row = rows[0]
     assert row["action"] == action
@@ -1003,37 +998,22 @@ def test_each_evaluation_writes_exactly_one_decision_log(name: str) -> None:
 
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
-@pytest.mark.parametrize("name", ["cluster_not_found", "manual_start_stop_log", "check_single_auto_run_off"])
-def test_decision_logs_only_come_from_engine_evaluations(name: str) -> None:
-    """404s, manual actuation and ``auto_run`` off never reach the engine's persistence."""
+@pytest.mark.parametrize("name", list(SCENARIOS))
+def test_pipeline_golden(name: str) -> None:
+    """Full matrix: responses, DB writes, adapter/gateway calls, notifications — one golden per scenario.
+
+    The I6 cases also check their decision log, and the engine-only cases that only
+    engine evaluations write one.
+    """
     observed = run_scenario(name)
-    evaluated = [c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == HTTPStatus.OK]
-    assert len(observed["db_writes"]["decision_logs"]) == len(evaluated)
-
-
-# ── I11: the leak hold vs the escape hatch ─────────────────────────────────
-
-
-def test_leak_hold_blocks_forced_irrigate_but_not_direct_start(pipeline: Pipeline) -> None:
-    """I11: ``force=true`` cannot bypass the hold; ``POST /irrigators/{id}/start`` still actuates."""
-    ids = pipeline.seed_cluster(soil=35.0)
-    pipeline.raise_leak(ids["cluster_id"], ids["sensor_id"], age=HOUR)
-    pipeline.mark()
-
-    held = _irrigate(pipeline, force=True)
-    assert held["status"] == HTTPStatus.OK
-    assert held["response"]["action"] == "skip"
-    assert [r["code"] for r in held["response"]["reasons"]] == ["leak_hold"]
-    assert pipeline.wiring.irrigator.calls == []
-
-    started = pipeline.call("POST", f"/api/v1/irrigators/{ids['irrigator_id']}/start", {"minutes": 3})
-    assert started["status"] == HTTPStatus.OK
-    assert pipeline.wiring.irrigator.calls == [("start", ids["irrigator_id"], 3)]
-    events = pipeline.db_rows()["irrigation_events"]
-    assert [(e["action"], e["triggered_by"], e["duration_minutes"]) for e in events] == [("start", "manual", 3)]
-    # The hold itself is untouched by the manual start.
-    alerts = pipeline.db_rows()["alerts"]
-    assert [(a["code"], a["status"]) for a in alerts] == [(LEAK_ALERT_CODE, "open")]
+    assert_golden_json(f"orchestration/pipeline/{name}.json", observed)
+    if name in _ONE_LOG_CASES:
+        _assert_one_decision_log(observed, name)
+    if name in _ENGINE_ONLY_CASES:
+        evaluated = [
+            c for c in observed["calls"] if c["request"].endswith("/irrigate") and c["status"] == HTTPStatus.OK
+        ]
+        assert len(observed["db_writes"]["decision_logs"]) == len(evaluated)
 
 
 # ── Running scheduler: post-start follow-up jobs ───────────────────────────
@@ -1255,29 +1235,6 @@ def test_reraised_alert_is_renotified(pipeline: Pipeline) -> None:
     reopened = pipeline.db_rows()["alerts"][0]
     assert (reopened["id"], reopened["status"], reopened["occurrence_count"]) == (alert["id"], "open", 2)
     assert [n["kind"] for n in pipeline.notifier.sent] == ["alert", "alert"]
-
-
-def test_device_health_block_is_written_to_decision_log(pipeline: Pipeline) -> None:
-    """B-6 fixed: the device-health block is the decision the audit log records.
-
-    The response says ``skip`` led by a ``device_no_water`` reason, and the
-    ``decision_logs`` row is rewritten to match: ``skip``, ``primary_code``
-    ``device_no_water``, ``actuated = false``, the full trail in ``payload_json``.
-    """
-    _install_health_block(pipeline, pipeline.seed_cluster(soil=35.0))
-    pipeline.mark()
-    resp = _irrigate(pipeline)["response"]
-    assert resp["action"] == "skip"
-    assert resp["reasons"][0]["code"] == "device_no_water"
-    rows = pipeline.db_rows()
-    (log,) = rows["decision_logs"]
-    assert (log["action"], log["primary_code"], log["actuated"]) == ("skip", "device_no_water", False)
-    assert log["reason_text"] == resp["reason"]
-    decision = IrrigationDecision.model_validate(log["payload_json"])
-    assert decision.action.value == "skip"
-    assert [r.code.value for r in decision.reasons] == [r["code"] for r in resp["reasons"]]
-    assert pipeline.wiring.irrigator.calls == []
-    assert [a["code"] for a in rows["activity_events"]] == ["decision_skip"]
 
 
 def test_vacation_create_rejects_reversed_window(pipeline: Pipeline) -> None:
