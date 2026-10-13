@@ -156,6 +156,7 @@ Repo conventions (PRs, CI `check` job, releases) follow the [giocaizzi GitHub st
 make install       # uv sync
 make serve         # uv run greenhouse-server (API + web UI on :8000)
 make check         # full local gate: pre-commit-run + lint-imports + typecheck + sizecheck + coverage
+make check-fast    # lint + lint-imports + typecheck + sizecheck, no tests (~15 s): what the agents' stop hook runs
 make test          # uv run pytest -n auto (PYTEST_XDIST="-n 2" on a shared host, PYTEST_XDIST= for serial)
 make lint          # ruff check libs/ tests/
 make format        # ruff format libs/ tests/

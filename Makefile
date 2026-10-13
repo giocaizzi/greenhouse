@@ -1,4 +1,4 @@
-.PHONY: help install test lint format check coverage serve clean lint-imports typecheck sizecheck \
+.PHONY: help install test lint format check check-fast coverage serve clean lint-imports typecheck sizecheck \
         docker-build docker-up docker-down docker-logs docker-shell \
         pre-commit-install pre-commit-run
 
@@ -23,6 +23,8 @@ lint: ## Run ruff lint
 
 format: ## Apply ruff formatter
 	uv run ruff format libs/ tests/
+
+check-fast: lint lint-imports typecheck sizecheck ## Quick gate (no tests): what the agents' stop hook runs; CI and `make check` keep the full suite
 
 check: pre-commit-run lint-imports typecheck sizecheck coverage ## CI parity: pre-commit hooks (lint/format/hygiene) + import contracts + strict types + size limits + coverage gate
 
