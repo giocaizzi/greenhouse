@@ -379,14 +379,14 @@ def test_anomaly_skips_drift_with_too_few_soil_values_but_still_checks_staleness
 ) -> None:
     """Anomaly skips drift with too few soil values but still checks staleness."""
     _cid, _, (sid,) = _cluster_with_sensor(repo)
-    latest = FROZEN_TS - 3600
-    for k in range(12):  # every 10 min; the newest is an hour old → stale
+    latest = FROZEN_TS - 4 * 3600
+    for k in range(12):  # every 10 min; the newest is 4 h old → past the default 180-min sync + 30-min grace
         soil = 50.0 if k < soil_values else None
         repo.add_sensor_reading(sensor_id=sid, timestamp=latest - 600 * k, soil_moisture=soil, temperature=20.0)
     repo.session.commit()
     alerts = SensorAnomalyService(repo).scan()
     assert [(a.code, a.message) for a in alerts] == [
-        ("sensor_stale", "Gap Sensor 0: no reading for 60 min (expected every 10 min)")
+        ("sensor_stale", "Gap Sensor 0: no reading for 240 min (expected every 10 min)")
     ]
     assert repo.session.query(Alert).count() == 1
 

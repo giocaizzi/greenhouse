@@ -8,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from greenhouse_core.constants import SENSOR_OFFLINE_GRACE_MINUTES
 from greenhouse_core.database import init_db
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.anomaly import SensorAnomalyService
@@ -52,13 +53,13 @@ class TestSensorStale:
         repo.session.commit()
 
     def test_stale_sensor_detected(self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]) -> None:
-        """A 90-minute silence after 5-minute intervals triggers sensor_stale."""
+        """A 90-minute silence after 5-minute intervals, past a 30-min sync + 30-min grace, triggers sensor_stale."""
         cluster_id, sensor_id = cluster_and_sensor
         # 12 readings every 5 min; last reading 90 min ago
-        # median interval = 300s; gap = 5400s > 2x300 = 600s
+        # gap = 5400s > max(2x300s, (30 + 30) min = 3600s)
         self._seed_regular(repo, sensor_id, count=12, interval_s=300, end_offset_s=5400)
 
-        alerts = SensorAnomalyService(repo).scan()
+        alerts = SensorAnomalyService(repo, sync_interval_minutes=30).scan()
 
         stale = [a for a in alerts if a.code == "sensor_stale"]
         assert len(stale) >= 1
@@ -74,6 +75,46 @@ class TestSensorStale:
         alerts = SensorAnomalyService(repo).scan()
 
         assert [a for a in alerts if a.code == "sensor_stale"] == []
+
+    def test_silence_between_syncs_is_not_stale(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """29 min without a reading, 10-min median gap, 30-min sync: within sync + grace → no alert."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_regular(repo, sensor_id, count=12, interval_s=600, end_offset_s=29 * 60)
+
+        assert SensorAnomalyService(repo, sync_interval_minutes=30).scan() == []
+
+    def test_silence_past_sync_and_grace_is_stale(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """Silent one minute past sync interval + SENSOR_OFFLINE_GRACE_MINUTES → sensor_stale."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_regular(
+            repo, sensor_id, count=12, interval_s=600, end_offset_s=(30 + SENSOR_OFFLINE_GRACE_MINUTES + 1) * 60
+        )
+
+        alerts = SensorAnomalyService(repo, sync_interval_minutes=30).scan()
+
+        assert [a.code for a in alerts] == ["sensor_stale"]
+
+    def test_stale_alert_resolves_once_fresh(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """An open sensor_stale alert resolves on the first scan that finds the sensor fresh."""
+        cluster_id, sensor_id = cluster_and_sensor
+        self._seed_regular(repo, sensor_id, count=12, interval_s=600, end_offset_s=2 * 3600)
+        svc = SensorAnomalyService(repo, sync_interval_minutes=30)
+        (alert,) = svc.scan()
+        repo.session.commit()
+
+        repo.add_sensor_reading(sensor_id, timestamp=int(time.time()), soil_moisture=50.0)
+        repo.session.commit()
+        assert svc.scan() == []
+        repo.session.commit()
+
+        (row,) = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_stale"]
+        assert (row.id, row.status) == (alert.id, "resolved")
 
     def test_too_few_readings_skipped(self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]) -> None:
         """Sensors with fewer than 10 readings are skipped."""
