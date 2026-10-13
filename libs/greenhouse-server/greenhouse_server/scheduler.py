@@ -317,7 +317,7 @@ def _sync_job() -> None:
     registry = state.device_registry(_job_app())
     with _job_session(_app, logger, "Sync job failed") as session:
         repo = IrrigationRepository(session)
-        sync_svc = SyncService(repo, registry, gateway)
+        sync_svc = SyncService(repo, registry, gateway, state.ntfy_notifier(_job_app()))
         sync_svc.sync_all_sensors(hours=SYNC_JOB_BACKFILL_HOURS)
 
 

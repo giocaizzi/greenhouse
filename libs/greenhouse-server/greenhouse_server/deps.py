@@ -236,9 +236,11 @@ def require_valid_window(start_hour: int, end_hour: int, weekday_mask: int) -> N
 # --- Service dependencies ---
 
 
-def get_sync_service(repo: RepoDep, registry: DeviceRegistryDep, gateway: DeviceGatewayDep) -> SyncService:
+def get_sync_service(
+    repo: RepoDep, registry: DeviceRegistryDep, gateway: DeviceGatewayDep, notifier: NtfyNotifierDep
+) -> SyncService:
     """Build the sensor sync service on the request's repository."""
-    return SyncService(repo, registry, gateway)
+    return SyncService(repo, registry, gateway, notifier)
 
 
 SyncServiceDep = Annotated[SyncService, Depends(get_sync_service)]

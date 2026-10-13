@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypedDict, TypeVar
 
 import tinytuya
 
-from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE
+from greenhouse_core.constants import SENSOR_LOG_MAX_PAGES, SENSOR_LOG_PAGE_SIZE, TUYA_SUBSCRIPTION_EXPIRED_TEXT
 from greenhouse_core.devices.datapoints import DATAPOINT_PARSERS, group_logs_by_timestamp
 from greenhouse_core.devices.local_keys import LocalKeyResolver, is_key_or_version_error
 from greenhouse_core.models import Irrigator, parse_device_config
@@ -298,6 +298,8 @@ class DeviceGateway:
                 max_fetches=1,
                 start_row_key=row_key,
             )
+            if TUYA_SUBSCRIPTION_EXPIRED_TEXT in str(result):  # a lapsed plan fails the sync, not just this page
+                raise CloudApiError(result)
             page = result.get("result") or {}
             logs.extend(page.get("logs", []))
             next_key = _next_row_key(device_id, result, row_key)

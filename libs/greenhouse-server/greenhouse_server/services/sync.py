@@ -9,13 +9,17 @@ from greenhouse_core.constants import (
     FRESHNESS_SYNC_BACKFILL_HOURS,
     SENSOR_READING_STALE_SECONDS,
     SNAPSHOT_LOOKBACK_HOURS,
+    TUYA_SUBSCRIPTION_EXPIRED_TEXT,
 )
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.devices.gateway import DeviceGateway
 from greenhouse_core.logic.cleaning import clean_readings_desc
+from greenhouse_core.models import SOURCE_HEALTH
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.sync import SyncStats, sync_single_sensor
 from greenhouse_core.sync import sync_sensor_data as core_sync
+from greenhouse_server.services.alerts import clear_alert, raise_alert
+from greenhouse_server.services.notify import NtfyClient
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -23,6 +27,8 @@ if TYPE_CHECKING:
     from greenhouse_core.models import Sensor, SensorReading
 
 logger = logging.getLogger(__name__)
+
+SUBSCRIPTION_EXPIRED_CODE = "tuya_subscription_expired"
 
 
 class ClusterSnapshot(TypedDict):
@@ -48,17 +54,43 @@ class SyncService:
         repo: IrrigationRepository,
         registry: DeviceRegistry | None,
         cloud: DeviceGateway | None,
+        notifier: NtfyClient | None = None,
     ) -> None:
         """Bind the sync to the repository and the app's one gateway (``None``: no Cloud reads, persisted rows only)."""
         self._repo = repo
         self._registry = registry
         self._gateway = cloud
+        self._notifier = notifier
 
     def sync_all_sensors(self, hours: int = 24) -> SyncStats:
         """Sync all sensor data from the Cloud gateway. Returns the run's totals."""
         if self._gateway is None:
             return {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": ["No cloud connection"]}
-        return core_sync(self._repo, self._gateway, hours=hours)
+        stats = core_sync(self._repo, self._gateway, hours=hours)
+        self._reconcile_subscription_alert(stats["errors"])
+        return stats
+
+    def _reconcile_subscription_alert(self, errors: list[str]) -> None:
+        """Raise the critical inbox alert while Tuya says the IoT Core plan expired; resolve it on a clean sync.
+
+        A sync with other errors leaves an open alert as it is: only a run without
+        errors proves the Cloud answers again.
+        """
+        if any(TUYA_SUBSCRIPTION_EXPIRED_TEXT in error for error in errors):
+            raise_alert(
+                self._repo,
+                notifier=self._notifier,
+                source=SOURCE_HEALTH,
+                code=SUBSCRIPTION_EXPIRED_CODE,
+                severity="critical",
+                title="Tuya IoT Core subscription expired",
+                message=(
+                    "Every Tuya Cloud call fails: sensor sync and irrigation are down until the "
+                    "IoT Core plan is renewed (iot.tuya.com → Cloud → your project → Service API)."
+                ),
+            )
+        elif not errors:
+            clear_alert(self._repo, source=SOURCE_HEALTH, code=SUBSCRIPTION_EXPIRED_CODE)
 
     def ensure_fresh_and_read(self, cluster_id: int) -> ClusterSnapshot | None:
         """Return the cluster's current sensor snapshot from SQLite.

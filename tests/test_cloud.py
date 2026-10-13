@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from fake_data import FAKE_CLIENT_ID, FAKE_CLIENT_SECRET, FAKE_REGION, FAKE_SENSOR_ID
-from greenhouse_core.devices.gateway import DeviceGateway
+from greenhouse_core.devices.gateway import CloudApiError, DeviceGateway
 
 # Canned Cloud payload values and what the gateway must parse them into.
 V1_HUMIDITY_PCT = 45.0  # v1 ``humidity`` DP 45 → soil moisture
@@ -86,6 +86,19 @@ class TestDeviceGateway:
         assert logs[0]["value"] == pytest.approx(22.0)
         assert logs[1]["key"] == "soil_moisture"
         assert logs[1]["value"] == LOG_HUMIDITY_PCT
+
+    @pytest.mark.parametrize(
+        "answer",
+        [
+            {"code": 28841002, "msg": "IoT Core service subscription has expired.", "success": False},
+            {"Error": "Error Response from Tuya Cloud", "Err": "913", "Payload": "...subscription has expired."},
+        ],
+    )
+    def test_get_device_logs_raises_when_the_subscription_expired(self, answer: dict[str, object]) -> None:
+        """An expired IoT Core plan fails the log read (raw or tinytuya-wrapped) instead of reading as no logs."""
+        self.mock_cloud_instance.getdevicelog.return_value = answer
+        with pytest.raises(CloudApiError, match="subscription has expired"):
+            self.cloud.get_device_logs(FAKE_SENSOR_ID, hours=1)
 
     def test_group_logs_by_timestamp(self) -> None:
         """Logs reported within tolerance are grouped into single readings."""
