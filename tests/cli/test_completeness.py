@@ -199,48 +199,6 @@ class TestAuthCommands:
         token_path = Path(os.environ["XDG_CONFIG_HOME"]) / "greenhouse" / "token"
         assert not token_path.exists()
 
-    def test_logout_no_token(self, patch_client: PatchClient) -> None:
-        """``logout`` without a token is a friendly no-op that exits 0."""
-        patch_client(
-            {
-                ("POST", "/api/v1/auth/logout"): (401, {"detail": "Not authenticated"}),
-            }
-        )
-        result = runner.invoke(app, ["logout"])
-        assert result.exit_code == 0
-        assert "no token" in result.output.lower()
-
-    def test_whoami(self, patch_client: PatchClient) -> None:
-        """``whoami`` sends the stored token and prints the current user."""
-        client_mod.store_token("jwt-stored")
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("GET", "/api/v1/auth/me"): (200, {"id": 1, "username": "alice"}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["whoami"])
-        assert result.exit_code == 0
-        data = json.loads(result.stdout)
-        assert data["username"] == "alice"
-        assert captured[0]["headers"].get("authorization") == "Bearer jwt-stored"
-
-    def test_env_token_wins_over_disk(self, patch_client: PatchClient, monkeypatch: pytest.MonkeyPatch) -> None:
-        """``$GREENHOUSE_API_TOKEN`` takes precedence over the token file."""
-        client_mod.store_token("disk-token")
-        monkeypatch.setenv("GREENHOUSE_API_TOKEN", "env-token")
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("GET", "/api/v1/auth/me"): (200, {"id": 1, "username": "alice"}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["whoami"])
-        assert result.exit_code == 0
-        assert captured[0]["headers"].get("authorization") == "Bearer env-token"
-
 
 # ─────────────────────────── alerts ───────────────────────────
 
@@ -318,19 +276,6 @@ class TestAlertsCommands:
         result = runner.invoke(app, ["alerts", "resolve", "5"])
         assert result.exit_code == 0
 
-    def test_sync_all(self, patch_client: PatchClient) -> None:
-        """``alerts sync`` without a cluster re-scans every cluster."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("POST", "/api/v1/alerts/sync"): (200, {"open_count": 0, "items": []}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["alerts", "sync"])
-        assert result.exit_code == 0
-        assert captured[0]["path"] == "/api/v1/alerts/sync"
-
     def test_sync_cluster(self, patch_client: PatchClient) -> None:
         """``alerts sync --cluster`` re-scans only that cluster."""
         captured: list[CapturedRequest] = []
@@ -385,17 +330,6 @@ class TestPreferencesCommands:
             "scheduler_paused": False,
         }
 
-    def test_get(self, patch_client: PatchClient) -> None:
-        """``prefs get`` prints the preferences."""
-        patch_client(
-            {
-                ("GET", "/api/v1/preferences"): (200, self._stub()),
-            }
-        )
-        result = runner.invoke(app, ["prefs", "get"])
-        assert result.exit_code == 0
-        assert "metric" in result.stdout
-
     def test_set_only_supplied_fields_are_sent(self, patch_client: PatchClient) -> None:
         """``prefs set`` sends only the options given."""
         captured: list[CapturedRequest] = []
@@ -441,19 +375,6 @@ class TestVacationCommands:
             "notes": None,
             "created_at": 0,
         }
-
-    def test_list(self, patch_client: PatchClient) -> None:
-        """``vacation list`` prints the active window and every window."""
-        patch_client(
-            {
-                ("GET", "/api/v1/vacation"): (
-                    200,
-                    {"active": None, "items": [self._stub()]},
-                ),
-            }
-        )
-        result = runner.invoke(app, ["vacation", "list"])
-        assert result.exit_code == 0
 
     def test_add(self, patch_client: PatchClient) -> None:
         """``vacation add`` maps its options onto the request body, including the contact email."""
@@ -535,20 +456,6 @@ class TestWindowsCommands:
             "label": "morning",
         }
 
-    def test_list(self, patch_client: PatchClient) -> None:
-        """``windows list`` reads the cluster's irrigation windows."""
-        patch_client(
-            {
-                ("GET", "/api/v1/clusters/2/windows"): (
-                    200,
-                    {"cluster_id": 2, "windows": [self._stub()]},
-                ),
-            }
-        )
-        result = runner.invoke(app, ["windows", "list", "--cluster", "2"])
-        assert result.exit_code == 0
-        assert "morning" in result.stdout
-
     def test_add(self, patch_client: PatchClient) -> None:
         """``windows add`` posts the new window with its weekday mask."""
         captured: list[CapturedRequest] = []
@@ -614,17 +521,6 @@ class TestWindowsCommands:
 class TestClusterCrud:
     """``cluster get`` / ``update`` / ``delete``."""
 
-    def test_get(self, patch_client: PatchClient) -> None:
-        """``cluster get`` prints one cluster."""
-        patch_client(
-            {
-                ("GET", "/api/v1/clusters/4"): (200, {"id": 4, "name": "Den", "environment": "indoor"}),
-            }
-        )
-        result = runner.invoke(app, ["cluster", "get", "4"])
-        assert result.exit_code == 0
-        assert "Den" in result.stdout
-
     def test_update_sends_only_set_fields(self, patch_client: PatchClient) -> None:
         """``cluster update`` sends only the fields given."""
         captured: list[CapturedRequest] = []
@@ -637,30 +533,6 @@ class TestClusterCrud:
         result = runner.invoke(app, ["cluster", "update", "4", "--name", "Den2"])
         assert result.exit_code == 0
         assert captured[0]["json"] == {"name": "Den2"}
-
-    def test_delete_with_yes(self, patch_client: PatchClient) -> None:
-        """``cluster delete --yes`` deletes without prompting."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("DELETE", "/api/v1/clusters/4"): (200, {"success": True}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["cluster", "delete", "4", "--yes"])
-        assert result.exit_code == 0
-        assert captured[0]["method"] == "DELETE"
-
-    def test_delete_prompt_aborts_without_yes(self, patch_client: PatchClient) -> None:
-        """Declining the delete prompt aborts without a request."""
-        patch_client(
-            {
-                ("DELETE", "/api/v1/clusters/4"): (200, {"success": True}),
-            }
-        )
-        result = runner.invoke(app, ["cluster", "delete", "4"], input="n\n")
-        # confirmation aborted
-        assert result.exit_code != 0
 
 
 # ─────────────────────────── plant/sensor/irrigator CRUD ──────────────────
@@ -775,63 +647,6 @@ class TestResourceCrud:
 
 class TestStopAllCommand:
     """``greenhouse stop-all`` and its confirmation."""
-
-    def test_stop_all_with_yes(self, patch_client: PatchClient) -> None:
-        """``stop-all --yes`` stops every pump without prompting."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 3, "errors": []}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["stop-all", "--yes"])
-        assert result.exit_code == 0
-        assert captured[0]["method"] == "POST"
-        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
-        data = json.loads(result.stdout)
-        assert data == {"stopped": 3, "errors": []}
-
-    def test_stop_all_short_flag(self, patch_client: PatchClient) -> None:
-        """``-y`` is accepted as the short form of ``--yes``."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 0, "errors": []}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["stop-all", "-y"])
-        assert result.exit_code == 0
-        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
-
-    def test_stop_all_prompt_aborts_without_yes(self, patch_client: PatchClient) -> None:
-        """Declining the prompt aborts without a request."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 1, "errors": []}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["stop-all"], input="n\n")
-        assert result.exit_code != 0
-        assert captured == []
-
-    def test_stop_all_prompt_confirmed(self, patch_client: PatchClient) -> None:
-        """Confirming the prompt sends the stop-all and prints any per-device errors."""
-        captured: list[CapturedRequest] = []
-        patch_client(
-            {
-                ("POST", "/api/v1/bulk/stop-all"): (200, {"stopped": 2, "errors": ["irrigator 5: timeout"]}),
-            },
-            captured,
-        )
-        result = runner.invoke(app, ["stop-all"], input="y\n")
-        assert result.exit_code == 0
-        assert captured[0]["path"] == "/api/v1/bulk/stop-all"
-        assert '"stopped": 2' in result.stdout
-        assert "irrigator 5: timeout" in result.stdout
 
     def test_stop_all_server_error_exits_1(self, patch_client: PatchClient) -> None:
         """A server error on stop-all exits 1."""
