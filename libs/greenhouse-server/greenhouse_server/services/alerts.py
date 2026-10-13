@@ -197,3 +197,10 @@ def raise_alert(repo: IrrigationRepository, *, notifier: NtfyClient | None = Non
     )
     notify_if_new_alert(repo, notifier, alert, was_open=was_open)
     return alert
+
+
+def clear_alert(repo: IrrigationRepository, *, source: ActivitySource, code: str) -> None:
+    """Resolve the open system-wide alert (no cluster, plant or sensor) that :func:`raise_alert` keyed on ``code``."""
+    alert = repo.get_open_alert_by_key(_dedup_key(source, code, None, f"{ENTITY_CLUSTER}0"))
+    if alert is not None:
+        repo.resolve_alert(alert.id)

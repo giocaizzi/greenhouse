@@ -455,6 +455,13 @@ EFFICACY_SCORE_PER_PCT_RISE = 5.0  # efficacy score points per percentage point 
 SENSOR_LOG_PAGE_SIZE = 100  # entries per getdevicelog request (Tuya's hard per-query limit)
 SENSOR_LOG_MAX_PAGES = 50  # request cap per sensor sync (= 5,000 entries; tinytuya's own default)
 
+# ── Tuya IoT Core subscription ───────────────────────────────────────────────
+# When the project's IoT Core plan lapses every Cloud call fails (OpenAPI code 28841002,
+# "IoT Core service subscription has expired."; tinytuya's Err 913 wraps the same text),
+# so sync and the on/off pulse stop until it is renewed.
+
+TUYA_SUBSCRIPTION_EXPIRED_TEXT = "subscription has expired"  # matched in the Cloud's error answer
+
 # ── Tuya local_key refresh (tinytuya error 914) ──────────────────────────────
 # A local call answered "Check device key or version" (error 914) — the stored local_key went
 # stale when the device was re-paired — refreshes the key with ONE Cloud getdevices lookup.

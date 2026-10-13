@@ -279,10 +279,38 @@ class TestSyncAllSensors:
 
         def fake_core_sync(repo: IrrigationRepository, cloud: DeviceGateway, hours: int) -> SyncStats:
             seen.append((repo, cloud, hours))
-            return cast("SyncStats", {"ok": 1})  # a sentinel the service must pass through untouched
+            return cast("SyncStats", {"ok": 1, "errors": []})  # a sentinel the service must pass through untouched
 
         monkeypatch.setattr(sync_service_module, "core_sync", fake_core_sync)
         gw = RecordingGateway()
         result: object = SyncService(tmp_db, None, _as_gateway(gw)).sync_all_sensors(hours=3)
-        assert result == {"ok": 1}
+        assert result == {"ok": 1, "errors": []}
         assert seen == [(tmp_db, gw, 3)]
+
+
+class TestSubscriptionExpiredAlert:
+    """A sync that meets Tuya's expired-subscription error opens one critical alert; a clean sync resolves it."""
+
+    def _sync(self, repo: IrrigationRepository, monkeypatch: pytest.MonkeyPatch, errors: list[str]) -> None:
+        stats: SyncStats = {"total_synced": 0, "total_new": 0, "total_live": 0, "errors": errors}
+        monkeypatch.setattr(sync_service_module, "core_sync", lambda *_a, **_k: stats)
+        SyncService(repo, None, _as_gateway(RecordingGateway())).sync_all_sensors()
+
+    def _open(self, repo: IrrigationRepository) -> list[str]:
+        return [a.code for a in repo.list_alerts() if a.status != "resolved"]
+
+    def test_expired_error_raises_then_clean_sync_resolves(
+        self, tmp_db: IrrigationRepository, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Raise on the expired text (deduplicated), keep it through other errors, resolve on a clean sync."""
+        expired = "Soil: Cloud API error: {'msg': 'IoT Core service subscription has expired.'}"
+        self._sync(tmp_db, monkeypatch, [expired, expired])
+        self._sync(tmp_db, monkeypatch, [expired])
+        assert self._open(tmp_db) == [sync_service_module.SUBSCRIPTION_EXPIRED_CODE]
+        assert tmp_db.list_alerts()[0].severity == "critical"
+
+        self._sync(tmp_db, monkeypatch, ["Soil: timeout"])
+        assert self._open(tmp_db) == [sync_service_module.SUBSCRIPTION_EXPIRED_CODE]
+
+        self._sync(tmp_db, monkeypatch, [])
+        assert self._open(tmp_db) == []
