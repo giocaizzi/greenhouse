@@ -3,8 +3,11 @@
 Two detectors run across all sensors on a rolling window of the last 50
 readings:
 
-- **Stale**: if (now - latest_timestamp) > 2 x median sample interval, the
-  sensor has gone silent and raises a ``sensor_stale`` warning.
+- **Stale**: if (now - latest_timestamp) exceeds both 2 x the median sample
+  interval and one sync interval + ``SENSOR_OFFLINE_GRACE_MINUTES``, the sensor
+  has gone silent and raises a ``sensor_stale`` warning; readings land only when
+  the sync job runs, so a healthy sensor looks silent until the next sync. The
+  alert resolves on the first scan that finds the sensor fresh again.
 - **Drift/spike**: if |z-score| of the latest soil-moisture reading > 4
   relative to the rolling mean + std of the 50-reading window, raises a
   ``sensor_drift`` warning.
@@ -24,10 +27,12 @@ from greenhouse_core.constants import (
     ANOMALY_STALE_INTERVAL_MULTIPLIER,
     ANOMALY_WINDOW_READINGS,
     ANOMALY_Z_THRESHOLD,
+    DEFAULT_SYNC_INTERVAL_MINUTES,
+    SENSOR_OFFLINE_GRACE_MINUTES,
 )
 from greenhouse_core.models import SOURCE_ANOMALY, Alert
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.alerts import raise_alert
+from greenhouse_server.services.alerts import clear_alert, raise_alert
 from greenhouse_server.services.notify import NtfyClient
 
 if TYPE_CHECKING:
@@ -66,17 +71,28 @@ def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, fl
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
-    def __init__(self, repo: IrrigationRepository, notifier: NtfyClient | None = None) -> None:
-        """Bind the scan to the caller's repository; ``notifier`` pushes newly opened alerts (``None``: no push)."""
+    def __init__(
+        self,
+        repo: IrrigationRepository,
+        notifier: NtfyClient | None = None,
+        sync_interval_minutes: int = DEFAULT_SYNC_INTERVAL_MINUTES,
+    ) -> None:
+        """Bind the scan to the caller's repository; ``notifier`` pushes newly opened alerts (``None``: no push).
+
+        ``sync_interval_minutes`` is the sensor sync cadence: readings are persisted only by
+        the sync, so a sensor is not stale before one interval plus ``SENSOR_OFFLINE_GRACE_MINUTES``.
+        """
         self._repo = repo
         self._notifier = notifier
+        self._min_stale_seconds = (sync_interval_minutes + SENSOR_OFFLINE_GRACE_MINUTES) * 60
 
     def scan(self) -> list[Alert]:
         """Detect stale and drifting sensors across the entire fleet.
 
         For each sensor with at least 10 readings in the last 72 hours:
 
-        - **Stale**: ``(now - latest_ts) > 2 * median_interval``.
+        - **Stale**: ``(now - latest_ts) > max(2 * median_interval, sync interval + grace)``;
+          a fresh sensor resolves its open ``sensor_stale`` alert.
         - **Drift**: ``|z-score of latest soil_moisture| > 4`` versus the
           rolling mean and std of the last 50 soil-moisture readings.
           A minimum std of 1.0 % is applied to avoid false alarms on near-constant
@@ -114,9 +130,10 @@ class SensorAnomalyService:
     def _stale_alert(
         self, sensor: "Sensor", timestamps_asc: list[int], median_interval: float | None, now: int
     ) -> Alert | None:
-        """Raise ``sensor_stale`` when the sensor has been silent for over twice its usual interval."""
+        """Raise ``sensor_stale`` past twice its usual interval and the sync window; resolve it once fresh."""
         latest_ts = timestamps_asc[-1]
-        if median_interval and (now - latest_ts) > ANOMALY_STALE_INTERVAL_MULTIPLIER * median_interval:
+        threshold = max(ANOMALY_STALE_INTERVAL_MULTIPLIER * (median_interval or 0), self._min_stale_seconds)
+        if median_interval and (now - latest_ts) > threshold:
             gap_seconds = now - latest_ts
             alert = raise_alert(
                 self._repo,
@@ -147,6 +164,9 @@ class SensorAnomalyService:
                 median_interval,
             )
             return alert
+        clear_alert(
+            self._repo, source=SOURCE_ANOMALY, code="sensor_stale", cluster_id=sensor.cluster_id, sensor_id=sensor.id
+        )
         return None
 
     def _drift_alert(

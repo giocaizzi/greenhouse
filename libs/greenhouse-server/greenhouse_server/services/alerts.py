@@ -175,12 +175,18 @@ class NewAlert(TypedDict):
     payload: NotRequired[dict[str, Any] | None]
 
 
+def _entity_key(source: ActivitySource, code: str, cluster_id: int | None, sensor_id: int | None) -> str:
+    """The dedup key :func:`raise_alert` gives an alert on a sensor, else on its cluster (or system-wide)."""
+    entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
+    return _dedup_key(source, code, cluster_id, f"{entity_type}{sensor_id or cluster_id or 0}")
+
+
 def raise_alert(repo: IrrigationRepository, *, notifier: NtfyClient | None = None, **new: Unpack[NewAlert]) -> Alert:
     """Convenience wrapper: build a dedup_key, upsert the alert, push when this call opened it."""
     sensor_id, cluster_id = new.get("sensor_id"), new.get("cluster_id")
     entity_type = ENTITY_SENSOR if sensor_id else ENTITY_CLUSTER
     entity_id = sensor_id or cluster_id
-    key = _dedup_key(new["source"], new["code"], cluster_id, f"{entity_type}{entity_id or 0}")
+    key = _entity_key(new["source"], new["code"], cluster_id, sensor_id)
     was_open = is_alert_open(repo, key)
     alert = repo.upsert_alert(
         dedup_key=key,
@@ -199,8 +205,15 @@ def raise_alert(repo: IrrigationRepository, *, notifier: NtfyClient | None = Non
     return alert
 
 
-def clear_alert(repo: IrrigationRepository, *, source: ActivitySource, code: str) -> None:
-    """Resolve the open system-wide alert (no cluster, plant or sensor) that :func:`raise_alert` keyed on ``code``."""
-    alert = repo.get_open_alert_by_key(_dedup_key(source, code, None, f"{ENTITY_CLUSTER}0"))
+def clear_alert(
+    repo: IrrigationRepository,
+    *,
+    source: ActivitySource,
+    code: str,
+    cluster_id: int | None = None,
+    sensor_id: int | None = None,
+) -> None:
+    """Resolve the open alert :func:`raise_alert` keyed on ``code`` and this cluster / sensor (none: system-wide)."""
+    alert = repo.get_open_alert_by_key(_entity_key(source, code, cluster_id, sensor_id))
     if alert is not None:
         repo.resolve_alert(alert.id)

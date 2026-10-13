@@ -361,7 +361,11 @@ def _anomaly_job() -> None:
     """Background job: scan all sensors for staleness and drift anomalies."""
     with _job_session(_app, logger, "Anomaly scan job failed") as session:
         repo = IrrigationRepository(session)
-        SensorAnomalyService(repo, notifier=state.ntfy_notifier(_job_app())).scan()
+        SensorAnomalyService(
+            repo,
+            notifier=state.ntfy_notifier(_job_app()),
+            sync_interval_minutes=state.settings(_job_app()).sync_interval_minutes,
+        ).scan()
 
 
 def _health_monitor_job() -> None:
