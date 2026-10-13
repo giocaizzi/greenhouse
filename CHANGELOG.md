@@ -4,6 +4,18 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.1.0](https://github.com/giocaizzi/greenhouse/compare/v6.0.0...v6.1.0) (2026-10-13)
+
+
+### Added
+
+* **alerts:** raise a critical alert when the Tuya subscription expires ([#138](https://github.com/giocaizzi/greenhouse/issues/138)) ([be98cce](https://github.com/giocaizzi/greenhouse/commit/be98ccea63e09606e1f782a7f252c6ed4f8d450a))
+
+
+### Fixed
+
+* **anomaly:** judge sensor_stale against the sync interval and auto-resolve it ([#140](https://github.com/giocaizzi/greenhouse/issues/140)) ([5031c6e](https://github.com/giocaizzi/greenhouse/commit/5031c6ea8f9b6402a78e0f383cc3296722c58d42))
+
 ## [6.0.0](https://github.com/giocaizzi/greenhouse/compare/v5.0.1...v6.0.0) (2026-10-12)
 
 
