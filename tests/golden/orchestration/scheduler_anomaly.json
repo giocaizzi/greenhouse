@@ -9,6 +9,7 @@
    "entity_type": "sensor",
    "first_seen_at": 1776247200,
    "id": 1,
+   "last_notified_at": 1776247200,
    "last_seen_at": 1776247200,
    "message": "Sensor 1: no reading for 300 min (expected every 60 min)",
    "occurrence_count": 1,

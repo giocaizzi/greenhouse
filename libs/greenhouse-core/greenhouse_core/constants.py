@@ -350,6 +350,12 @@ MAINTENANCE_STALE_SECONDS = 3 * SECONDS_PER_HOUR
 MAINTENANCE_MIN_SAMPLES = 3
 MAINTENANCE_HUMIDITY_DEFICIT = 10  # % below the ideal humidity minimum
 
+# ── Alert re-notify — escalating pushes for an alert that stays open ────────
+
+ALERT_RENOTIFY_SEVERITIES = ("warning", "critical")  # actuation_failed is a warning (#146)
+ALERT_RENOTIFY_OCCURRENCES = (3, 10)  # occurrence counts that push again while unresolved
+ALERT_RENOTIFY_INTERVAL_SECONDS = SECONDS_PER_DAY  # past the last step: at most one push per interval
+
 # ── Irrigation pipeline — monitor bands and fallbacks ────────────────────────
 
 MONITOR_LOOKBACK_HOURS = 2
