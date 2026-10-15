@@ -14,7 +14,7 @@
 {# ── Page head with actions ──────────────────────────────────────────────────── #}
 <section class="page-head">
   <div class="page-head__title">
-    <h1>{{ plant.notes or plant.species }}</h1>
+    <h1>{{ plant.species }}</h1>
     <div class="page-head__meta">
       <i class="species">{{ plant.species }}</i>
       {% if plant.category %}<span class="dot"></span><span>{{ plant.category }}</span>{% endif %}
