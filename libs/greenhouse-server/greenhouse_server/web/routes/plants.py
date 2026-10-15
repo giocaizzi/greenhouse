@@ -8,7 +8,8 @@ from typing import Annotated, TypedDict
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_server.deps import RepoDep, require_cluster, require_plant_in_cluster
+from greenhouse_server.deps import PlantDbDep, RepoDep, require_cluster, require_plant_in_cluster
+from greenhouse_server.services.plant_care import clear_care_alert, reconcile_care_alert
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
@@ -94,13 +95,14 @@ def new_plant_form(request: Request, cluster_id: int, repo: RepoDep) -> Response
 
 
 @router.post("/clusters/{cluster_id}/plants")
-def create_plant(cluster_id: int, repo: RepoDep, form: PlantFormDep) -> Response:
+def create_plant(cluster_id: int, repo: RepoDep, plant_db: PlantDbDep, form: PlantFormDep) -> Response:
     """Add a plant from the form and return to the cluster's plants section."""
     require_cluster(repo, cluster_id)
-    repo.add_plant(
+    plant_id = repo.add_plant(
         cluster_id=cluster_id,
         **form.fields(),
     )
+    reconcile_care_alert(repo, plant_db, require_plant_in_cluster(repo, cluster_id, plant_id))
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
@@ -114,13 +116,14 @@ def edit_plant_form(request: Request, cluster_id: int, plant_id: int, repo: Repo
 
 
 @router.post("/clusters/{cluster_id}/plants/{plant_id}/edit")
-def update_plant(cluster_id: int, plant_id: int, repo: RepoDep, form: PlantFormDep) -> Response:
+def update_plant(cluster_id: int, plant_id: int, repo: RepoDep, plant_db: PlantDbDep, form: PlantFormDep) -> Response:
     """Save the plant form and return to the cluster's plants section."""
-    require_plant_in_cluster(repo, cluster_id, plant_id)
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.update_plant(
         plant_id,
         **form.fields(),
     )
+    reconcile_care_alert(repo, plant_db, plant)
     repo.commit()
     return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)
 
@@ -130,5 +133,6 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
     """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
+    clear_care_alert(repo, plant_id)
     repo.commit()
     return HTMLResponse("")

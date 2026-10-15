@@ -10,6 +10,7 @@ from greenhouse_core.repository import SameClusterMoveError
 from greenhouse_core.schemas import (
     CreatePlantRequest,
     MovePlantRequest,
+    PlantDetailResponse,
     PlantHealthResponse,
     PlantListResponse,
     PlantResponse,
@@ -20,6 +21,7 @@ from greenhouse_core.schemas import (
 )
 from greenhouse_server.deps import (
     ClusterServiceDep,
+    PlantDbDep,
     PlantHealthServiceDep,
     RepoDep,
     require_cluster,
@@ -27,6 +29,7 @@ from greenhouse_server.deps import (
     require_plant_in_cluster,
 )
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
+from greenhouse_server.services.plant_care import clear_care_alert, reconcile_care_alert
 
 router = APIRouter(tags=["plants"])
 
@@ -69,13 +72,22 @@ def list_all_plants(
     )
 
 
-@router.post("/clusters/{cluster_id}/plants", response_model=PlantResponse, status_code=status.HTTP_201_CREATED)
-def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep) -> Plant:
+def _reconciled_detail(repo: RepoDep, plant_db: PlantDbDep, plant: Plant) -> PlantDetailResponse:
+    """Reconcile the plant's default-band alert (the caller commits) and build its detail response."""
+    care = reconcile_care_alert(repo, plant_db, plant)
+    return PlantDetailResponse.model_validate({**PlantResponse.model_validate(plant).model_dump(), **care})
+
+
+@router.post("/clusters/{cluster_id}/plants", response_model=PlantDetailResponse, status_code=status.HTTP_201_CREATED)
+def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep, plant_db: PlantDbDep) -> PlantDetailResponse:
     """Add a plant to a cluster.
 
     Care thresholds (water needs, temperature/humidity ranges) can be supplied
     directly or left null to be filled in later via POST /plants/sync, which
-    looks them up in the evidence-based plant database.
+    looks them up in the evidence-based plant database. The response names the
+    soil band the plant is judged against and its source; when neither species
+    nor category is in the plant database (``soil_band_source`` =
+    ``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened.
 
     Args:
         cluster_id: ID of the cluster the plant belongs to.
@@ -85,7 +97,7 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep) -> Pl
         HTTPException: 404 if the cluster does not exist.
 
     Returns:
-        The created plant including its ID and parent cluster.
+        The created plant including its ID, parent cluster and effective soil band.
     """
     require_cluster(repo, cluster_id)
     plant_id = repo.add_plant(
@@ -100,9 +112,10 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep) -> Pl
         ideal_humidity_max=request.ideal_humidity_max,
         notes=request.notes,
     )
-    repo.commit()
     plants = repo.get_plants_in_cluster(cluster_id)
-    return next(p for p in plants if p.id == plant_id)
+    detail = _reconciled_detail(repo, plant_db, next(p for p in plants if p.id == plant_id))
+    repo.commit()
+    return detail
 
 
 @router.get("/clusters/{cluster_id}/plants", response_model=list[PlantResponse])
@@ -118,13 +131,17 @@ def list_plants(cluster_id: int, repo: RepoDep) -> list[Plant]:
     return repo.get_plants_in_cluster(cluster_id)
 
 
-@router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantResponse, summary="Update a plant")
-def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep) -> Plant | None:
+@router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantDetailResponse, summary="Update a plant")
+def update_plant(
+    cluster_id: int, plant_id: int, request: UpdatePlantRequest, repo: RepoDep, plant_db: PlantDbDep
+) -> PlantDetailResponse:
     """Partially update a plant's care metadata.
 
     Only fields present in the request body are modified; omitted fields are
     left unchanged. An explicit `null` clears an optional field and is
     ignored for a required one. The plant must belong to the specified cluster.
+    A species or category that now resolves in the plant database resolves the
+    plant's ``plant_care_defaulted`` alert; one that no longer does opens it.
 
     Args:
         cluster_id: Cluster the plant belongs to.
@@ -132,16 +149,17 @@ def update_plant(cluster_id: int, plant_id: int, request: UpdatePlantRequest, re
         request: Fields to update — any subset of care metadata fields.
 
     Returns:
-        The updated plant.
+        The updated plant with its effective soil band and its source.
 
     Raises:
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
-    require_plant_in_cluster(repo, cluster_id, plant_id)
-    updated = repo.update_plant(plant_id, **request.model_dump(exclude_unset=True))
+    plant = require_plant_in_cluster(repo, cluster_id, plant_id)
+    repo.update_plant(plant_id, **request.model_dump(exclude_unset=True))
+    detail = _reconciled_detail(repo, plant_db, plant)
     repo.commit()
-    return updated
+    return detail
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Delete a plant")
@@ -164,6 +182,7 @@ def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> SuccessRespon
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
     repo.delete_plant(plant_id)
+    clear_care_alert(repo, plant_id)
     repo.commit()
     return SuccessResponse(success=True)
 

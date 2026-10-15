@@ -111,7 +111,9 @@ class TestClusterCRUD:
         doomed = client.post("/api/v1/clusters", json={"name": "Doomed"}).json()["id"]
         kept = client.post("/api/v1/clusters", json={"name": "Kept"}).json()["id"]
         for cid in (doomed, kept):
-            pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Fern"}).json()["id"]
+            pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Fern", "category": "fern"}).json()[
+                "id"
+            ]
             client.post(
                 f"/api/v1/clusters/{cid}/sensors",
                 json={

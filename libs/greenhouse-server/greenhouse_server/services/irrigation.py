@@ -36,6 +36,7 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation_jobs import _schedule_leak_check, record_leak_check_armed
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from greenhouse_server.services.plant_care import reconcile_cluster_care_alerts
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from greenhouse_server.services.sync import ClusterSnapshot, SyncService
 from greenhouse_server.services.weather import WeatherClient
@@ -639,6 +640,7 @@ class IrrigationService:
             result = self.run_irrigation_pipeline(cluster_id)
             action, detail = result.get("action", "error"), result.get("reason", "")
         sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
+        reconcile_cluster_care_alerts(self._repo, self._plant_db, cluster_id)
         head: CheckResult = {"cluster_id": cluster_id, "cluster_name": cluster.name, "action": action}
         return _check_result(head, detail_key, detail, alerts=alerts, maintenance=maintenance)
 

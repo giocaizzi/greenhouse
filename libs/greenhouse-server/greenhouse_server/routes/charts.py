@@ -6,11 +6,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from greenhouse_core.models import Plant
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
     HeatmapResponse,
     MultiMetricOverlayResponse,
+    PlantDetailResponse,
     PlantHealthTimelineResponse,
     PlantResponse,
 )
@@ -30,24 +30,34 @@ from greenhouse_server.services.charts import (
     build_plant_chart_payload,
     build_plant_health_timeline_payload,
 )
+from greenhouse_server.services.plant_care import plant_care
 
 router = APIRouter(tags=["charts"])
 
 
-@router.get("/plants/{plant_id}", response_model=PlantResponse)
-def get_plant(plant_id: int, repo: RepoDep) -> Plant:
+@router.get("/plants/{plant_id}", response_model=PlantDetailResponse)
+def get_plant(plant_id: int, repo: RepoDep, plant_db: PlantDbDep) -> PlantDetailResponse:
     """Fetch a single plant by ID across all clusters.
+
+    The response includes the soil band the plant is judged against
+    (``soil_moisture_min`` / ``soil_moisture_max``) and the plant-database
+    layer it comes from (``soil_band_source``: ``species``,
+    ``category_defaults``, ``category`` or ``builtin_fallback``, the 45-65 %
+    default used when neither species nor category resolves).
 
     Args:
         plant_id: Numeric plant identifier.
 
     Returns:
-        The plant record including its parent ``cluster_id``.
+        The plant record including its parent ``cluster_id`` and effective soil band.
 
     Raises:
         HTTPException: 404 if no plant with that ID exists.
     """
-    return require_plant(repo, plant_id)
+    plant = require_plant(repo, plant_id)
+    return PlantDetailResponse.model_validate(
+        {**PlantResponse.model_validate(plant).model_dump(), **plant_care(plant_db, plant)}
+    )
 
 
 @router.get("/plants/{plant_id}/chart-data", response_model=ChartPayloadResponse)
