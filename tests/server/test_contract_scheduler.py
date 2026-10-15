@@ -54,7 +54,14 @@ if TYPE_CHECKING:
     from greenhouse_core.repository import IrrigationRepository
 
 HOUR = 3600
-CORE_JOB_ORDER = ["sensor_sync", "check_all", "plant_health_snapshot", "sensor_anomaly", "device_health_monitor"]
+CORE_JOB_ORDER = [
+    "sensor_sync",
+    "check_all",
+    "plant_health_snapshot",
+    "alert_digest",
+    "sensor_anomaly",
+    "device_health_monitor",
+]
 
 
 @pytest.fixture
@@ -118,7 +125,7 @@ def _prefs_paused(p: Pipeline) -> bool:
 
 @pytest.mark.usefixtures("p")
 def test_registered_jobs_golden() -> None:
-    """The five built-in jobs, in registration order, with their triggers and defaults."""
+    """The six built-in jobs, in registration order, with their triggers and defaults."""
     view = _registry_view()
     assert [j["id"] for j in view["jobs"]] == CORE_JOB_ORDER
     assert_golden_json("orchestration/scheduler_registry.json", view)

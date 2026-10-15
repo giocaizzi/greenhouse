@@ -11,14 +11,14 @@
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "soil moderately dry (driest=35%); manual override of quiet hours (09:00–11:00 local)",
+    "reason": "soil moderately dry (driest=35% < 45.0%, species band); manual override of quiet hours (09:00–11:00 local)",
     "reasons": [
      {
       "code": "sensor_dry",
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      },
      {
@@ -96,7 +96,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       },
       {
@@ -146,7 +146,7 @@
      "weather": null
     },
     "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%); manual override of quiet hours (09:00–11:00 local)",
+    "reason_text": "soil moderately dry (driest=35% < 45.0%, species band); manual override of quiet hours (09:00–11:00 local)",
     "triggered_by": "manual"
    }
   ],
@@ -156,7 +156,7 @@
     "duration_minutes": 2,
     "id": 1,
     "irrigator_id": 1,
-    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35%); manual override of quiet hours (09:00–11:00 local)",
+    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35% < 45.0%, species band); manual override of quiet hours (09:00–11:00 local)",
     "timestamp": 1776247200,
     "triggered_by": "manual"
    }

@@ -235,6 +235,7 @@
   "url": "/scheduler/pause"
  },
  "scheduler_jobs_after": [
+  "alert_digest",
   "device_health_monitor",
   "plant_health_snapshot",
   "sensor_anomaly",

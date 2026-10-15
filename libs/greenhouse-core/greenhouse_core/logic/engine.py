@@ -52,6 +52,7 @@ from greenhouse_core.constants import (
     MIN_INTERVAL_HOURS,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
+    SENSOR_FLATLINE_ALERT_CODE,
     SNAPSHOT_LOOKBACK_HOURS,
     STRESS_DURATION_MINUTES,
     STRESS_INTERVAL_HOURS,
@@ -102,7 +103,7 @@ from greenhouse_core.logic.timing import (
     seasonal_multiplier,
 )
 from greenhouse_core.logic.trends import analyze_historical_trends
-from greenhouse_core.models import TRIGGERED_BY_AUTO, TriggeredBy
+from greenhouse_core.models import ENTITY_SENSOR, SOURCE_ANOMALY, TRIGGERED_BY_AUTO, TriggeredBy
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
@@ -217,7 +218,21 @@ class IrrigationLogic:
             self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
             _ensure_reason(decision)
         _note_settling_sensors(decision, inputs.snapshot.settling)
+        _note_flatlined_sensors(decision, self._flatlined_sensors(inputs.snapshot))
         return decision
+
+    def _flatlined_sensors(self, snapshot: SensorSnapshot) -> list[str]:
+        """Names of the sensors with a current soil reading and an unresolved ``sensor_flatline`` alert.
+
+        Keyed on the sensor (the alert's entity), not the cluster: a sensor moved
+        here keeps its open alert.
+        """
+        flat_ids = {
+            a.entity_id
+            for a in self.db.list_unresolved_alerts(SOURCE_ANOMALY)
+            if a.code == SENSOR_FLATLINE_ALERT_CODE and a.entity_type == ENTITY_SENSOR
+        }
+        return [s.name for s in snapshot.per_sensor if s.sensor_id in flat_ids and s.latest_soil_moisture is not None]
 
     def _base_or_emergency(
         self, cluster_id: int, evaluated_at: int, current_temp: float | None, inputs: _EngineInputs
@@ -274,6 +289,7 @@ class IrrigationLogic:
 
         plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
         band = cluster_band(plant_care)
+        sources = {p.id: self.plant_db.soil_band_source(species=p.species, category=p.category) for p in plants}
         return _EngineInputs(
             snapshot=snapshot,
             trends=trends,
@@ -283,7 +299,7 @@ class IrrigationLogic:
             humidity_range=get_ideal_humidity_range(plant_care),
             water_needs=analyze_water_needs(plant_care),
             light_month=light_month,
-            soil=current_soil(snapshot, plant_bands(plants, plant_care), band),
+            soil=current_soil(snapshot, plant_bands(plants, plant_care), band, sources),
             band=band,
         )
 
@@ -803,6 +819,17 @@ def _note_settling_sensors(decision: IrrigationDecision, settling: list[str]) ->
         )
 
 
+def _note_flatlined_sensors(decision: IrrigationDecision, flatlined: list[str]) -> None:
+    """Say which judged sensors have an open flatline alert (advisory, appended last: never the primary code)."""
+    if flatlined:
+        decision.add_reason(
+            code=TriggerCode.SENSOR_FLATLINE,
+            message=f"sensor flat-lined at an extreme (open alert), reading still judged: {', '.join(flatlined)}",
+            severity=Severity.WARNING,
+            icon="warning-circle",
+        )
+
+
 def _apply_emergency_rules(decision: IrrigationDecision, soil: list[SoilNow]) -> bool:
     """The device soil-dry alarm, then critical stress; True when one of them decides (terminal).
 
@@ -967,19 +994,20 @@ def _apply_soil_level(
         decision.confidence = CONFIDENCE_SENSOR_VERY_DRY
         decision.add_reason(
             code=TriggerCode.SENSOR_VERY_DRY,
-            message=f"soil very dry (driest={driest.value:.0f}% < {driest.band[0]}%)",
+            message=f"soil very dry (driest={driest.value:.0f}% < {driest.band[0]}%, {driest.source} band)",
             severity=Severity.WARNING,
             icon="drop",
         )
         return
     if dry:
+        driest = min(dry, key=lambda s: s.value)
         decision.action = Action.IRRIGATE
         decision.duration_minutes = DEFAULT_DURATION_MINUTES
         decision.interval_hours = DEFAULT_INTERVAL_HOURS
         decision.confidence = CONFIDENCE_SENSOR_DRY
         decision.add_reason(
             code=TriggerCode.SENSOR_DRY,
-            message=f"soil moderately dry (driest={min(s.value for s in dry):.0f}%)",
+            message=f"soil moderately dry (driest={driest.value:.0f}% < {driest.band[0]}%, {driest.source} band)",
             icon="drop",
         )
         return
