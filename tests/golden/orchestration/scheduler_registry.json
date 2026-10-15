@@ -1,6 +1,7 @@
 {
  "check_all_paused": false,
  "core_job_ids": [
+  "alert_digest",
   "check_all",
   "device_health_monitor",
   "plant_health_snapshot",
@@ -31,6 +32,14 @@
    "next_run_time": null,
    "paused": false,
    "trigger": "cron[hour='0', minute='30']"
+  },
+  {
+   "core": true,
+   "id": "alert_digest",
+   "name": "Daily critical alert digest",
+   "next_run_time": null,
+   "paused": false,
+   "trigger": "cron[hour='9', minute='0']"
   },
   {
    "core": true,
@@ -84,6 +93,18 @@
    "misfire_grace_time": "<unset>",
    "name": "Daily plant health snapshot",
    "trigger": "cron[hour='0', minute='30']",
+   "trigger_timezone": "UTC"
+  },
+  {
+   "args": [],
+   "coalesce": "<unset>",
+   "executor": "default",
+   "func": "greenhouse_server.scheduler:_alert_digest_job",
+   "id": "alert_digest",
+   "max_instances": "<unset>",
+   "misfire_grace_time": "<unset>",
+   "name": "Daily critical alert digest",
+   "trigger": "cron[hour='9', minute='0']",
    "trigger_timezone": "UTC"
   },
   {

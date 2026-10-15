@@ -10,6 +10,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi import FastAPI
 
 from greenhouse_core.constants import (
+    ALERT_DIGEST_HOUR,
+    ALERT_DIGEST_MINUTE,
     ANOMALY_SCAN_INTERVAL_MINUTES,
     HEALTH_POLL_IDLE_MINUTES,
     HEALTH_SNAPSHOT_HOUR,
@@ -22,6 +24,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import get_display_timezone, set_display_timezone
 from greenhouse_server import state
 from greenhouse_server.config import Settings
+from greenhouse_server.services.alerts import push_critical_digest
 from greenhouse_server.services.anomaly import SensorAnomalyService
 from greenhouse_server.services.health import PlantHealthService
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
@@ -96,7 +99,7 @@ CHECK_ALL_JOB_ID = "check_all"
 # Cron jobs that gate wall-clock-sensitive work and therefore MUST fire on the
 # same clock the engine reasons in (UserPreferences.timezone). These are
 # re-added by `reschedule_for_timezone` whenever the preference changes.
-_TZ_BOUND_CRON_JOBS = (CHECK_ALL_JOB_ID, "plant_health_snapshot")
+_TZ_BOUND_CRON_JOBS = (CHECK_ALL_JOB_ID, "plant_health_snapshot", "alert_digest")
 
 # IDs of the built-in jobs registered at startup, recorded by `_add_core_job`
 # as they are registered — so the protected set can never drift from what
@@ -230,6 +233,14 @@ def _add_tz_bound_cron_jobs(settings: Settings) -> None:
         job_id="plant_health_snapshot",
         name="Daily plant health snapshot",
     )
+    _add_core_job(
+        _alert_digest_job,
+        "cron",
+        hour=ALERT_DIGEST_HOUR,
+        minute=ALERT_DIGEST_MINUTE,
+        job_id="alert_digest",
+        name="Daily critical alert digest",
+    )
 
 
 def reschedule_for_timezone(tz_name: str | None, settings: Settings) -> None:
@@ -327,6 +338,12 @@ def _health_snapshot_job() -> None:
         repo = IrrigationRepository(session)
         svc = PlantHealthService(repo, state.plant_db(_job_app()))
         svc.snapshot_daily()
+
+
+def _alert_digest_job() -> None:
+    """Background job: push the daily digest of critical alerts still unresolved."""
+    with _job_session(_app, logger, "Alert digest job failed") as session:
+        push_critical_digest(IrrigationRepository(session), state.ntfy_notifier(_job_app()))
 
 
 def _build_irrigation_service(
