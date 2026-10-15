@@ -316,6 +316,42 @@
     </nav>
   </header>
   
+    <article class="card chart-card" id="plant-health">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Plant health</h3>
+          <small class="muted">daily score and the components it averages · last 7d + today</small>
+        </div>
+      </header>
+      <div class="chart-body">
+        
+        
+
+  <div class="chart-container chart-container--compact">
+    <canvas id="chart-plant-health-3" role="img"
+            aria-label="Eriobotrya japonica: health score and its components, last 7 days"></canvas>
+    <script type="application/json" id="chart-data-plant-health-3">{"days": 7, "plant_id": 3, "series": [{"key": "score", "label": "Health score", "points": [[1776247200, 50.0]]}, {"key": "soil_in_band_pct", "label": "Soil in band", "points": [[1776247200, 0.0]]}, {"key": "temp_in_band_pct", "label": "Temperature in band", "points": [[1776247200, 100.0]]}, {"key": "humidity_in_band_pct", "label": "Humidity in band", "points": [[1776247200, 100.0]]}, {"key": "efficiency", "label": "Watering efficiency", "points": [[1776247200, 0.0]]}], "species": "Eriobotrya japonica"}</script>
+    <script>
+      (function () {
+        var el = document.getElementById('chart-plant-health-3');
+        var raw = document.getElementById('chart-data-plant-health-3');
+        if (!el || !raw) return;
+        var data = JSON.parse(raw.textContent);
+        function draw() {
+          if (typeof window.renderHealthBreakdown === 'function') {
+            window.renderHealthBreakdown(el, data);
+          }
+        }
+        if (window.Chart) { draw(); }
+        else { window.addEventListener('load', draw); }
+      })();
+    </script>
+  </div>
+  <p class="muted"><small>latest: health score 50 · soil in band 0 · temperature in band 100 · humidity in band 100 · watering efficiency 0
+  </small></p>
+
+      </div>
+    </article>
     
       
       <article class="card chart-card">
@@ -437,14 +473,6 @@
         </div>
       </article>
     
-
-    <article class="card chart-card"
-             hx-get="/clusters/2/plants/3/health-fragment"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-      <header class="chart-head"><h3>Plant health (90d)</h3></header>
-      <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
-    </article>
   
 </section>
 

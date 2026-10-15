@@ -1,0 +1,28 @@
+{# One plant's health chart: the score (bold) over the components it averages. Needs `chart` (PlantHealthChart). #}
+{% if chart.series | selectattr("points") | list %}
+  <div class="chart-container chart-container--compact">
+    <canvas id="chart-plant-health-{{ chart.plant_id }}" role="img"
+            aria-label="{{ chart.species }}: health score and its components, last {{ chart.days }} days"></canvas>
+    <script type="application/json" id="chart-data-plant-health-{{ chart.plant_id }}">{{ chart | tojson }}</script>
+    <script>
+      (function () {
+        var el = document.getElementById('chart-plant-health-{{ chart.plant_id }}');
+        var raw = document.getElementById('chart-data-plant-health-{{ chart.plant_id }}');
+        if (!el || !raw) return;
+        var data = JSON.parse(raw.textContent);
+        function draw() {
+          if (typeof window.renderHealthBreakdown === 'function') {
+            window.renderHealthBreakdown(el, data);
+          }
+        }
+        if (window.Chart) { draw(); }
+        else { window.addEventListener('load', draw); }
+      })();
+    </script>
+  </div>
+  <p class="muted"><small>latest:
+    {%- for s in chart.series if s.points %} {{ s.label | lower }} {{ s.points[-1][1] | round | int }}{% if not loop.last %} ·{% endif %}{% endfor %}
+  </small></p>
+{% else %}
+  <p class="muted"><small>No health data yet: the score needs sensor readings attributed to this plant.</small></p>
+{% endif %}

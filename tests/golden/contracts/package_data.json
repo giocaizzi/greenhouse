@@ -71,6 +71,7 @@
   "web/templates/partials/_irrigator_row.html",
   "web/templates/partials/_monitor_panel.html",
   "web/templates/partials/_plant_care_panel.html",
+  "web/templates/partials/_plant_health_breakdown.html",
   "web/templates/partials/_plant_health_chart.html",
   "web/templates/partials/_plant_latest_card.html",
   "web/templates/partials/_plant_row.html",

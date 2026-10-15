@@ -8,7 +8,9 @@ from fastapi.testclient import TestClient
 
 from greenhouse_core.constants import DEFAULT_SOIL_MOISTURE_MIN
 from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.charts import _threshold_for_plant
+from server.conftest import app_of
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Plant
@@ -177,3 +179,26 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser() -> None:
             "max": 65.0,
             "source": "default",
         }
+
+
+def test_cluster_detail_health_chart_is_the_first_chart(seeded_client: TestClient) -> None:
+    """The cluster page opens its chart section with one health chart per plant, titled by species."""
+    with app_of(seeded_client).state.session_factory() as session:
+        IrrigationRepository(session).upsert_plant_health(plant_id=1, date_key="2020-01-01", score=64.0)
+        session.commit()
+    html = seeded_client.get("/clusters/1?hours=72").text
+    health = html.index('id="plant-health"')
+    assert health < html.index('id="chart-data-soil_moisture"')
+    assert '<i class="species">Monstera deliciosa</i>' in html[health:]
+    assert 'id="chart-data-plant-health-1"' in html
+    assert "last 7d + today" in html  # a 3-day range still shows a week of daily points
+    assert "latest: health score 64" in html
+
+
+def test_plant_dashboard_health_chart_replaces_the_soil_timeline(seeded_client: TestClient) -> None:
+    """The plant page shows the same health chart first, instead of the old soil-mean "health" card."""
+    html = seeded_client.get("/clusters/1/plants/1?hours=720").text
+    health = html.index('id="plant-health"')
+    assert health < html.index('id="chart-data-soil_moisture"')
+    assert "last 30d + today" in html
+    assert "/health-fragment" not in html

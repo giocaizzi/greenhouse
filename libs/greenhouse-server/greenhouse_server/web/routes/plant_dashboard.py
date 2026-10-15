@@ -112,6 +112,7 @@ def plant_dashboard(
             chart_payloads=chart_payloads_json,
             health_score=health_score,
             health_history=health_history,
+            health_chart=health_svc.health_chart(plant, query.hours // HOURS_PER_DAY),
             last_irrigated_relative=last_irrigated_relative,
         ),
     )

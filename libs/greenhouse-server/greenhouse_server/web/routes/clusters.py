@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import APIRouter, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from greenhouse_core.constants import CHART_RANGE_HOURS, DEFAULT_CHART_RANGE_HOURS
+from greenhouse_core.constants import CHART_RANGE_HOURS, DEFAULT_CHART_RANGE_HOURS, HOURS_PER_DAY
 from greenhouse_core.logic.timing import active_quiet_window
 from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
+    PlantHealthServiceDep,
     RepoDep,
     not_found_as_404,
     require_cluster,
@@ -178,15 +180,24 @@ def _detail_data(repo: IrrigationRepository, cluster_id: int, hours: int) -> dic
     }
 
 
+@dataclass(frozen=True, slots=True)
+class _DetailQuery:
+    """``GET /clusters/{cluster_id}``: the cluster and the charts' look-back."""
+
+    cluster_id: Annotated[int, Path()]
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS
+
+
 @router.get("/clusters/{cluster_id}")
 def cluster_detail(
     request: Request,
-    cluster_id: int,
     svc: ClusterServiceDep,
     repo: RepoDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
+    health_svc: PlantHealthServiceDep,
+    query: Annotated[_DetailQuery, Depends()],
 ) -> Response:
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
+    cluster_id, hours = query.cluster_id, query.hours
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
 
@@ -210,6 +221,10 @@ def cluster_detail(
             cluster_id=cluster_id,
             hours=hours,
             quiet_active_now=quiet_window is not None,
+            # One health chart per plant (small multiples), first in the chart section.
+            health_charts=[
+                health_svc.health_chart(p, hours // HOURS_PER_DAY) for p in repo.get_plants_in_cluster(cluster_id)
+            ],
             **data,
         ),
     )
