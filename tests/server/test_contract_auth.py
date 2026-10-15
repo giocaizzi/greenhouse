@@ -275,7 +275,7 @@ class TestJwt:
             ),
             lambda: jwt.encode(
                 {"sub": "5", "iat": FROZEN_TS, "exp": FROZEN_TS + 60, "aud": JWT_AUDIENCE},
-                TEST_AUTH_SECRET,
+                TEST_AUTH_SECRET * 2,  # >= 64 bytes, the RFC 7518 minimum for HS512 (else InsecureKeyLengthWarning)
                 algorithm="HS512",
             ),
             lambda: jwt.encode(

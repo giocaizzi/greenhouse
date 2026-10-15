@@ -58,6 +58,11 @@ testpaths = ["tests"]
 # A hung test fails with a traceback after 5 min instead of eating the CI job (slowest golden test ~40 s locally).
 timeout = 300
 pythonpath = ["libs/greenhouse-core", "libs/greenhouse-server", "libs/greenhouse-cli", "tests"]
+# fastapi-mcp 0.4.0 (types.py) calls the deprecated BaseModel.__get_pydantic_core_schema__ at import; nothing to fix
+# on our side until it is replaced or fixed upstream (#119). Any other warning stays visible.
+filterwarnings = [
+    "ignore:The `__get_pydantic_core_schema__` method of the `BaseModel` class is deprecated:pydantic.warnings.PydanticDeprecatedSince211",
+]
 markers = ["dotenv: keep Settings' real `.env` loading (tests/conftest.py disables it for every other test)"]
 
 [tool.mypy]
