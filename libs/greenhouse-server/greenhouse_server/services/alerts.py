@@ -15,6 +15,8 @@ from greenhouse_core.constants import (
     ALERT_RENOTIFY_OCCURRENCES,
     ALERT_RENOTIFY_SEVERITIES,
     ALERT_SCAN_LIMIT,
+    SECONDS_PER_DAY,
+    SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
@@ -277,3 +279,32 @@ def clear_alert(
     alert = find_open_alert(repo, source=source, code=code, **entity)
     if alert is not None:
         repo.resolve_alert(alert.id)
+
+
+def _age_text(seconds: int) -> str:
+    """``"3d 4h"``, or ``"5h"`` under a day: how long the oldest alert has been open."""
+    days, rest = divmod(max(0, seconds), SECONDS_PER_DAY)
+    hours = rest // SECONDS_PER_HOUR
+    return f"{days}d {hours}h" if days else f"{hours}h"
+
+
+def push_critical_digest(repo: IrrigationRepository, notifier: NtfyClient | None) -> None:
+    """Push one daily reminder of the critical alerts still unresolved: count and oldest age (#181).
+
+    Open and acknowledged both count: acknowledging says "seen", not "fixed", and an
+    acknowledged leak alert still holds irrigation. Nothing unresolved means no push;
+    the ``notify_alerts`` preference is honoured via :func:`maybe_notify`.
+    """
+    alerts = repo.list_unresolved_alerts_by_severity("critical")
+    if not alerts:
+        return
+    oldest = alerts[0]
+    count = len(alerts)
+    title = f"{count} critical alert{'s' if count != 1 else ''} still open"
+    message = f"Oldest, open {_age_text(int(time.time()) - oldest.first_seen_at)}: {oldest.title}"
+    maybe_notify(
+        notifier,
+        repo.get_preferences(),
+        "alerts",
+        lambda n: n.notify_alert(severity="critical", title=title, message=message),
+    )

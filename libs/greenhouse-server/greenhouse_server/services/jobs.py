@@ -1,7 +1,7 @@
 """Session scaffolding outside a request: one spelling per transaction shape.
 
 Lives below the scheduler (``app > … > scheduler > services``) so services may use it too.
-:func:`job_session` is the job transaction (the scheduler's five jobs, the leak check, the pump
+:func:`job_session` is the job transaction (the scheduler's six jobs, the leak check, the pump
 watcher); :func:`read_session` is the bare open/close for code that handles its own errors
 (startup reads, the leak-check re-arm, the health-monitor bootstrap). A job passes its module
 logger, so each failure record keeps its module's logger name.

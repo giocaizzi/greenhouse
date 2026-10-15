@@ -19,7 +19,7 @@ from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from server.conftest import _make_stubbed_app
 
 DEFAULT_JOB_IDS = sorted(
-    ["sensor_sync", "check_all", "plant_health_snapshot", "sensor_anomaly", "device_health_monitor"]
+    ["sensor_sync", "check_all", "plant_health_snapshot", "alert_digest", "sensor_anomaly", "device_health_monitor"]
 )
 
 
