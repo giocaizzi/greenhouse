@@ -2,6 +2,8 @@
  "chart": {
   "datasets": [
    {
+    "label": "Glitchy (unassigned)",
+    "plant_id": null,
     "points": [
      [
       1776247080,
@@ -12,6 +14,8 @@
     "sensor_name": "Glitchy"
    },
    {
+    "label": "Monstera deliciosa · Sensor 1",
+    "plant_id": 1,
     "points": [
      [
       1776230940,
@@ -300,6 +304,8 @@
  "plant_chart": {
   "datasets": [
    {
+    "label": "Monstera deliciosa · Sensor 1",
+    "plant_id": 1,
     "points": [
      [
       1776230940,

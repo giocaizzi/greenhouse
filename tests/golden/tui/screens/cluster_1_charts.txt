@@ -4,8 +4,8 @@
  Soil moisture · 3 days   m: next metric   [ / ]: shorter / longer range
                                                Soil moisture (%) — last 3 days
      ┌──────────────────────────────────────────────────┬────────────────────────┬────────────────────────┬────────────┐
-100.0┤ ⢕⢕ Monstera probe                                │                        │                        │            │
-     │ ⢕⢕ Nephrolepis probe                             │                        │                        │            │
+100.0┤ ⢕⢕ Monstera deliciosa · Monstera probe           │                        │                        │            │
+     │ ⢕⢕ Nephrolepis exaltata · Nephrolepis probe      │                        │                        │            │
      │                                                  │                        │                        │            │
  83.3┤                                                  │                        │                        │            │
      │                                                  │                        │                        │            │
