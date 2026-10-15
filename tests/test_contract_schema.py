@@ -41,7 +41,7 @@ TABLE_COUNT = 17
 
 # sha256 of "\n".join(DDL statements), re-recorded for sensors/plants.archived_at (#149).
 PHASE0_DDL_SHA256 = (
-    "1e66a04c2fc7e5caa9ae0b6339c19a1c771f31e8a5612b0dfc47cd62fbc3dbd4"  # gitleaks:allow — content hash, not a secret
+    "d390122c949005e084a6f0d5a1881258fdd93f37125757dd1454387ea012da41"  # gitleaks:allow — content hash, not a secret
 )
 
 ALEMBIC_HEAD = "c4d6f8a0b215"

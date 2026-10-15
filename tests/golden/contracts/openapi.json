@@ -7230,6 +7230,18 @@
       "type": "integer",
       "title": "Cluster Id"
      },
+     "archived_at": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Archived At",
+      "description": "Unix seconds it was archived; null while active"
+     },
      "soil_moisture_min": {
       "type": "number",
       "title": "Soil Moisture Min"

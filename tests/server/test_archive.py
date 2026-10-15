@@ -11,7 +11,6 @@ import pytest
 from golden import FROZEN_TS
 from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.logic.engine import IrrigationLogic
-from greenhouse_core.models import ActivityEvent
 from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
@@ -19,6 +18,8 @@ if TYPE_CHECKING:
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
+
+    from greenhouse_core.models import ActivityEvent
 
 SENSOR_URL = "/api/v1/clusters/1/sensors/1"
 PLANT_URL = "/api/v1/clusters/1/plants/1"
@@ -65,9 +66,7 @@ def _events(repo: IrrigationRepository, code: str) -> list[ActivityEvent]:
     return [e for e in repo.list_activity_events(limit=50) if e.code == code]
 
 
-def test_archive_then_restore_keeps_id_readings_and_assignments(
-    seeded: TestClient, repo: IrrigationRepository
-) -> None:
+def test_archive_then_restore_keeps_id_readings_and_assignments(seeded: TestClient, repo: IrrigationRepository) -> None:
     """Archived: hidden from listings, still there with include_archived; restored: same id and history."""
     assert seeded.delete(SENSOR_URL).status_code == HTTPStatus.OK
 

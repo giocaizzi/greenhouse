@@ -45,7 +45,7 @@ if typing.TYPE_CHECKING:
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "fe4a51e4f739da8822f2d8aa92285557369de70a23d12ce3f64cb4f70dae8b4b"  # gitleaks:allow — content hash, not a secret
+    "526c21c00bd70dedac2b3e7fcd2adfae846f8a58c515ee58f2a21ac573fb0382"  # gitleaks:allow — content hash, not a secret
 )
 # Headline counts of the pinned route table.
 API_OPERATION_COUNT = 87
