@@ -1,4 +1,4 @@
-.PHONY: help install test lint format check check-fast coverage serve clean lint-imports typecheck sizecheck \
+.PHONY: audit help install test lint format check check-fast coverage serve clean lint-imports typecheck sizecheck \
         docker-build docker-up docker-down docker-logs docker-shell \
         pre-commit-install pre-commit-run
 
@@ -27,6 +27,11 @@ format: ## Apply ruff formatter
 check-fast: lint lint-imports typecheck sizecheck ## Quick gate (no tests): what the agents' stop hook runs; CI and `make check` keep the full suite
 
 check: pre-commit-run lint-imports typecheck sizecheck coverage ## CI parity: pre-commit hooks (lint/format/hygiene) + import contracts + strict types + size limits + coverage gate
+
+audit: ## Published advisories in uv.lock (pip-audit) + missing/unused dependencies per package (deptry)
+	uv export --frozen --no-emit-workspace --no-hashes -o /tmp/greenhouse-audit-req.txt
+	uvx pip-audit --no-deps --disable-pip -r /tmp/greenhouse-audit-req.txt
+	@for p in core server cli; do (cd libs/greenhouse-$$p && uv run --with deptry deptry .) || exit 1; done
 
 lint-imports: ## Check the import-linter layering contracts
 	uv run lint-imports
