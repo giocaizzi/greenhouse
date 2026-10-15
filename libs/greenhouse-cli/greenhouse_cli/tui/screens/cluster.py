@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -258,12 +259,21 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         ids = [p["id"] for p in status.get("plants", [])]
         if ids and ids != self._plants_loaded:
             self._plants_loaded = ids
-            self.run_worker(self._load_plant_health(ids[0]), group="plant-health", exclusive=True)
+            self._chart_plant(ids[0])
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Follow the plant cursor with that plant's chart."""
         if event.data_table.id == "plants-table" and event.row_key.value:
-            self.run_worker(self._load_plant_health(int(event.row_key.value)), group="plant-health", exclusive=True)
+            self._chart_plant(int(event.row_key.value))
+
+    def _chart_plant(self, plant_id: int) -> None:
+        """Start the exclusive plant chart worker as a callable, so a superseded one leaves no unawaited coroutine."""
+        # partial, not a lambda: Textual needs a coroutine function. mypy infers Never for it in WorkType
+        self.run_worker(
+            partial(self._load_plant_health, plant_id),  # type: ignore[arg-type]
+            group="plant-health",
+            exclusive=True,
+        )
 
     async def _load_plant_health(self, plant_id: int) -> None:
         """Chart one plant: its 72h soil moisture, or its 90-day health timeline."""
@@ -335,7 +345,7 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         if self.active_tab == "tab-plants":
             self.plant_chart = "moisture" if self.plant_chart == "health" else "health"
             if self._plant_id is not None:
-                self.run_worker(self._load_plant_health(self._plant_id), group="plant-health", exclusive=True)
+                self._chart_plant(self._plant_id)
             return
         self.metric = METRIC_ORDER[(METRIC_ORDER.index(self.metric) + 1) % len(METRIC_ORDER)]
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
