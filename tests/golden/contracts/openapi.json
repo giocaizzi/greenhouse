@@ -499,7 +499,7 @@
      "plants"
     ],
     "summary": "Add Plant",
-    "description": "Add a plant to a cluster.\n\nCare thresholds (water needs, temperature/humidity ranges) can be supplied\ndirectly or left null to be filled in later via POST /plants/sync, which\nlooks them up in the evidence-based plant database.\n\nArgs:\n    cluster_id: ID of the cluster the plant belongs to.\n    request: Species and optional plant-care fields.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\nReturns:\n    The created plant including its ID and parent cluster.",
+    "description": "Add a plant to a cluster.\n\nCare thresholds (water needs, temperature/humidity ranges) can be supplied\ndirectly or left null to be filled in later via POST /plants/sync, which\nlooks them up in the evidence-based plant database. The response names the\nsoil band the plant is judged against and its source; when neither species\nnor category is in the plant database (``soil_band_source`` =\n``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened.\n\nArgs:\n    cluster_id: ID of the cluster the plant belongs to.\n    request: Species and optional plant-care fields.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\nReturns:\n    The created plant including its ID, parent cluster and effective soil band.",
     "operationId": "add_plant",
     "security": [
      {
@@ -533,7 +533,7 @@
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/PlantResponse"
+         "$ref": "#/components/schemas/PlantDetailResponse"
         }
        }
       }
@@ -607,7 +607,7 @@
      "plants"
     ],
     "summary": "Update a plant",
-    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The plant must belong to the specified cluster.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
+    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The plant must belong to the specified cluster.\nA species or category that now resolves in the plant database resolves the\nplant's ``plant_care_defaulted`` alert; one that no longer does opens it.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant with its effective soil band and its source.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
     "operationId": "update_plant",
     "security": [
      {
@@ -650,7 +650,7 @@
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/PlantResponse"
+         "$ref": "#/components/schemas/PlantDetailResponse"
         }
        }
       }
@@ -2680,7 +2680,7 @@
      "charts"
     ],
     "summary": "Get Plant",
-    "description": "Fetch a single plant by ID across all clusters.\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The plant record including its parent ``cluster_id``.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
+    "description": "Fetch a single plant by ID across all clusters.\n\nThe response includes the soil band the plant is judged against\n(``soil_moisture_min`` / ``soil_moisture_max``) and the plant-database\nlayer it comes from (``soil_band_source``: ``species``,\n``category_defaults``, ``category`` or ``builtin_fallback``, the 45-65 %\ndefault used when neither species nor category resolves).\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The plant record including its parent ``cluster_id`` and effective soil band.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
     "operationId": "get_plant",
     "security": [
      {
@@ -2704,7 +2704,7 @@
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/PlantResponse"
+         "$ref": "#/components/schemas/PlantDetailResponse"
         }
        }
       }
@@ -6840,6 +6840,139 @@
     ],
     "title": "OverlayDataset",
     "description": "One normalised series in the multi-metric overlay chart."
+   },
+   "PlantDetailResponse": {
+    "properties": {
+     "species": {
+      "type": "string",
+      "title": "Species"
+     },
+     "category": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Category"
+     },
+     "water_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Water Needs"
+     },
+     "light_needs": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Light Needs"
+     },
+     "ideal_temp_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ideal Temp Min"
+     },
+     "ideal_temp_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ideal Temp Max"
+     },
+     "ideal_humidity_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ideal Humidity Min"
+     },
+     "ideal_humidity_max": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ideal Humidity Max"
+     },
+     "notes": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Notes"
+     },
+     "id": {
+      "type": "integer",
+      "title": "Id"
+     },
+     "cluster_id": {
+      "type": "integer",
+      "title": "Cluster Id"
+     },
+     "soil_moisture_min": {
+      "type": "number",
+      "title": "Soil Moisture Min"
+     },
+     "soil_moisture_max": {
+      "type": "number",
+      "title": "Soil Moisture Max"
+     },
+     "soil_band_source": {
+      "type": "string",
+      "enum": [
+       "species",
+       "category_defaults",
+       "category",
+       "builtin_fallback"
+      ],
+      "title": "Soil Band Source"
+     }
+    },
+    "type": "object",
+    "required": [
+     "species",
+     "id",
+     "cluster_id",
+     "soil_moisture_min",
+     "soil_moisture_max",
+     "soil_band_source"
+    ],
+    "title": "PlantDetailResponse",
+    "description": "A plant with the soil band it is judged against and the plant-DB layer that band comes from.\n\n``soil_band_source`` is ``builtin_fallback`` when neither the species nor the\ncategory resolves in the plant database: the plant then runs on the default\n45-65 % band and a ``plant_care_defaulted`` info alert is open on it."
    },
    "PlantHealthDailyResponse": {
     "properties": {
