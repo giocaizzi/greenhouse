@@ -3,14 +3,13 @@
 from fastapi import APIRouter
 
 from greenhouse_core.schemas import SystemHealthResponse
-from greenhouse_server.deps import RepoDep, SyncServiceDep
-from greenhouse_server.services.system_health import SystemHealthService
+from greenhouse_server.deps import SystemHealthServiceDep
 
 router = APIRouter(tags=["scheduler"])
 
 
 @router.get("/health/system", response_model=SystemHealthResponse)
-def system_health(repo: RepoDep, sync_svc: SyncServiceDep) -> SystemHealthResponse:
+def system_health(svc: SystemHealthServiceDep) -> SystemHealthResponse:
     """Return a detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.
 
     A richer sibling of GET /health. Checks every sensor's most recent reading
@@ -26,5 +25,4 @@ def system_health(repo: RepoDep, sync_svc: SyncServiceDep) -> SystemHealthRespon
         count, last sync timestamp, and a per-device status list (up to 20
         devices; an irrigator row carries its consecutive failed starts).
     """
-    svc = SystemHealthService(repo, sync_svc)
     return svc.pulse()

@@ -8773,6 +8773,10 @@
       "type": "integer",
       "title": "Irrigators Failing"
      },
+     "irrigators_offline": {
+      "type": "integer",
+      "title": "Irrigators Offline"
+     },
      "open_alerts": {
       "type": "integer",
       "title": "Open Alerts"
@@ -8796,6 +8800,7 @@
      "sensors_fresh",
      "irrigators_total",
      "irrigators_failing",
+     "irrigators_offline",
      "open_alerts",
      "devices"
     ],
