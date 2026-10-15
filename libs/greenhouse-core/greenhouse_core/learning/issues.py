@@ -73,7 +73,7 @@ def _drainage_alert(db: IrrigationRepository, sensor: Sensor, profile: PlantProf
     """Rapid drainage, attributed to transpiration when recent daytime light is high."""
     if not profile.avg_drainage_per_hour < LEARNING_RAPID_DRAINAGE_THRESHOLD:
         return None
-    recent_readings = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
+    recent_readings = clean_readings(db.get_judged_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
     lux_readings = daytime_lux_readings(recent_readings)
     avg_lux = statistics.mean(lux_readings) if lux_readings else None
 
@@ -110,7 +110,7 @@ def _chronic_underwatering_alert(
     """The soil never reaches the plant's target minimum over the last week."""
     target_min, _ = moisture_target_range(care)
 
-    recent = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
+    recent = clean_readings(db.get_judged_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
     if not recent:
         return None
     max_recent = max((r.soil_moisture for r in recent if r.soil_moisture is not None), default=0)
@@ -190,7 +190,7 @@ def _latest_moisture_by_sensor(db: IrrigationRepository, sensors: list[Sensor]) 
         # Newest-first cleaned view. `get_recent_readings` returns DESC, so the
         # *first* three entries are the latest three — slicing from the tail
         # would have averaged the OLDEST samples in the window instead.
-        readings = clean_readings_desc(db.get_recent_readings(sensor.id, hours=LEARNING_CONFLICT_LOOKBACK_HOURS))
+        readings = clean_readings_desc(db.get_judged_readings(sensor.id, hours=LEARNING_CONFLICT_LOOKBACK_HOURS))
         moisture_values = [r.soil_moisture for r in readings if r.soil_moisture is not None]
         if moisture_values:
             sensor_moisture[sensor.id] = statistics.mean(moisture_values[:LEARNING_LATEST_SAMPLES])
@@ -313,7 +313,7 @@ def _low_light_alerts(
         min_lux = care.get("ideal_light_lux_min")
         if not min_lux:
             continue
-        readings_7d = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
+        readings_7d = clean_readings(db.get_judged_readings(sensor.id, hours=LEARNING_WEEK_HOURS))
         lux_vals = daytime_lux_readings(readings_7d)
         if len(lux_vals) < LEARNING_MIN_ENV_SAMPLES:
             continue
@@ -353,7 +353,7 @@ def _low_env_humidity_alerts(
         ideal_hum_min = care2.get("ideal_humidity_min")
         if not ideal_hum_min:
             continue
-        readings_48h = clean_readings(db.get_recent_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
+        readings_48h = clean_readings(db.get_judged_readings(sensor.id, hours=LEARNING_DRAINAGE_LUX_LOOKBACK_HOURS))
         hum_vals = [r.env_humidity for r in readings_48h if r.env_humidity is not None]
         if len(hum_vals) < LEARNING_MIN_ENV_SAMPLES:
             continue

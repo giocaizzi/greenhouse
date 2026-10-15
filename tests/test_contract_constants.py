@@ -35,7 +35,7 @@ from greenhouse_core.logic import DEVICE_BLOCKING_CODES, decision
 from greenhouse_core.logic.decision import Action, Severity, TriggerCode
 
 MIN_CONSTANTS = 100
-TRIGGER_CODE_COUNT = 48  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
+TRIGGER_CODE_COUNT = 49  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED, SENSOR_SETTLING (#145)
 PINNED_MIN_COOLDOWN_HOURS = 6  # CLAUDE.md invariant 3
 PINNED_LEAK_HOLD_HOURS = 24  # CLAUDE.md invariant 11
 
@@ -122,7 +122,7 @@ def test_trigger_code_count_and_extremes() -> None:
     """The trigger-code count and first / last members are pinned."""
     members = list(TriggerCode)
     assert len(members) == TRIGGER_CODE_COUNT  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED
-    assert (members[0].value, members[-1].value) == ("no_plants", "dry_run_global")
+    assert (members[0].value, members[-1].value) == ("no_plants", "sensor_settling")
     assert len({m.value for m in members}) == TRIGGER_CODE_COUNT  # no aliases
 
 

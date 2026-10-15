@@ -71,9 +71,11 @@ def get_recent_sensor_data(
     The snapshot drives every downstream rule (stress, conflict, adjustments)
     and is persisted with the decision so the audit log can replay the inputs.
     ``now`` (default: the wall clock) dates each sensor's current reading; one
-    older than SENSOR_READING_STALE_SECONDS is not current.
+    older than SENSOR_READING_STALE_SECONDS is not current. A sensor still inside
+    its post-move settle window contributes nothing and is listed in ``settling``.
     """
-    fresh_since = (now if now is not None else int(time.time())) - SENSOR_READING_STALE_SECONDS
+    now_ts = now if now is not None else int(time.time())
+    fresh_since = now_ts - SENSOR_READING_STALE_SECONDS
     sensors = db.get_sensors_in_cluster(cluster_id)
     if not sensors:
         return SensorSnapshot()
@@ -81,7 +83,9 @@ def get_recent_sensor_data(
     # Clean per sensor (range-gate + spike-reject) so spurious samples don't
     # drag the cluster aggregates — especially min_soil_moisture, which the
     # engine uses as "the driest plant drives the call".
-    cleaned = [(sensor, clean_readings(db.get_recent_readings(sensor.id, hours=hours))) for sensor in sensors]
+    # Judged view: after a move only the sensor's readings from its current plant,
+    # past the settle window, count — never a value measured in the old pot (#145).
+    cleaned = [(sensor, clean_readings(db.get_judged_readings(sensor.id, hours=hours))) for sensor in sensors]
     pooled = [r for _, readings in cleaned for r in readings]
     all_soil = [r.soil_moisture for r in pooled if r.soil_moisture is not None]
     daytime_light = [r.light for r in pooled if r.light is not None and r.light > NIGHT_LUX_THRESHOLD]
@@ -96,4 +100,5 @@ def get_recent_sensor_data(
         avg_light=_mean_or_none(daytime_light),
         per_sensor=[_per_sensor_snapshot(sensor, readings, fresh_since) for sensor, readings in cleaned],
         water_warnings=sorted(water_warnings),
+        settling=sorted(sensor.name for sensor in sensors if db.judged_since(sensor.id) > now_ts),
     )

@@ -169,7 +169,7 @@ class SyncService:
 
         for sensor in sensors:
             # The decision engine's own look-back, so both read the same slice of history.
-            readings = clean_readings_desc(self._repo.get_recent_readings(sensor.id, hours=SNAPSHOT_LOOKBACK_HOURS))
+            readings = clean_readings_desc(self._repo.get_judged_readings(sensor.id, hours=SNAPSHOT_LOOKBACK_HOURS))
             for field, bucket in (
                 ("temperature", temperatures),
                 ("env_humidity", humidities),

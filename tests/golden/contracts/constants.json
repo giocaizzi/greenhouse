@@ -75,6 +75,7 @@
   "MIN_INTERVAL_HOURS": "6",
   "OFFLINE_AFTER_MINUTES": "30",
   "SENSOR_HEALTH_BACKFILL_WINDOW": "5",
+  "SENSOR_MOVE_SETTLE_SECONDS": "1800",
   "SENSOR_PHYSICAL_RANGES": "{'temperature': (-40.0, 80.0), 'soil_moisture': (0.0, 100.0), 'env_humidity': (0.0, 100.0), 'light': (0.0, 200000.0)}",
   "SENSOR_READING_STALE_SECONDS": "14400",
   "SIGNAL_LOSS_THRESHOLD": "30",
@@ -350,6 +351,10 @@
    [
     "DRY_RUN_GLOBAL",
     "dry_run_global"
+   ],
+   [
+    "SENSOR_SETTLING",
+    "sensor_settling"
    ]
   ]
  }

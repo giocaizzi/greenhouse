@@ -1,12 +1,15 @@
 """Sensor CRUD routes."""
 
+import time
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 
 from greenhouse_core.models import Sensor
+from greenhouse_core.repository import InvalidMoveTimeError
 from greenhouse_core.schemas import (
     CreateSensorRequest,
+    MoveSensorRequest,
     SensorAssignmentListResponse,
     SensorAssignmentResponse,
     SensorListResponse,
@@ -201,6 +204,59 @@ def list_sensor_assignments(sensor_id: int, repo: RepoDep) -> SensorAssignmentLi
         HTTPException: 404 if the sensor does not exist.
     """
     require_sensor(repo, sensor_id)
+    rows = repo.list_sensor_assignments(sensor_id)
+    return SensorAssignmentListResponse(
+        sensor_id=sensor_id,
+        assignments=[SensorAssignmentResponse.model_validate(r) for r in rows],
+    )
+
+
+@router.post(
+    "/clusters/{cluster_id}/sensors/{sensor_id}/move",
+    response_model=SensorAssignmentListResponse,
+    summary="Move a sensor to another plant, effective at a given time",
+)
+def move_sensor(
+    cluster_id: int, sensor_id: int, request: MoveSensorRequest, repo: RepoDep
+) -> SensorAssignmentListResponse:
+    """Record that a sensor was physically moved to another plant (or detached), and when.
+
+    Readings are attributed to a plant by the sensor's assignment history, so
+    dating the move right matters: readings before `effective_at` stay with the
+    old plant, readings after it (past a settle window, 30 min by default, while
+    the probe is not judged) count for the new one. Sending the plant the sensor
+    is already on re-dates its last move instead — e.g. a move done at 09:00 but
+    entered at 14:00. Writes a `sensor_reassigned` activity event.
+
+    Args:
+        cluster_id: Cluster the sensor belongs to.
+        sensor_id: Numeric sensor identifier.
+        request: `plant_id` (null detaches) and optional `effective_at` (Unix
+            seconds, default now).
+
+    Returns:
+        The sensor's assignment history after the move, oldest first.
+
+    Raises:
+        HTTPException: 404 if the sensor does not exist or belongs to a
+            different cluster, or if `plant_id` is not a plant of that cluster;
+            400 if `effective_at` is in the future, before the current
+            assignment started, or would overlap the previous assignment.
+    """
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    try:
+        ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
+    now = int(time.time())
+    when = request.effective_at if request.effective_at is not None else now
+    if when > now:
+        raise HTTPException(status_code=400, detail="effective_at: must not be in the future")
+    try:
+        repo.move_sensor(sensor_id, request.plant_id, when=when)
+    except InvalidMoveTimeError as exc:
+        raise HTTPException(status_code=400, detail=f"effective_at: {exc}") from None
+    repo.commit()
     rows = repo.list_sensor_assignments(sensor_id)
     return SensorAssignmentListResponse(
         sensor_id=sensor_id,

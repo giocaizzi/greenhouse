@@ -216,6 +216,7 @@ class IrrigationLogic:
         else:
             self._apply_adjustments(cluster, cluster_id, decision, inputs, evaluated_at)
             _ensure_reason(decision)
+        _note_settling_sensors(decision, inputs.snapshot.settling)
         return decision
 
     def _base_or_emergency(
@@ -790,6 +791,16 @@ def _ensure_reason(decision: IrrigationDecision) -> None:
         message="readings within range — no action needed",
         icon="check-circle",
     )
+
+
+def _note_settling_sensors(decision: IrrigationDecision, settling: list[str]) -> None:
+    """Say which sensors sat out the call because they were just moved (appended last: never the primary code)."""
+    if settling:
+        decision.add_reason(
+            code=TriggerCode.SENSOR_SETTLING,
+            message=f"sensor just moved, readings not judged yet: {', '.join(settling)}",
+            icon="clock",
+        )
 
 
 def _apply_emergency_rules(decision: IrrigationDecision, soil: list[SoilNow]) -> bool:

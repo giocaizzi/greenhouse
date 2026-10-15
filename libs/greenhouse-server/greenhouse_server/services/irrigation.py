@@ -202,7 +202,7 @@ def _monitor_readings(repo: IrrigationRepository, sensor_id: int) -> "list[Clean
     series cut to ``MONITOR_LOOKBACK_HOURS``.
     """
     cutoff = int(_time.time()) - MONITOR_LOOKBACK_HOURS * SECONDS_PER_HOUR
-    history = clean_readings_desc(repo.get_recent_readings(sensor_id, hours=SNAPSHOT_LOOKBACK_HOURS))
+    history = clean_readings_desc(repo.get_judged_readings(sensor_id, hours=SNAPSHOT_LOOKBACK_HOURS))
     return [r for r in history if r.timestamp >= cutoff]
 
 

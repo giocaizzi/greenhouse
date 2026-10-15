@@ -227,7 +227,7 @@ class AlertOptions(TypedDict, total=False):
 
 
 class PlantHealthScores(TypedDict, total=False):
-    """``upsert_plant_health``'s sub-scores (``None`` each), ``sample_count`` (0) and ``timestamp`` (now)."""
+    """``upsert_plant_health``'s sub-scores and ``sensor_ids`` (``None`` each), ``sample_count`` (0), ``timestamp``."""
 
     soil_in_band_pct: float | None
     temp_in_band_pct: float | None
@@ -235,6 +235,11 @@ class PlantHealthScores(TypedDict, total=False):
     efficiency: float | None
     sample_count: int
     timestamp: int | None
+    sensor_ids: list[int] | None
+
+
+class InvalidMoveTimeError(ValueError):
+    """A sensor move's ``effective_at`` would precede the current link or overlap the previous assignment."""
 
 
 class SameClusterMoveError(ValueError):

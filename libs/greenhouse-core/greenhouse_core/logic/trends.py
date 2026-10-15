@@ -34,7 +34,7 @@ def _pooled_clean_readings(db: IrrigationRepository, sensors: Sequence[Sensor], 
     """
     pooled: list[CleanedReading] = []
     for sensor in sensors:
-        pooled.extend(clean_readings(db.get_recent_readings(sensor.id, hours=hours)))
+        pooled.extend(clean_readings(db.get_judged_readings(sensor.id, hours=hours)))
     return pooled
 
 

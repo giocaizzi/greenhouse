@@ -295,6 +295,19 @@ class SensorAssignmentListResponse(BaseModel):
     assignments: list[SensorAssignmentResponse]
 
 
+class MoveSensorRequest(BaseModel):
+    """Move a sensor to another plant (or detach it), effective at a given time."""
+
+    plant_id: int | None = Field(description="Plant the sensor now measures; null detaches it from any plant")
+    effective_at: int | None = Field(
+        default=None,
+        description=(
+            "Unix seconds the physical move happened (default: now); not in the future and not before "
+            "the current assignment started. Same plant as now = re-date the last move."
+        ),
+    )
+
+
 # --- Irrigation Window ---
 
 
@@ -866,6 +879,10 @@ class PlantHealthDailyResponse(BaseModel):
     humidity_in_band_pct: float | None = None
     efficiency: float | None = None
     sample_count: int
+    sensor_ids: list[int] | None = Field(
+        default=None,
+        description="Sensors whose readings fed the score (null on snapshots taken before it was recorded)",
+    )
 
 
 class PlantHealthResponse(BaseModel):

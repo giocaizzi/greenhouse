@@ -20,7 +20,8 @@
   "migrations/versions/8e1a4d6c5f20_add_irrigator_reservoir_capacity.py",
   "migrations/versions/9f2b5e7c6a31_irrigator_cluster_unique.py",
   "migrations/versions/a1d3f5b7c902_rewrite_legacy_device_types.py",
-  "migrations/versions/b2e4a6c8d013_add_alert_last_notified_at.py"
+  "migrations/versions/b2e4a6c8d013_add_alert_last_notified_at.py",
+  "migrations/versions/b3c5e7f9a104_sensor_assignment_open_unique.py"
  ],
  "greenhouse-server": [
   "web/static/app.css",

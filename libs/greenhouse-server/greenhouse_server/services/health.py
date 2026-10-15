@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Self, TypedDict
 
-from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS, HOURS_PER_DAY
+from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS, HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.plant_needs import moisture_target_range
@@ -120,17 +120,21 @@ class PlantHealthService:
             efficiency (float | None), sample_count (int).
             score is None when no readings and no efficiency are available.
         """
+        return self._score_with_sources(plant_id, days)[0]
+
+    def _score_with_sources(self, plant_id: int, days: int) -> tuple[HealthScore, list[int]]:
+        """The plant's score and the ids of the sensors whose readings fed it (snapshot provenance)."""
         plant = self._repo.get_plant(plant_id)
         if not plant:
-            return _empty_score()
+            return _empty_score(), []
 
         care = self._plant_db.get_care_data(species=plant.species, category=plant.category)
         bands = _HealthBands.from_care(care)
 
-        sensors = list(plant.sensors)
-        all_readings = self._pooled_clean_readings(sensors, days)
+        by_sensor = self._attributed_clean_readings(plant_id, days)
+        all_readings = [r for readings in by_sensor.values() for r in readings]
         soil_in_band_pct, temp_in_band_pct, humidity_in_band_pct = _band_percentages(all_readings, bands)
-        efficiency = self._first_profile_efficiency(sensors, days)
+        efficiency = self._first_profile_efficiency(list(plant.sensors), days)
 
         components = [
             c
@@ -143,7 +147,7 @@ class PlantHealthService:
             if c is not None
         ]
 
-        return {
+        score: HealthScore = {
             "score": _composite_score(components),
             "soil_in_band_pct": soil_in_band_pct,
             "temp_in_band_pct": temp_in_band_pct,
@@ -151,16 +155,19 @@ class PlantHealthService:
             "efficiency": efficiency,
             "sample_count": len(all_readings),
         }
+        return score, sorted(sid for sid, readings in by_sensor.items() if readings)
 
-    def _pooled_clean_readings(self, sensors: "Sequence[Sensor]", days: int) -> "list[CleanedReading]":
-        """Every sensor's cleaned readings over the window, pooled in sensor order."""
-        all_readings: list[CleanedReading] = []
-        for sensor in sensors:
-            # Cleaned view, per sensor, before pooling: the score is a judgement
-            # about how much time the plant spent in band, and a probe glitch
-            # must not cost (or buy) the plant health points.
-            all_readings.extend(clean_readings(self._repo.get_recent_readings(sensor.id, hours=days * HOURS_PER_DAY)))
-        return all_readings
+    def _attributed_clean_readings(self, plant_id: int, days: int) -> "dict[int, list[CleanedReading]]":
+        """Cleaned readings per sensor over the window, only those taken while the sensor measured this plant.
+
+        Attribution goes through the assignment history (the same rule as the plant
+        chart), so a sensor moved in or out mid-window counts only for its time in
+        this pot, settle window excluded (issue #145). Cleaned per sensor, before
+        pooling: a probe glitch must not cost (or buy) the plant health points.
+        """
+        since = int(time.time()) - days * HOURS_PER_DAY * SECONDS_PER_HOUR
+        rows = self._repo.judged_readings_for_plant(plant_id, since_ts=since)
+        return {sensor_id: clean_readings(readings) for sensor_id, readings in rows.items()}
 
     def _first_profile_efficiency(self, sensors: "Sequence[Sensor]", days: int) -> float | None:
         """Efficiency of the first sensor that has a learned profile (later sensors are not read)."""
@@ -182,7 +189,7 @@ class PlantHealthService:
         plants = self._repo.list_all_plants()
         rows_written = 0
         for plant in plants:
-            result = self.compute_score(plant.id)
+            result, sensor_ids = self._score_with_sources(plant.id, HEALTH_SCORE_WINDOW_DAYS)
             score = result["score"]
             if score is None:
                 continue
@@ -196,6 +203,7 @@ class PlantHealthService:
                 efficiency=result["efficiency"],
                 sample_count=result["sample_count"],
                 timestamp=now,
+                sensor_ids=sensor_ids,
             )
             rows_written += 1
         return rows_written

@@ -133,7 +133,7 @@ class ForecastService:
         # Newest-first cleaned view: the forecast extrapolates from "current
         # moisture", so a spike as the latest sample would shift every ETA.
         readings = clean_readings_desc(
-            self._repo.get_recent_readings(sensor.id, hours=FORECAST_READINGS_LOOKBACK_HOURS)
+            self._repo.get_judged_readings(sensor.id, hours=FORECAST_READINGS_LOOKBACK_HOURS)
         )
         current_moisture = next((r.soil_moisture for r in readings if r.soil_moisture is not None), None)
         if current_moisture is None:

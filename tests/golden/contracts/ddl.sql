@@ -103,6 +103,7 @@ CREATE TABLE plant_health_daily (
 	humidity_in_band_pct DOUBLE,
 	efficiency DOUBLE,
 	sample_count INTEGER NOT NULL,
+	sensor_ids JSON,
 	PRIMARY KEY (id),
 	UNIQUE (plant_id, date_key)
 )
@@ -268,6 +269,7 @@ CREATE TABLE sensor_assignments (
 CREATE INDEX idx_sensor_assignments_plant ON sensor_assignments (plant_id)
 CREATE INDEX idx_sensor_assignments_sensor ON sensor_assignments (sensor_id)
 CREATE INDEX idx_sensor_assignments_time ON sensor_assignments (started_at, ended_at)
+CREATE UNIQUE INDEX uq_sensor_assignments_open ON sensor_assignments (sensor_id) WHERE ended_at IS NULL
 
 CREATE TABLE sensor_readings (
 	id INTEGER NOT NULL,

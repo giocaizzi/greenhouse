@@ -60,8 +60,15 @@ class ClusterMixin(SensorMixin):
         species: str,
         **care: Unpack[PlantCareFields],
     ) -> int:
-        """Add a plant to a cluster and return its ID."""
+        """Add a plant to a cluster and return its ID.
+
+        The id is allocated above every plant id the history still references:
+        SQLite reuses the highest deleted rowid, and a recycled id would inherit
+        a deleted plant's assignment windows (foreign keys are not enforced, so
+        their ON DELETE CASCADE never runs).
+        """
         plant = Plant(
+            id=self._next_plant_id(),
             cluster_id=cluster_id,
             species=species,
             category=care.get("category"),
@@ -76,6 +83,14 @@ class ClusterMixin(SensorMixin):
         self.session.add(plant)
         self.session.flush()
         return plant.id
+
+    def _next_plant_id(self) -> int:
+        """One above the highest plant id in ``plants`` or referenced by assignment history."""
+        highest = max(
+            self.session.scalar(select(func.max(Plant.id))) or 0,
+            self.session.scalar(select(func.max(SensorAssignment.plant_id))) or 0,
+        )
+        return highest + 1
 
     def get_plants_in_cluster(self, cluster_id: int) -> list[Plant]:
         """Get all plants in a cluster ordered by species."""
@@ -94,6 +109,7 @@ class ClusterMixin(SensorMixin):
         soil_in_band_pct, temp_in_band_pct = scores.get("soil_in_band_pct"), scores.get("temp_in_band_pct")
         humidity_in_band_pct, efficiency = scores.get("humidity_in_band_pct"), scores.get("efficiency")
         sample_count, timestamp = scores.get("sample_count", 0), scores.get("timestamp")
+        sensor_ids = scores.get("sensor_ids")
         existing = self.session.scalar(
             select(PlantHealthDaily).where(PlantHealthDaily.plant_id == plant_id, PlantHealthDaily.date_key == date_key)
         )
@@ -104,6 +120,7 @@ class ClusterMixin(SensorMixin):
             existing.humidity_in_band_pct = humidity_in_band_pct
             existing.efficiency = efficiency
             existing.sample_count = sample_count
+            existing.sensor_ids = sensor_ids
             self.session.flush()
             return existing
         row = PlantHealthDaily(
@@ -116,6 +133,7 @@ class ClusterMixin(SensorMixin):
             humidity_in_band_pct=humidity_in_band_pct,
             efficiency=efficiency,
             sample_count=sample_count,
+            sensor_ids=sensor_ids,
         )
         self.session.add(row)
         self.session.flush()
