@@ -130,7 +130,7 @@ class StubPlantDb:
         """Serve ``care`` for every lookup."""
         self.care = care
 
-    def get_care_data(self, species: str | None = None) -> dict[str, object]:  # noqa: ARG002 — mirrors PlantDatabase
+    def get_care_data(self, species: str | None = None, category: str | None = None) -> dict[str, object]:  # noqa: ARG002 — mirrors PlantDatabase
         """Return a copy of the canned care data."""
         return dict(self.care)
 

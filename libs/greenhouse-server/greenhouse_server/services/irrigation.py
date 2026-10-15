@@ -595,7 +595,9 @@ class IrrigationService:
             latest_soil = _latest_soil(_monitor_readings(self._repo, sensor.id))
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
-            care = self._plant_db.get_care_data(species=plant.species if plant else None)
+            care = self._plant_db.get_care_data(
+                species=plant.species if plant else None, category=plant.category if plant else None
+            )
             t_min, t_max = moisture_target_range(care)
             status = _soil_status(latest_soil, t_min, t_max)
 
