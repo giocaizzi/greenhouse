@@ -22,6 +22,8 @@ ClusterArg = Annotated[int, typer.Argument(help="Cluster ID")]
 ClusterOpt = Annotated[int, typer.Option(help="Cluster ID")]
 ClusterFilterOpt = Annotated[int | None, typer.Option(help="Filter by cluster ID")]
 YesOpt = Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt")]
+ArchivedOpt = Annotated[bool, typer.Option("--archived", help="Also list archived (soft-deleted) rows")]
+PurgeOpt = Annotated[bool, typer.Option(help="Hard-delete an already archived row (irreversible)")]
 
 T = TypeVar("T")
 

@@ -12,17 +12,16 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import UTC, datetime, tzinfo
+from datetime import datetime
 from typing import TYPE_CHECKING, Annotated
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
 from fastapi.responses import RedirectResponse, Response
 
-from greenhouse_core.utils import get_display_timezone
 from greenhouse_server.deps import RepoDep, require_vacation_window, require_valid_vacation_range
 from greenhouse_server.services.vacation import cluster_budgets
 from greenhouse_server.web.context import base_context
+from greenhouse_server.web.forms import preference_zone
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
@@ -38,16 +37,8 @@ def _parse_ts(value: str) -> int:
         return int(value)
     except ValueError:
         pass
-    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=_preference_zone())
+    dt = datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=preference_zone())
     return int(dt.timestamp())
-
-
-def _preference_zone() -> tzinfo:
-    """The display timezone (``UserPreferences.timezone``, else ``IRRIGATION_TZ``); UTC if unknown."""
-    try:
-        return ZoneInfo(get_display_timezone())
-    except (ZoneInfoNotFoundError, ValueError):
-        return UTC
 
 
 @router.get("/vacation")

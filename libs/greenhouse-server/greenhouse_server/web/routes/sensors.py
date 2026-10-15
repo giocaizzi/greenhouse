@@ -1,18 +1,19 @@
-"""Sensor web routes: list, create form, create, edit, delete."""
+"""Sensor web routes: list, create form, create, edit, move, archive, restore, purge."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from greenhouse_core.repository import InvalidMoveTimeError, NotArchivedError
 from greenhouse_server.deps import DeviceRegistryDep, RepoDep, require_cluster, require_sensor_in_cluster
 from greenhouse_server.services import inventory
 from greenhouse_server.services.inventory import DeviceIdExistsError, PlantNotInClusterError
 from greenhouse_server.web.context import base_context
-from greenhouse_server.web.forms import device_type_options, parsed_or_400
+from greenhouse_server.web.forms import device_type_options, local_datetime_or_400, parsed_or_400
 from greenhouse_server.web.templating import templates
 
 if TYPE_CHECKING:
@@ -45,6 +46,16 @@ class _EditSensorForm:
     name: Annotated[str, Form()]
     type: Annotated[str, Form()]
     plant_id: Annotated[str, Form()] = ""
+
+
+@dataclass(frozen=True, slots=True)
+class _MoveSensorForm:
+    """``POST /clusters/{cluster_id}/sensors/{sensor_id}/move``: target plant (blank: detach) and when."""
+
+    cluster_id: Annotated[int, Path()]
+    sensor_id: Annotated[int, Path()]
+    plant_id: Annotated[str, Form()] = ""
+    effective_at: Annotated[str, Form()] = ""
 
 
 def _parse_optional_plant_id(plant_id: str) -> int | None:
@@ -146,10 +157,41 @@ def update_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_E
     return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
 
 
-@router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)
-def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Response:
-    """HTMX-targeted delete: archives the sensor (soft delete, like the API default); empty body removes the row."""
+@router.post("/clusters/{cluster_id}/sensors/{sensor_id}/move")
+def move_sensor(repo: RepoDep, form: Annotated[_MoveSensorForm, Depends()]) -> Response:
+    """Record a dated sensor move (the API's rules and wording) and return to the sensors section."""
+    cluster_id, sensor_id = form.cluster_id, form.sensor_id
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    repo.archive_sensor(sensor_id)
+    pid = _parse_optional_plant_id(form.plant_id)
+    when = local_datetime_or_400(form.effective_at, error="Invalid effective_at: use the date and time picker")
+    try:
+        inventory.move_sensor(repo, cluster_id, sensor_id, pid, effective_at=when)
+    except PlantNotInClusterError as exc:
+        raise HTTPException(404, f"Plant {exc.plant_id} not found in cluster") from None
+    except InvalidMoveTimeError as exc:
+        raise HTTPException(400, f"effective_at: {exc}") from None
+    repo.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)
+
+
+@router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)
+def delete_sensor(
+    cluster_id: int, sensor_id: int, repo: RepoDep, *, purge: Annotated[bool, Query()] = False
+) -> Response:
+    """HTMX-targeted delete: archive the sensor, or ``purge`` an archived one; empty body drops the row."""
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    try:
+        inventory.remove_sensor(repo, sensor_id, purge=purge)
+    except NotArchivedError as exc:
+        raise HTTPException(409, str(exc)) from None
     repo.commit()
     return HTMLResponse("")
+
+
+@router.post("/clusters/{cluster_id}/sensors/{sensor_id}/restore")
+def restore_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Response:
+    """Bring an archived sensor back (re-linked to its plant if still active) and return to the sensors section."""
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    repo.restore_sensor(sensor_id)
+    repo.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}#sensors", status_code=303)

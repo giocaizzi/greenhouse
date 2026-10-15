@@ -1143,6 +1143,7 @@
    "sync",
    "move",
    "update",
+   "restore",
    "delete"
   ]
  },
@@ -1427,6 +1428,30 @@
     "secondary_opts": [],
     "type": "int",
     "type_class": "IntParamType"
+   },
+   {
+    "default": false,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Also list archived (soft-deleted) rows",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": true,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "archived",
+    "nargs": 1,
+    "opts": [
+     "--archived"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "boolean",
+    "type_class": "BoolParamType"
    }
   ],
   "path": "greenhouse plant list",
@@ -1828,7 +1853,7 @@
  {
   "deprecated": false,
   "group": false,
-  "help": "Delete a plant and its health / learning history.",
+  "help": "Bring an archived plant back with its history; move its former sensors back with `sensor move`.",
   "hidden": false,
   "no_args_is_help": false,
   "params": [
@@ -1879,6 +1904,91 @@
     "secondary_opts": [],
     "type": "int",
     "type_class": "IntParamType"
+   }
+  ],
+  "path": "greenhouse plant restore",
+  "short_help": null
+ },
+ {
+  "deprecated": false,
+  "group": false,
+  "help": "Archive a plant (restore undoes it); --purge deletes an archived one and its health history for good.",
+  "hidden": false,
+  "no_args_is_help": false,
+  "params": [
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Plant ID",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "argument",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "plant_id",
+    "nargs": 1,
+    "opts": [
+     "plant_id"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Cluster the plant belongs to",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "cluster",
+    "nargs": 1,
+    "opts": [
+     "--cluster"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": false,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Hard-delete an already archived row (irreversible)",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": true,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "purge",
+    "nargs": 1,
+    "opts": [
+     "--purge"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [
+     "--no-purge"
+    ],
+    "type": "boolean",
+    "type_class": "BoolParamType"
    },
    {
     "default": false,
@@ -2608,6 +2718,8 @@
    "add",
    "list",
    "update",
+   "move",
+   "restore",
    "delete"
   ]
  },
@@ -2772,6 +2884,30 @@
     "secondary_opts": [],
     "type": "int",
     "type_class": "IntParamType"
+   },
+   {
+    "default": false,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Also list archived (soft-deleted) rows",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": true,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "archived",
+    "nargs": 1,
+    "opts": [
+     "--archived"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "boolean",
+    "type_class": "BoolParamType"
    }
   ],
   "path": "greenhouse sensor list",
@@ -2911,7 +3047,7 @@
  {
   "deprecated": false,
   "group": false,
-  "help": "Delete a sensor. Historic readings stay attached to the cluster.",
+  "help": "Record that a sensor was moved to another plant (or detached), and when.\n\nReadings before --at stay with the old plant. Naming the plant the sensor is\nalready on re-dates its last move. Give exactly one of --plant-id / --detach.",
   "hidden": false,
   "no_args_is_help": false,
   "params": [
@@ -2962,6 +3098,224 @@
     "secondary_opts": [],
     "type": "int",
     "type_class": "IntParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Plant the sensor now measures",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "plant_id",
+    "nargs": 1,
+    "opts": [
+     "--plant-id"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": false,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Detach the sensor from its plant instead",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": true,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "detach",
+    "nargs": 1,
+    "opts": [
+     "--detach"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [
+     "--no-detach"
+    ],
+    "type": "boolean",
+    "type_class": "BoolParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "When it was moved (Unix seconds, default now)",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "at",
+    "nargs": 1,
+    "opts": [
+     "--at"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   }
+  ],
+  "path": "greenhouse sensor move",
+  "short_help": null
+ },
+ {
+  "deprecated": false,
+  "group": false,
+  "help": "Bring an archived sensor back, re-linked to its plant if that plant is still active.",
+  "hidden": false,
+  "no_args_is_help": false,
+  "params": [
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Sensor ID",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "argument",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "id",
+    "nargs": 1,
+    "opts": [
+     "id"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Cluster the sensor belongs to",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "cluster",
+    "nargs": 1,
+    "opts": [
+     "--cluster"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   }
+  ],
+  "path": "greenhouse sensor restore",
+  "short_help": null
+ },
+ {
+  "deprecated": false,
+  "group": false,
+  "help": "Archive a sensor (restore undoes it); --purge deletes an archived one and its readings for good.",
+  "hidden": false,
+  "no_args_is_help": false,
+  "params": [
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Sensor ID",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "argument",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "id",
+    "nargs": 1,
+    "opts": [
+     "id"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Cluster the sensor belongs to",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "cluster",
+    "nargs": 1,
+    "opts": [
+     "--cluster"
+    ],
+    "prompt": null,
+    "required": true,
+    "secondary_opts": [],
+    "type": "int",
+    "type_class": "IntParamType"
+   },
+   {
+    "default": false,
+    "envvar": null,
+    "expose_value": true,
+    "help": "Hard-delete an already archived row (irreversible)",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": true,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "purge",
+    "nargs": 1,
+    "opts": [
+     "--purge"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [
+     "--no-purge"
+    ],
+    "type": "boolean",
+    "type_class": "BoolParamType"
    },
    {
     "default": false,
