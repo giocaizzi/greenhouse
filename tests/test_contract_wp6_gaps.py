@@ -113,10 +113,33 @@ def test_water_stress_low_and_steep_decline_boundaries(soil: float, delta: float
 
 @pytest.mark.parametrize(("soil", "fires"), [(70.0, False), (70.1, True)])
 def test_over_watering_fires_strictly_above_saturated(soil: float, *, fires: bool) -> None:
-    """Over-watering stress fires only strictly above the saturation level."""
+    """Over-watering stress fires only when a current reading is strictly above the saturation level."""
     trends = Trends(irrigation_frequency_high=True)
-    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil), trends)
+    current = [PerSensorSnapshot(sensor_id=1, name="Soil", latest_soil_moisture=soil)]
+    stress = _stress({}, SensorSnapshot(avg_soil_moisture=soil, per_sensor=current), trends)
     assert (stress.over_watering is not None) is fires
+
+
+@pytest.mark.parametrize(("avg", "latest", "fires"), [(85.0, 55.0, False), (55.0, 85.0, True), (85.0, None, False)])
+def test_over_watering_judges_current_readings_not_the_average(
+    avg: float, latest: float | None, *, fires: bool
+) -> None:
+    """Issue #121: a drained sensor ends the skip at once; a stale one (no current reading) neither fires it."""
+    trends = Trends(irrigation_frequency_high=True)
+    current = [PerSensorSnapshot(sensor_id=1, name="Soil", latest_soil_moisture=latest)]
+    stress = _stress({}, SensorSnapshot(avg_soil_moisture=avg, per_sensor=current), trends)
+    assert (stress.over_watering is not None) is fires
+
+
+def test_over_watering_defers_a_mixed_cluster_to_the_soil_rule() -> None:
+    """A saturated sensor beside one below its band is no terminal skip: the conflict burst decides."""
+    trends = Trends(irrigation_frequency_high=True)
+    current = [
+        PerSensorSnapshot(sensor_id=1, name="Wet", latest_soil_moisture=85.0),
+        PerSensorSnapshot(sensor_id=2, name="Dry", latest_soil_moisture=20.0),
+    ]
+    stress = _stress({}, SensorSnapshot(avg_soil_moisture=52.5, per_sensor=current), trends)
+    assert stress.over_watering is None
 
 
 # ── learning/issues: fakes ────────────────────────────────────────────────────

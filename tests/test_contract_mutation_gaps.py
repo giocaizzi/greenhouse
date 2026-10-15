@@ -198,9 +198,11 @@ def _hourly(field: str, values: tuple[float, ...], **const: Unpack[ReadingFields
     return _sensor(*(Reading(age_s=(n - 1 - i) * HOUR, **_field(field, v), **const) for i, v in enumerate(values)))
 
 
-@pytest.mark.parametrize(("soils", "saturated"), [((65.0, 65.0, 75.0, 75.0), False), ((65.5, 65.5, 75.5, 75.5), True)])
-def test_over_watering_needs_average_strictly_above_saturation(soils: tuple[float, ...], *, saturated: bool) -> None:
-    """stress-10: ``avg_soil > 70`` (exclusive) + rising trend → over_watering."""
+@pytest.mark.parametrize(("soils", "saturated"), [((60.0, 64.0, 68.0, 70.0), False), ((60.0, 64.0, 68.0, 70.5), True)])
+def test_over_watering_needs_current_reading_strictly_above_saturation(
+    soils: tuple[float, ...], *, saturated: bool
+) -> None:
+    """stress-10: the newest soil reading ``> 70`` (exclusive) + rising trend → over_watering (issue #121)."""
     decision = _decide(f"saturated-{soils[0]}", sensors=(_hourly("soil", soils),))
     assert decision["trends"]["soil_moisture_trend"] == "rising"
     assert (decision["stress_indicators"]["over_watering"] is not None) is saturated

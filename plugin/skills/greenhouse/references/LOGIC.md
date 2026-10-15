@@ -37,7 +37,7 @@ Every rule function appends a `Reason` to the decision's trail via `decision.add
 | `quiet_hours` | Skip — current local time is inside the configured quiet-hours window (auto runs only) |
 | `water_warning` | Irrigate — sensor DP 111 water-warning set (the probe reports the soil dry; it is never treated as a probe fault). The flag is a state: only each sensor's newest reading that carries it counts, and a flag last reported more than 4h ago (`SENSOR_READING_STALE_SECONDS`) is ignored. Not acted on when over-watering is detected (terminal `over_watering` skip, the alarm recorded as a `water_warning` reason) or when another sensor reads above its plant's band (the alarm is noted after the soil rule, and critical stress / the soil rule decide) |
 | `water_stress` | Irrigate — critical low moisture on any sensor's newest reading, against the plant that sensor is linked to: below the plant's minimum − 15 (`CRITICAL_STRESS_BELOW_TARGET_MARGIN`), never above 30 %; or below that + 10 while the soil is falling steeply. Vetoed when over-watering is detected or any plant currently reads above its band |
-| `over_watering` | Skip — 24h average soil moisture > 70% **and** (high irrigation frequency or a rising trend) |
+| `over_watering` | Skip — some sensor's newest reading above its plant's band maximum and above 70% (`SOIL_MOISTURE_SATURATED`), **and** (high irrigation frequency or a rising trend). Stale sensors don't count. Not fired while another sensor reads below its band (the soil rule's conflict burst decides) |
 | `outside_window` | Skip — local time outside every configured `IrrigationWindow` of the cluster (never emitted when the cluster has no windows) |
 | `sensor_very_dry` | Irrigate — a sensor's newest reading is more than 10 below its plant's minimum (`VERY_DRY_MARGIN`) |
 | `sensor_dry` | Irrigate — a sensor's newest reading is below its plant's minimum |
@@ -382,9 +382,8 @@ All engine thresholds live in `libs/greenhouse-core/greenhouse_core/constants.py
 
 ## Behaviors that look like bugs (by design)
 
-Every engine quirk the refactor pinned has been fixed (critical stress on the driest plant, emergency runs inside windows and vacation budgets, no empty trail, short-series spike guard, confirmed step kept, exclusive edges, light season in the `timezone` preference). What remains is deliberate; explain it rather than assuming a malfunction:
+Every engine quirk the refactor pinned has been fixed (critical stress on the driest plant, over-watering on current readings, emergency runs inside windows and vacation budgets, no empty trail, short-series spike guard, confirmed step kept, exclusive edges, light season in the `timezone` preference). What remains is deliberate; explain it rather than assuming a malfunction:
 
 - **A lone high glitch at the newest end of a short series is kept** (10, 10, 99), so a dry plant can skip one cycle. Dropping a newest-end rise is not safe either — rain or an unlogged manual watering looks the same — and the next reading settles it.
-- **Over-watering uses the 24h average** (with the trend and watering frequency), while the soil rule and critical stress use current readings.
 - **A device soil-dry alarm can go unacted on.** Beside detected over-watering it becomes an `over_watering` skip with the alarm recorded; beside a plant that merely reads above its band it is noted and the soil rule decides (its conflict burst still waters a dry plant).
 - **Only `environment == "outdoor"` is outdoor.** A free-text label such as `"greenhouse"` gets no rain skip, the indoor seasonal table and the sensor-first temperature.
