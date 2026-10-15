@@ -2,16 +2,34 @@
 
 import time
 from http import HTTPStatus
+from typing import TYPE_CHECKING, cast
 
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.models import Alert, Sensor, SensorReading
+from greenhouse_core.models import (
+    EVENT_ACTION_ATTEMPTED,
+    EVENT_ACTION_START,
+    EVENT_ACTION_STOP,
+    SOURCE_IRRIGATION,
+    TRIGGERED_BY_AUTO,
+    Alert,
+    EventAction,
+    Sensor,
+    SensorReading,
+)
+from greenhouse_core.schemas import SystemHealthDevice, SystemHealthResponse
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
+from greenhouse_server.services.alerts import raise_alert
+from greenhouse_server.services.system_health import SystemHealthService
+
+if TYPE_CHECKING:
+    from conftest import SampleCluster
+    from greenhouse_server.services.sync import SyncService
 
 
 def _make_app() -> tuple[TestClient, Engine]:
@@ -165,8 +183,74 @@ class TestSystemHealthPulse:
             "sensors_stale",
             "sensors_fresh",
             "irrigators_total",
+            "irrigators_failing",
             "open_alerts",
             "devices",
         }
         assert required <= data.keys()
         assert isinstance(data["devices"], list)
+
+
+class TestIrrigatorFailing:
+    """#148: repeated failed starts mark the irrigator ``failing`` and the system ``degraded``."""
+
+    @staticmethod
+    def _pulse(sample: "SampleCluster") -> SystemHealthResponse:
+        repo = sample["db"]
+        repo.session.add(
+            SensorReading(sensor_id=sample["sensor_id"], timestamp=int(time.time()) - 60, soil_moisture=50.0)
+        )
+        repo.session.flush()
+        return SystemHealthService(repo, cast("SyncService", None)).pulse()
+
+    @staticmethod
+    def _irrigator_row(pulse: SystemHealthResponse, irrigator_id: int) -> SystemHealthDevice:
+        return next(d for d in pulse.devices if d.id == irrigator_id and d.consecutive_failures is not None)
+
+    @staticmethod
+    def _events(sample: "SampleCluster", *actions: EventAction) -> None:
+        now = int(time.time())
+        for offset, action in enumerate(actions):
+            sample["db"].add_irrigation_event(
+                sample["irrigator_id"], action, TRIGGERED_BY_AUTO, timestamp=now - 3600 * (len(actions) - offset)
+            )
+
+    def test_three_failed_starts_is_failing_and_degraded(self, sample_cluster: "SampleCluster") -> None:
+        """Three ``attempted`` in a row → ``failing``, overall ``degraded``, counted at the top level."""
+        self._events(sample_cluster, EVENT_ACTION_START, *[EVENT_ACTION_ATTEMPTED] * 3)
+        pulse = self._pulse(sample_cluster)
+        row = self._irrigator_row(pulse, sample_cluster["irrigator_id"])
+        assert (row.status, row.consecutive_failures, pulse.irrigators_failing, pulse.status) == (
+            "failing",
+            3,
+            1,
+            "degraded",
+        )
+
+    def test_later_successful_start_is_ok(self, sample_cluster: "SampleCluster") -> None:
+        """A ``start`` after the failures resets the streak."""
+        self._events(sample_cluster, *[EVENT_ACTION_ATTEMPTED] * 3, EVENT_ACTION_START)
+        pulse = self._pulse(sample_cluster)
+        row = self._irrigator_row(pulse, sample_cluster["irrigator_id"])
+        assert (row.status, row.consecutive_failures, pulse.irrigators_failing, pulse.status) == ("ok", 0, 0, "ok")
+
+    def test_one_failure_is_ok_without_the_alert(self, sample_cluster: "SampleCluster") -> None:
+        """A single failed start alone does not mark the irrigator failing."""
+        self._events(sample_cluster, EVENT_ACTION_ATTEMPTED, EVENT_ACTION_STOP)
+        row = self._irrigator_row(self._pulse(sample_cluster), sample_cluster["irrigator_id"])
+        assert (row.status, row.consecutive_failures) == ("ok", 1)
+
+    def test_one_failure_with_open_alert_is_failing(self, sample_cluster: "SampleCluster") -> None:
+        """One failed start while the cluster's ``actuation_failed`` alert is open → ``failing``."""
+        self._events(sample_cluster, EVENT_ACTION_ATTEMPTED)
+        raise_alert(
+            sample_cluster["db"],
+            source=SOURCE_IRRIGATION,
+            code="actuation_failed",
+            title="t",
+            message="m",
+            severity="warning",
+            cluster_id=sample_cluster["cluster_id"],
+        )
+        row = self._irrigator_row(self._pulse(sample_cluster), sample_cluster["irrigator_id"])
+        assert row.status == "failing"

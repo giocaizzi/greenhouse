@@ -8351,6 +8351,17 @@
        }
       ],
       "title": "Note"
+     },
+     "consecutive_failures": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Consecutive Failures"
      }
     },
     "type": "object",
@@ -8403,6 +8414,10 @@
       "type": "integer",
       "title": "Irrigators Total"
      },
+     "irrigators_failing": {
+      "type": "integer",
+      "title": "Irrigators Failing"
+     },
      "open_alerts": {
       "type": "integer",
       "title": "Open Alerts"
@@ -8425,6 +8440,7 @@
      "sensors_stale",
      "sensors_fresh",
      "irrigators_total",
+     "irrigators_failing",
      "open_alerts",
      "devices"
     ],
