@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class _Window:
+class AssignmentWindow:
     """One assignment row as an attribution window: ``[starts, ends)``, ``ends=None`` = still open."""
 
     sensor_id: int
@@ -44,10 +44,10 @@ class _Window:
         return self.starts <= ts and (self.ends is None or ts < self.ends)
 
 
-def _windows(rows: "Sequence[SensorAssignment]", *, settle: int) -> list[_Window]:
+def _windows(rows: "Sequence[SensorAssignment]", *, settle: int) -> list[AssignmentWindow]:
     """One sensor's rows (oldest first) as windows: the first reaches back to 0, later ones start after ``settle``."""
     return [
-        _Window(row.sensor_id, row.plant_id, 0 if i == 0 else row.started_at + settle, row.ended_at)
+        AssignmentWindow(row.sensor_id, row.plant_id, 0 if i == 0 else row.started_at + settle, row.ended_at)
         for i, row in enumerate(rows)
     ]
 
@@ -221,7 +221,11 @@ class AssignmentMixin(AuditMixin):
         )
         return window.plant_id if window is not None else None
 
-    def _plant_windows(self, plant_id: int, *, settle: int) -> list[_Window]:
+    def judged_windows(self, sensor_id: int) -> list[AssignmentWindow]:
+        """The sensor's assignment windows, oldest first, each move's settle window cut off (empty = never linked)."""
+        return _windows(self.list_sensor_assignments(sensor_id), settle=SENSOR_MOVE_SETTLE_SECONDS)
+
+    def _plant_windows(self, plant_id: int, *, settle: int) -> list[AssignmentWindow]:
         """Every window in which some sensor measured ``plant_id``."""
         sensor_ids = self.session.scalars(
             select(SensorAssignment.sensor_id).where(SensorAssignment.plant_id == plant_id).distinct()
@@ -233,7 +237,7 @@ class AssignmentMixin(AuditMixin):
             if window.plant_id == plant_id
         ]
 
-    def _window_readings(self, window: _Window, since_ts: int, until_ts: int) -> list[SensorReading]:
+    def _window_readings(self, window: AssignmentWindow, since_ts: int, until_ts: int) -> list[SensorReading]:
         """The window's readings inside ``[since_ts, until_ts]``, oldest first."""
         stmt = select(SensorReading).where(
             SensorReading.sensor_id == window.sensor_id,

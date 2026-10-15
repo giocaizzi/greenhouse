@@ -8,7 +8,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.models import IrrigationEvent, Sensor, SensorReading
+from greenhouse_core.models import IrrigationEvent, Plant, Sensor, SensorAssignment, SensorReading
 from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
@@ -189,6 +189,63 @@ class TestClusterEfficacy:
         resp = seeded_client.get(f"/api/v1/clusters/1/efficacy?days={days}")
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["days"] == days
+
+
+def _seed_moved_sensor(engine: Engine, *, plant_cluster_before: int, move_ts: int) -> None:
+    """Sensor 1 measured a plant in ``plant_cluster_before`` until ``move_ts``, then a cluster-1 plant."""
+    with Session(engine) as session:
+        before = Plant(cluster_id=plant_cluster_before, species="Ficus")
+        after = Plant(cluster_id=1, species="Monstera")
+        session.add_all([before, after])
+        session.flush()
+        session.add(SensorAssignment(sensor_id=1, plant_id=before.id, started_at=0, ended_at=move_ts))
+        session.add(SensorAssignment(sensor_id=1, plant_id=after.id, started_at=move_ts, ended_at=None))
+        sensor = session.get(Sensor, 1)
+        assert sensor is not None
+        sensor.plant_id = after.id
+        session.commit()
+
+
+class TestAssignmentAttribution:
+    """Issue #185: readings count for an event only through the assignment window holding it."""
+
+    def test_readings_from_another_clusters_pot_do_not_score(self) -> None:
+        """A sensor that measured another cluster's plant at the event says nothing about this pump."""
+        client, engine = _make_client()
+        try:
+            _seed_cluster_with_devices(client)
+            client.post("/api/v1/clusters", json={"name": "Other Cluster"})
+            now = int(time.time())
+            event_ts = now - 3 * 3600
+            _seed_ten_point_rise(engine, event_ts, 3)
+            _seed_moved_sensor(engine, plant_cluster_before=2, move_ts=now - 1800)
+
+            item = client.get("/api/v1/clusters/1/efficacy?days=1").json()["items"][0]
+            assert item["before_pct"] is None
+            assert item["after_pct"] is None
+            assert item["score"] is None
+        finally:
+            engine.dispose()
+
+    def test_readings_after_a_move_do_not_score_the_earlier_event(self) -> None:
+        """Readings taken in the new pot are not the old pot's response to the event."""
+        client, engine = _make_client()
+        try:
+            _seed_cluster_with_devices(client)
+            now = int(time.time())
+            event_ts = now - 3 * 3600
+            _seed_ten_point_rise(engine, event_ts, 3)  # 30 % before, 40 % at +1200, 41 % at +2400
+            with Session(engine) as session:
+                session.add(SensorReading(sensor_id=1, timestamp=event_ts + 3600, soil_moisture=90.0))
+                session.add(SensorReading(sensor_id=1, timestamp=event_ts + 4200, soil_moisture=90.0))
+                session.commit()
+            _seed_moved_sensor(engine, plant_cluster_before=1, move_ts=event_ts + 3000)
+
+            item = client.get("/api/v1/clusters/1/efficacy?days=1").json()["items"][0]
+            assert item["before_pct"] == 30.0  # noqa: PLR2004 — the seeded baseline
+            assert item["after_pct"] == 40.5  # noqa: PLR2004 — mean of the old pot's two readings
+        finally:
+            engine.dispose()
 
 
 def test_days_is_bounded_like_the_web_page(seeded_client: TestClient) -> None:
