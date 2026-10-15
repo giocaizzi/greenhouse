@@ -31,7 +31,6 @@ if TYPE_CHECKING:
     from greenhouse_server.services.chart_payload import ChartDataset, ChartEvent, ChartPayload, ChartThreshold
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
-ALLOWED_HOURS = {24, 168, 720}
 
 
 def _water_needs_band(target: str | None) -> tuple[float, float] | None:

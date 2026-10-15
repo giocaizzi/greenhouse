@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack
 
 from rich.console import Group, RenderableType
@@ -14,7 +15,7 @@ from textual.widgets import Sparkline, Static
 from textual.widgets.data_table import RowDoesNotExist
 from textual_plotext import PlotextPlot
 
-from greenhouse_cli.constants import HOURS_PER_DAY, SECONDS_PER_HOUR
+from greenhouse_cli.constants import DEFAULT_CHART_RANGE_HOURS, HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
 
@@ -219,7 +220,11 @@ class MetricChart(PlotextPlot):
     """A plotext line chart fed by a ``chart-data`` / ``health-timeline`` payload."""
 
     def show_payload(
-        self, payload: dict[str, Any] | None, metric: str = "soil_moisture", hours: int = 24, title: str | None = None
+        self,
+        payload: dict[str, Any] | None,
+        metric: str = "soil_moisture",
+        hours: int = DEFAULT_CHART_RANGE_HOURS,
+        title: str | None = None,
     ) -> None:
         """Plot every sensor series, the ideal band and irrigation events.
 
@@ -229,7 +234,7 @@ class MetricChart(PlotextPlot):
         plt = self.plt
         plt.clear_figure()
         label, unit = fmt.METRICS.get(metric, (metric, ""))
-        plt.title(title or f"{label} ({unit}) — last {hours}h")
+        plt.title(title or f"{label} ({unit}) — last {fmt.range_days(hours)}")
         reference = fmt.now()
         plotted = self._plot_series((payload or {}).get("datasets", []), reference)
         threshold = (payload or {}).get("threshold") or {}
@@ -242,7 +247,7 @@ class MetricChart(PlotextPlot):
             plt.ylim(0, 100)
         self._set_x_ticks(hours, reference)
         if not plotted:
-            plt.title(f"{label} — no readings in the last {hours}h")
+            plt.title(f"{label} — no readings in the last {fmt.range_days(hours)}")
         self.refresh()
 
     def _plot_series(self, datasets: list[dict[str, Any]], reference: int) -> bool:
@@ -279,9 +284,8 @@ class MetricChart(PlotextPlot):
             )
             plotted = True
         self._draw_event_lines((payload or {}).get("events", []), reference)
-        plt.title(
-            f"Soil · humidity · light, normalised — last {hours}h" if plotted else f"No data in the last {hours}h"
-        )
+        span = fmt.range_days(hours)
+        plt.title(f"Soil · humidity · light, normalised — last {span}" if plotted else f"No data in the last {span}")
         plt.xlim(-hours, 0)
         plt.ylim(0, 100)
         self._set_x_ticks(hours, reference)
@@ -294,11 +298,11 @@ class MetricChart(PlotextPlot):
                 self.plt.vline((event["timestamp"] - reference) / SECONDS_PER_HOUR, "blue")
 
     def _set_x_ticks(self, hours: int, reference: int) -> None:
-        """Five evenly spaced wall-clock labels across the ``-hours … 0`` axis (with dates beyond one day)."""
-        ticks = [-hours + hours * i / 4 for i in range(5)]
-        self.plt.xticks(
-            ticks, [fmt.clock(reference + t * SECONDS_PER_HOUR, with_date=hours > HOURS_PER_DAY) for t in ticks]
-        )
+        """Five labels across ``-hours … 0``, the last ``now``; short ``MM-DD HH:MM`` keeps plotext stable."""
+        ticks = [-hours + hours * i / 4 for i in range(4)]
+        pattern = "%m-%d %H:%M" if hours > HOURS_PER_DAY else "%H:%M"
+        labels = [datetime.fromtimestamp(reference + t * SECONDS_PER_HOUR).strftime(pattern) for t in ticks]  # noqa: DTZ006 — local wall clock, like fmt.clock
+        self.plt.xticks([*ticks, 0], [*labels, "now"])
 
     def show_timeline(self, payload: dict[str, Any] | None, title: str) -> None:
         """Plot a ``(timestamp, score)`` timeline such as plant health."""

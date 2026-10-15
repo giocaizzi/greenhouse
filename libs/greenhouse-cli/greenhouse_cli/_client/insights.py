@@ -1,6 +1,7 @@
 """Read-model endpoints: forecast, activity, insights, search, plant health and charts."""
 
 from greenhouse_cli._client.transport import JSONObject, Transport, drop_none
+from greenhouse_cli.constants import DEFAULT_CHART_RANGE_HOURS
 
 
 class InsightEndpoints(Transport):
@@ -44,17 +45,21 @@ class InsightEndpoints(Transport):
 
     # ── Charts ──
 
-    def cluster_chart_data(self, cluster_id: int, hours: int = 24, metric: str = "soil_moisture") -> JSONObject:
+    def cluster_chart_data(
+        self, cluster_id: int, hours: int = DEFAULT_CHART_RANGE_HOURS, metric: str = "soil_moisture"
+    ) -> JSONObject:
         """Fetch one metric's per-sensor series for a cluster (``GET /clusters/{id}/chart-data``)."""
         return self._object(
             "GET", f"/api/v1/clusters/{cluster_id}/chart-data", params={"hours": hours, "metric": metric}
         )
 
-    def plant_chart_data(self, plant_id: int, hours: int = 24, metric: str = "soil_moisture") -> JSONObject:
+    def plant_chart_data(
+        self, plant_id: int, hours: int = DEFAULT_CHART_RANGE_HOURS, metric: str = "soil_moisture"
+    ) -> JSONObject:
         """Fetch one metric's series for a plant's sensors (``GET /plants/{plant_id}/chart-data``)."""
         return self._object("GET", f"/api/v1/plants/{plant_id}/chart-data", params={"hours": hours, "metric": metric})
 
-    def cluster_overlay(self, cluster_id: int, hours: int = 72) -> JSONObject:
+    def cluster_overlay(self, cluster_id: int, hours: int = DEFAULT_CHART_RANGE_HOURS) -> JSONObject:
         """Fetch the normalised soil/humidity/light overlay (``GET /clusters/{id}/overlay``)."""
         return self._object("GET", f"/api/v1/clusters/{cluster_id}/overlay", params={"hours": hours})
 

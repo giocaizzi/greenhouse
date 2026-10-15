@@ -201,8 +201,8 @@ Press `?` in the TUI for the live key list.
 | `n` / `u` / `del` | cluster → Overview | Attach / edit / detach the irrigator |
 | `u` | cluster → Config | Edit the cluster's irrigation config (mode, duration, interval, auto-run, caps, quiet hours) |
 | `M`, `P` | cluster → Plants | Move plant to another cluster (form), refresh care data from the plant DB (confirm) |
-| `m`, `[` / `]` | cluster → Charts | Cycle soil / temp / humidity / light / overlay, shorter / longer range (6h → 30d) |
-| `m` | cluster → Plants | Toggle the plant chart: 90-day health score ↔ 72h soil moisture |
+| `m`, `[` / `]` | cluster → Charts | Cycle soil / temp / humidity / light / overlay, shorter / longer range (3, 14, 30, 60, 90 days; default 3 days) |
+| `m` | cluster → Plants | Toggle the plant chart: 90-day health score ↔ 3-day soil moisture |
 | `e`, `D`, `E` | cluster | Edit cluster, delete cluster (confirm), export 30-day stats CSV to the current dir |
 | `k`, `v`, `f`, `y` | alerts | Acknowledge, resolve, filter by status, re-scan (no dialogs) |
 | `f`, `n` | activity | Filter severity, load older |

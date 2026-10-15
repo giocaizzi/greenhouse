@@ -10,6 +10,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Reques
 from fastapi.responses import RedirectResponse, Response
 
 from greenhouse_core.constants import (
+    CHART_RANGE_HOURS,
+    DEFAULT_CHART_RANGE_HOURS,
     HOURS_PER_DAY,
     PLANT_PAGE_HEALTH_HISTORY_DAYS,
     PLANT_PAGE_LAST_IRRIGATED_DAYS,
@@ -27,7 +29,6 @@ from greenhouse_server.deps import (
     require_plant_in_cluster,
 )
 from greenhouse_server.services.charts import (
-    ALLOWED_HOURS,
     build_plant_chart_payload,
     build_plant_health_timeline_payload,
 )
@@ -53,7 +54,7 @@ class _PlantPageQuery:
 
     cluster_id: Annotated[int, Path()]
     plant_id: Annotated[int, Path()]
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +64,7 @@ class _ChartFragmentQuery:
     cluster_id: Annotated[int, Path()]
     plant_id: Annotated[int, Path()]
     metric: Annotated[str, Query()] = "soil_moisture"
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS
 
 
 @router.get("/clusters/{cluster_id}/plants/{plant_id}")
@@ -106,7 +107,7 @@ def plant_dashboard(
             recent_events=recent_events,
             alerts=plant_alerts,
             hours=query.hours,
-            allowed_hours=sorted(ALLOWED_HOURS),
+            allowed_hours=CHART_RANGE_HOURS,
             metrics=METRICS,
             chart_payloads=chart_payloads_json,
             health_score=health_score,

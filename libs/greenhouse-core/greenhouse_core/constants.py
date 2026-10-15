@@ -284,6 +284,13 @@ SECONDS_PER_MINUTE = 60
 SECONDS_PER_HOUR = 3600
 SECONDS_PER_DAY = 86400
 
+# ── Chart timeframes ─────────────────────────────────────────────────────────
+
+# Look-back windows the web UI and the TUI offer for sensor charts, in hours (3, 14, 30, 60
+# and 90 days); the API's ``hours`` parameter accepts any 1-8760, these are the UI choices.
+CHART_RANGE_HOURS = (72, 336, 720, 1440, 2160)
+DEFAULT_CHART_RANGE_HOURS = 72  # 3 days: default look-back of every chart (API, web, TUI)
+
 # ── Decision engine — lookbacks, baseline and weather skip ───────────────────
 
 SNAPSHOT_LOOKBACK_HOURS = 24  # sensor history feeding the decision snapshot

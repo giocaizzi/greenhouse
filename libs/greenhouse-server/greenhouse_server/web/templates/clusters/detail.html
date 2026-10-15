@@ -410,7 +410,7 @@
 </article>
 {% endif %}
 
-{# Chart section — per-metric chart-card with hour seg #}
+{# Chart section — per-metric chart-card with day-range seg #}
 {% if caps.can_monitor %}
 <section class="chart-section">
   <header class="chart-section__head">
@@ -418,9 +418,9 @@
     <nav class="seg" aria-label="Time range">
       {% for h in allowed_hours %}
         {% if h == hours %}
-          <strong>{{ h }}h</strong>
+          <strong>{{ h // 24 }}d</strong>
         {% else %}
-          <a href="/clusters/{{ cluster.id }}?hours={{ h }}">{{ h }}h</a>
+          <a href="/clusters/{{ cluster.id }}?hours={{ h }}">{{ h // 24 }}d</a>
         {% endif %}
       {% endfor %}
     </nav>
@@ -440,10 +440,10 @@
   {% endfor %}
 
   <article class="card chart-card"
-           hx-get="/clusters/{{ cluster.id }}/overlay-fragment?hours=72"
+           hx-get="/clusters/{{ cluster.id }}/overlay-fragment?hours={{ hours }}"
            hx-trigger="load"
            hx-swap="innerHTML">
-    <header class="chart-head"><h3>Multi-metric overlay (72h)</h3></header>
+    <header class="chart-head"><h3>Multi-metric overlay ({{ hours // 24 }}d)</h3></header>
     <div class="chart-body skeleton"><div class="skeleton__line med"></div><div class="skeleton__line short"></div></div>
   </article>
 

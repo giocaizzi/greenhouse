@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from rich.text import Text
 
-from greenhouse_cli.constants import ALL_WEEKDAYS, SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
+from greenhouse_cli.constants import ALL_WEEKDAYS, HOURS_PER_DAY, SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_MINUTE
 
 SEVERITY_STYLES = {
     "critical": "bold #ff5f5f",
@@ -94,6 +94,12 @@ def clock(ts: float | None, *, with_date: bool = False, tz: str | None = None) -
         return "—"
     fmt = "%Y-%m-%d %H:%M" if with_date else "%H:%M"
     return datetime.fromtimestamp(ts, zone(tz) if tz is not None else None).strftime(fmt)
+
+
+def range_days(hours: int) -> str:
+    """A chart look-back as days, e.g. ``72`` → ``3 days`` (``1 day`` for 24 hours)."""
+    days = hours // HOURS_PER_DAY
+    return f"{days} day" if days == 1 else f"{days} days"
 
 
 def num(value: float | None, unit: str = "", digits: int = 1) -> str:

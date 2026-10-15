@@ -152,9 +152,9 @@
     <nav class="seg" aria-label="Time range">
       {% for h in allowed_hours %}
         {% if h == hours %}
-          <strong>{{ h }}h</strong>
+          <strong>{{ h // 24 }}d</strong>
         {% else %}
-          <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}?hours={{ h }}">{{ h }}h</a>
+          <a href="/clusters/{{ cluster.id }}/plants/{{ plant.id }}?hours={{ h }}">{{ h // 24 }}d</a>
         {% endif %}
       {% endfor %}
     </nav>

@@ -17,7 +17,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, HorizontalScroll, Vertical, VerticalScroll
 from textual.widgets import Footer, Header, Static, TabbedContent, TabPane
 
-from greenhouse_cli.constants import ALL_WEEKDAYS
+from greenhouse_cli.constants import ALL_WEEKDAYS, CHART_RANGE_HOURS, DEFAULT_CHART_RANGE_HOURS
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui import render, resources
 from greenhouse_cli.tui.model import ClusterSummary, summarize
@@ -32,8 +32,6 @@ if TYPE_CHECKING:
     from textual.app import ComposeResult
 
 METRIC_ORDER = ["soil_moisture", "temperature", "env_humidity", "light", "overlay"]
-RANGES = [6, 24, 72, 168, 720]
-_PRELOAD_HOURS = 24  # soil chart window fetched with the overview; reused while the range matches
 STATS_DAYS = 7
 
 
@@ -69,7 +67,7 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         self.status: dict[str, Any] = {}
         self.detail: dict[str, Any] = {}
         self.metric = "soil_moisture"
-        self.hours = 24
+        self.hours = DEFAULT_CHART_RANGE_HOURS
         self._plants_loaded: list[int] = []
         self.plant_chart = "health"
         self._plant_id: int | None = None
@@ -176,7 +174,7 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         api = self.gh.api
         status, soil = await asyncio.gather(
             api(lambda c: c.status(cid)),
-            api(lambda c: c.cluster_chart_data(cid, hours=_PRELOAD_HOURS), quiet=True),
+            api(lambda c: c.cluster_chart_data(cid, hours=DEFAULT_CHART_RANGE_HOURS), quiet=True),
         )
         if status is None:
             return
@@ -188,7 +186,9 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         self._render_plants(status)
         tasks = [
             self._load_forecast(),
-            self._load_chart(soil if self.metric == "soil_moisture" and self.hours == _PRELOAD_HOURS else None),
+            self._load_chart(
+                soil if self.metric == "soil_moisture" and self.hours == DEFAULT_CHART_RANGE_HOURS else None
+            ),
             self._load_heatmap(),
             self._load_decisions(),
             self._load_history(),
@@ -236,7 +236,7 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         """Redraw the cluster chart for the current metric and range; ``payload`` reuses data already fetched."""
         label = "Overlay: soil / humidity / light (0-100)" if self.metric == "overlay" else fmt.METRICS[self.metric][0]
         self.query_one("#chart-hint", Static).update(
-            f"[b]{label}[/b] · {self.hours}h   [dim]m: next metric   [ / ]: shorter / longer range[/dim]"
+            f"[b]{label}[/b] · {fmt.range_days(self.hours)}   [dim]m: next metric   [ / ]: shorter / longer range[/dim]"
         )
         metric, hours, cid = self.metric, self.hours, self.cluster_id
         chart = self.query_one("#metric-chart", MetricChart)
@@ -276,13 +276,15 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
         )
 
     async def _load_plant_health(self, plant_id: int) -> None:
-        """Chart one plant: its 72h soil moisture, or its 90-day health timeline."""
+        """Chart one plant: its default-range soil moisture, or its 90-day health timeline."""
         self._plant_id = plant_id
         species = next((p["species"] for p in self.status.get("plants", []) if p["id"] == plant_id), "")
         chart = self.query_one("#plant-chart", MetricChart)
         if self.plant_chart == "moisture":
-            payload = await self.gh.api(lambda c: c.plant_chart_data(plant_id, hours=72), quiet=True)
-            chart.show_payload(payload, "soil_moisture", 72, title=f"Soil moisture — {species} (last 72h)")
+            hours = DEFAULT_CHART_RANGE_HOURS
+            payload = await self.gh.api(lambda c: c.plant_chart_data(plant_id, hours=hours), quiet=True)
+            title = f"Soil moisture — {species} (last {fmt.range_days(hours)})"
+            chart.show_payload(payload, "soil_moisture", hours, title=title)
             return
         timeline, health = await asyncio.gather(
             self.gh.api(lambda c: c.plant_health_timeline(plant_id), quiet=True),
@@ -352,8 +354,8 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
 
     def action_range(self, step: int) -> None:
         """Move ``step`` positions along the fixed chart ranges, clamped at both ends."""
-        idx = max(0, min(len(RANGES) - 1, RANGES.index(self.hours) + step))
-        self.hours = RANGES[idx]
+        idx = max(0, min(len(CHART_RANGE_HOURS) - 1, CHART_RANGE_HOURS.index(self.hours) + step))
+        self.hours = CHART_RANGE_HOURS[idx]
         self.run_worker(self._load_chart(), group="chart", exclusive=True)
 
     # ── Irrigation actions ───────────────────────────────────────────────
