@@ -4,9 +4,14 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Self, TypedDict
+from typing import TYPE_CHECKING, Any, Self, TypedDict, cast
 
-from greenhouse_core.constants import HEALTH_SCORE_WINDOW_DAYS, HOURS_PER_DAY, SECONDS_PER_HOUR
+from greenhouse_core.constants import (
+    HEALTH_CHART_MIN_DAYS,
+    HEALTH_SCORE_WINDOW_DAYS,
+    HOURS_PER_DAY,
+    SECONDS_PER_HOUR,
+)
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.plant_needs import moisture_target_range
@@ -15,7 +20,7 @@ from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
     from greenhouse_core.logic.cleaning import CleanedReading
-    from greenhouse_core.models import Sensor
+    from greenhouse_core.models import Plant, Sensor
 
 
 class HealthScore(TypedDict):
@@ -39,6 +44,38 @@ def _empty_score() -> HealthScore:
         "efficiency": None,
         "sample_count": 0,
     }
+
+
+class HealthChartSeries(TypedDict):
+    """One line of a plant's health chart: the composite score or one of its components (0-100)."""
+
+    key: str
+    label: str
+    points: list[tuple[int, float]]
+
+
+class PlantHealthChart(TypedDict):
+    """A plant's daily health score and components, ending on today's live score."""
+
+    plant_id: int
+    species: str
+    days: int
+    series: list[HealthChartSeries]
+
+
+# (key, label) of every chart series in legend order: the score first, then the components it averages.
+_CHART_SERIES: tuple[tuple[str, str], ...] = (
+    ("score", "Health score"),
+    ("soil_in_band_pct", "Soil in band"),
+    ("temp_in_band_pct", "Temperature in band"),
+    ("humidity_in_band_pct", "Humidity in band"),
+    ("efficiency", "Watering efficiency"),
+)
+
+
+def _chart_value(key: str, value: float) -> float:
+    """A component on the score's 0-100 scale (efficiency is stored as 0-1), one decimal."""
+    return round(value * 100 if key == "efficiency" else value, 1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +158,35 @@ class PlantHealthService:
             score is None when no readings and no efficiency are available.
         """
         return self._score_with_sources(plant_id, days)[0]
+
+    def health_chart(self, plant: "Plant", days: int) -> PlantHealthChart:
+        """The plant's score and components per daily snapshot, then today's live score.
+
+        The snapshot is daily, so the look-back never drops below ``HEALTH_CHART_MIN_DAYS``:
+        a 3-day range would otherwise plot two or three points. When the plant has a live
+        score, it replaces today's snapshot row, so the last point matches the page's score.
+        A series skips the days its component had no data.
+        """
+        window = max(days, HEALTH_CHART_MIN_DAYS)
+        live = self.compute_score(plant.id)
+        # Today's snapshot gives way to the live score; without one it stays.
+        skip_day = datetime.now(tz=UTC).strftime("%Y-%m-%d") if live["score"] is not None else None
+        rows: list[tuple[int, Mapping[str, float | None]]] = [
+            (row.timestamp, {key: getattr(row, key) for key, _ in _CHART_SERIES})
+            for row in self._repo.list_plant_health_history(plant.id, days=window)
+            if row.date_key != skip_day
+        ]
+        if live["score"] is not None:
+            rows.append((int(time.time()), cast("Mapping[str, float | None]", live)))
+        series: list[HealthChartSeries] = [
+            {
+                "key": key,
+                "label": label,
+                "points": [(ts, _chart_value(key, v)) for ts, values in rows if (v := values[key]) is not None],
+            }
+            for key, label in _CHART_SERIES
+        ]
+        return {"plant_id": plant.id, "species": plant.species, "days": window, "series": series}
 
     def _score_with_sources(self, plant_id: int, days: int) -> tuple[HealthScore, list[int]]:
         """The plant's score and the ids of the sensors whose readings fed it (snapshot provenance)."""
