@@ -7,9 +7,12 @@ import logging
 import os
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from greenhouse_core.constants import PLANT_CARE_FALLBACK
+
+if TYPE_CHECKING:  # annotation only: importing schemas at runtime would load Pydantic and SQLAlchemy
+    from greenhouse_core.schemas import SoilBandSource
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +146,23 @@ class PlantDatabase:
                 merged["category"] = resolved_category
 
         return merged
+
+    def soil_band_source(self, species: str | None = None, category: str | None = None) -> "SoilBandSource":
+        """Name the layer whose ``soil_moisture_target`` :meth:`get_care_data` returns for this plant.
+
+        The most specific layer that carries the key wins, as in the merge:
+        species > ``_category_defaults[c]`` > ``categories[c]``; with none of
+        them, the band is the built-in fallback (``builtin_fallback``).
+        """
+        species_data, resolved_category = self._resolve(species, category)
+        key = "soil_moisture_target"
+        if species_data and key in species_data:
+            return "species"
+        if resolved_category and key in self._data.get("_category_defaults", {}).get(resolved_category, {}):
+            return "category_defaults"
+        if resolved_category and key in self._data["categories"].get(resolved_category, {}):
+            return "category"
+        return "builtin_fallback"
 
     def _resolve(self, species: str | None, category: str | None) -> tuple[CareData | None, str | None]:
         """The matched species entry and the normalised category; a miss is logged, never silent."""

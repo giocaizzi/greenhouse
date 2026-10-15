@@ -140,3 +140,20 @@ class TestPlantDatabase:
             self.db.get_care_data(species="Figus", category="Tropicale")
         assert "species 'Figus' not found" in caplog.text
         assert "category 'tropicale' not found" in caplog.text
+
+    @pytest.mark.parametrize(
+        ("species", "category", "source"),
+        [
+            ("Ficus benjamina", None, "species"),
+            ("Ficus", "succulent", "species"),
+            ("Unknown planticus", "Tropical", "category"),
+            ("Figus", None, "builtin_fallback"),
+            ("Figus", "tropicale", "builtin_fallback"),
+            (None, None, "builtin_fallback"),
+        ],
+    )
+    def test_soil_band_source_names_the_layer_that_answered(
+        self, species: str | None, category: str | None, source: str
+    ) -> None:
+        """``soil_band_source`` names the most specific layer carrying ``soil_moisture_target`` (issue #150)."""
+        assert self.db.soil_band_source(species=species, category=category) == source

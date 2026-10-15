@@ -1,6 +1,6 @@
 """Pydantic v2 request/response schemas for the irrigation API."""
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -102,6 +102,23 @@ class PlantResponse(PlantBase):
 
     id: int
     cluster_id: int
+
+
+# The plant-DB layer a plant's soil band comes from; ``builtin_fallback`` is the 45-65 default.
+SoilBandSource = Literal["species", "category_defaults", "category", "builtin_fallback"]
+
+
+class PlantDetailResponse(PlantResponse):
+    """A plant with the soil band it is judged against and the plant-DB layer that band comes from.
+
+    ``soil_band_source`` is ``builtin_fallback`` when neither the species nor the
+    category resolves in the plant database: the plant then runs on the default
+    45-65 % band and a ``plant_care_defaulted`` info alert is open on it.
+    """
+
+    soil_moisture_min: float
+    soil_moisture_max: float
+    soil_band_source: SoilBandSource
 
 
 class PlantListResponse(BaseModel):

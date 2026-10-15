@@ -3,6 +3,30 @@
   ""
  ],
  "db_effect": {
+  "alerts": {
+   "added": [
+    {
+     "acknowledged_at": null,
+     "cluster_id": 3,
+     "code": "plant_care_defaulted",
+     "dedup_key": "plant::plant_care_defaulted::0::plant4",
+     "entity_id": 4,
+     "entity_type": "plant",
+     "first_seen_at": 1776247200,
+     "id": 4,
+     "last_seen_at": 1776247200,
+     "message": "Unknown fern: neither the species nor the category (none) is in the plant database, so it is judged against the default 45-65% band. Fix the species or category, or add the species.",
+     "occurrence_count": 1,
+     "payload_json": null,
+     "plant_id": 4,
+     "resolved_at": null,
+     "severity": "info",
+     "source": "plant",
+     "status": "open",
+     "title": "Default soil band · Unknown fern"
+    }
+   ]
+  },
   "plants": {
    "added": [
     {
