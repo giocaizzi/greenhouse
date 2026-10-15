@@ -16,7 +16,7 @@
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      }
     ],
@@ -55,7 +55,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       }
      ],
@@ -97,7 +97,7 @@
      "weather": null
     },
     "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%)",
+    "reason_text": "soil moderately dry (driest=35% < 45.0%, species band)",
     "triggered_by": "auto"
    }
   ],

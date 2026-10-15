@@ -355,6 +355,10 @@
    [
     "SENSOR_SETTLING",
     "sensor_settling"
+   ],
+   [
+    "SENSOR_FLATLINE",
+    "sensor_flatline"
    ]
   ]
  }
