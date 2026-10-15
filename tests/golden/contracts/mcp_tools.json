@@ -210,7 +210,7 @@
   },
   {
    "name": "list_all_plants",
-   "description": "List plants across all clusters\n\nList every plant across all clusters, with optional filters and cursor pagination.\n\nThe cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this\nendpoint exists so MCP tools, dashboards, and the global search can walk\nthe full plant collection without enumerating clusters first.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    category: Restrict to plants whose ``category`` matches exactly.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n\nReturns:\n    The page of plants plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"plants\": [\n    {\n      \"species\": \"Species\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "description": "List plants across all clusters\n\nList every plant across all clusters, with optional filters and cursor pagination.\n\nThe cluster-scoped list at ``/clusters/{id}/plants`` is unchanged; this\nendpoint exists so MCP tools, dashboards, and the global search can walk\nthe full plant collection without enumerating clusters first.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    category: Restrict to plants whose ``category`` matches exactly.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n    include_archived: Also list archived plants (left out by default).\n\nReturns:\n    The page of plants plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"plants\": [\n    {\n      \"species\": \"Species\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -259,6 +259,12 @@
       "description": "Id cursor — return rows with id > cursor",
       "title": "cursor",
       "type": "integer"
+     },
+     "include_archived": {
+      "type": "boolean",
+      "description": "Also list archived (soft-deleted) rows",
+      "default": false,
+      "title": "include_archived"
      }
     },
     "title": "list_all_plantsArguments"
@@ -384,13 +390,19 @@
   },
   {
    "name": "list_plants",
-   "description": "List Plants\n\nList every plant in a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\nReturns:\n    The cluster's plants (empty for an unknown cluster).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"species\": \"Species\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
+   "description": "List Plants\n\nList every plant in a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n    include_archived: Also list archived plants (left out by default).\n\nReturns:\n    The cluster's plants (empty for an unknown cluster).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"species\": \"Species\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
      "cluster_id": {
       "type": "integer",
       "title": "cluster_id"
+     },
+     "include_archived": {
+      "type": "boolean",
+      "description": "Also list archived (soft-deleted) rows",
+      "default": false,
+      "title": "include_archived"
      }
     },
     "title": "list_plantsArguments",
@@ -531,7 +543,35 @@
   },
   {
    "name": "delete_plant",
-   "description": "Delete a plant\n\nDelete a plant from a cluster.\n\nSensors previously linked to this plant retain their cluster membership\nbut have their plant_id set to null. This operation is irreversible.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n\nReturns:\n    success=True on successful deletion.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "description": "Archive (or purge) a plant\n\nArchive a plant (soft delete), or purge an already archived one.\n\nArchiving keeps the plant's id, health history and attributed readings, and\nhides it from listings, health snapshots and decisions; its sensors stay in\nthe cluster, unlinked. `POST .../restore` undoes it. `purge=true`\nhard-deletes an archived plant (its health snapshots go too); this is\nirreversible. Both write an activity event naming the plant.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    purge: Hard-delete instead of archiving (the plant must be archived).\n\nReturns:\n    success=True once archived (idempotent) or purged.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster; 409 on `purge=true` for a plant that is not archived.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "plant_id": {
+      "type": "integer",
+      "title": "plant_id"
+     },
+     "purge": {
+      "type": "boolean",
+      "description": "Hard-delete instead of archiving; only allowed on an already archived row",
+      "default": false,
+      "title": "purge"
+     }
+    },
+    "title": "delete_plantArguments",
+    "required": [
+     "cluster_id",
+     "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "restore_plant",
+   "description": "Restore an archived plant\n\nBring an archived plant back, with the same id and history (no-op for an active plant).\n\nIts former sensors are not re-linked: move them back with the sensor move tool.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The restored plant.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"species\": \"Species\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -544,7 +584,7 @@
       "title": "plant_id"
      }
     },
-    "title": "delete_plantArguments",
+    "title": "restore_plantArguments",
     "required": [
      "cluster_id",
      "plant_id"
@@ -944,7 +984,7 @@
   },
   {
    "name": "list_all_sensors",
-   "description": "List sensors across all clusters\n\nList every sensor across all clusters with optional cluster filter and cursor pagination.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n\nReturns:\n    The page of sensors plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"sensors\": [\n    {\n      \"tuya_device_id\": \"Tuya Device Id\",\n      \"name\": \"Name\",\n      \"type\": \"Type\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
+   "description": "List sensors across all clusters\n\nList every sensor across all clusters with optional cluster filter and cursor pagination.\n\nArgs:\n    cluster_id: Restrict to a single cluster.\n    limit: Page size (default 100, max 500).\n    cursor: Id-based cursor — pass the previous response's ``next_cursor``\n        to fetch the next page.\n    include_archived: Also list archived sensors (left out by default).\n\nReturns:\n    The page of sensors plus a ``next_cursor`` (None when the page was not\n    full and there are no more rows to fetch).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"sensors\": [\n    {\n      \"tuya_device_id\": \"Tuya Device Id\",\n      \"name\": \"Name\",\n      \"type\": \"Type\",\n      \"id\": 1,\n      \"cluster_id\": 1\n    }\n  ]\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -980,6 +1020,12 @@
       "description": "Id cursor — return rows with id > cursor",
       "title": "cursor",
       "type": "integer"
+     },
+     "include_archived": {
+      "type": "boolean",
+      "description": "Also list archived (soft-deleted) rows",
+      "default": false,
+      "title": "include_archived"
      }
     },
     "title": "list_all_sensorsArguments"
@@ -1044,13 +1090,19 @@
   },
   {
    "name": "list_sensors",
-   "description": "List Sensors\n\nList every sensor registered to a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n\nReturns:\n    The cluster's sensors (empty for an unknown cluster).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"tuya_device_id\": \"Tuya Device Id\",\n    \"name\": \"Name\",\n    \"type\": \"Type\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
+   "description": "List Sensors\n\nList every sensor registered to a cluster.\n\nArgs:\n    cluster_id: ID of the cluster to enumerate.\n    include_archived: Also list archived sensors (left out by default).\n\nReturns:\n    The cluster's sensors (empty for an unknown cluster).\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n[\n  {\n    \"tuya_device_id\": \"Tuya Device Id\",\n    \"name\": \"Name\",\n    \"type\": \"Type\",\n    \"id\": 1,\n    \"cluster_id\": 1\n  }\n]\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
      "cluster_id": {
       "type": "integer",
       "title": "cluster_id"
+     },
+     "include_archived": {
+      "type": "boolean",
+      "description": "Also list archived (soft-deleted) rows",
+      "default": false,
+      "title": "include_archived"
      }
     },
     "title": "list_sensorsArguments",
@@ -1154,7 +1206,7 @@
   },
   {
    "name": "delete_sensor",
-   "description": "Delete a sensor\n\nDelete a sensor and all its historical readings.\n\nThis operation is irreversible. The sensor must belong to the specified\ncluster.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n\nReturns:\n    success=True on successful deletion.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
+   "description": "Archive (or purge) a sensor\n\nArchive a sensor (soft delete), or purge an already archived one.\n\nArchiving keeps the sensor's id, readings, assignment history and Tuya\ndevice id, closes its open plant assignment, and takes it out of listings,\nsync, health checks, snapshots and decisions. `POST .../restore` undoes it.\n`purge=true` hard-deletes an archived sensor with all its readings and frees\nits Tuya device id; this is irreversible. Both write an activity event with\nthe sensor's name, Tuya device id, cluster, plant and reading count.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    purge: Hard-delete instead of archiving (the sensor must be archived).\n\nReturns:\n    success=True once archived (idempotent) or purged.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster; 409 on `purge=true` for a sensor that is not archived.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"success\": true\n}\n```",
    "inputSchema": {
     "type": "object",
     "properties": {
@@ -1165,6 +1217,12 @@
      "sensor_id": {
       "type": "integer",
       "title": "sensor_id"
+     },
+     "purge": {
+      "type": "boolean",
+      "description": "Hard-delete instead of archiving; only allowed on an already archived row",
+      "default": false,
+      "title": "purge"
      }
     },
     "title": "delete_sensorArguments",
@@ -1237,6 +1295,28 @@
      "cluster_id",
      "sensor_id",
      "plant_id"
+    ]
+   }
+  },
+  {
+   "name": "restore_sensor",
+   "description": "Restore an archived sensor\n\nBring an archived sensor back with the same id, readings and history (no-op for an active one).\n\nIt is re-linked to the plant it measured when archived, if that plant is\nstill active (a new assignment starts now); otherwise it comes back unlinked.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n\nReturns:\n    The restored sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"tuya_device_id\": \"Tuya Device Id\",\n  \"name\": \"Name\",\n  \"type\": \"Type\",\n  \"id\": 1,\n  \"cluster_id\": 1\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     }
+    },
+    "title": "restore_sensorArguments",
+    "required": [
+     "cluster_id",
+     "sensor_id"
     ]
    }
   },
@@ -2746,6 +2826,10 @@
    "method": "delete",
    "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}"
   },
+  "restore_plant": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}/restore"
+  },
   "move_plant": {
    "method": "post",
    "path": "/api/v1/plants/{plant_id}/move"
@@ -2825,6 +2909,10 @@
   "move_sensor": {
    "method": "post",
    "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/move"
+  },
+  "restore_sensor": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/restore"
   },
   "set_config": {
    "method": "put",

@@ -102,6 +102,7 @@ class PlantResponse(PlantBase):
 
     id: int
     cluster_id: int
+    archived_at: int | None = Field(default=None, description="Unix seconds it was archived; null while active")
 
 
 # The plant-DB layer a plant's soil band comes from; ``builtin_fallback`` is the 45-65 default.
@@ -255,6 +256,7 @@ class SensorResponse(SensorBase):
 
     id: int
     cluster_id: int
+    archived_at: int | None = Field(default=None, description="Unix seconds it was archived; null while active")
 
     @field_validator("config", mode="before")
     @classmethod

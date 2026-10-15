@@ -6,6 +6,7 @@
   "plants": {
    "added": [
     {
+     "archived_at": null,
      "category": "tropical",
      "cluster_id": 3,
      "id": 4,

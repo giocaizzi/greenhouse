@@ -92,9 +92,12 @@ class ClusterMixin(SensorMixin):
         )
         return highest + 1
 
-    def get_plants_in_cluster(self, cluster_id: int) -> list[Plant]:
-        """Get all plants in a cluster ordered by species."""
-        return list(self.session.scalars(select(Plant).where(Plant.cluster_id == cluster_id).order_by(Plant.species)))
+    def get_plants_in_cluster(self, cluster_id: int, *, include_archived: bool = False) -> list[Plant]:
+        """Get the plants in a cluster ordered by species (archived ones only when asked)."""
+        stmt = select(Plant).where(Plant.cluster_id == cluster_id).order_by(Plant.species)
+        if not include_archived:
+            stmt = stmt.where(Plant.archived_at.is_(None))
+        return list(self.session.scalars(stmt))
 
     # ── Plant Health Daily ────────────────────────────────────────────────────
 
@@ -157,6 +160,7 @@ class ClusterMixin(SensorMixin):
         filter_category: str | None = None,
         limit: int | None = None,
         after_id: int | None = None,
+        include_archived: bool = False,
     ) -> list[Plant]:
         """All plants regardless of cluster, with optional filters and pagination.
 
@@ -166,11 +170,14 @@ class ClusterMixin(SensorMixin):
                 (e.g. ``"tropical"``).
             limit: Maximum rows to return; ``None`` means no cap.
             after_id: Id-based cursor — return only rows with ``id > after_id``.
+            include_archived: Also return archived plants.
 
         Returns:
             Plants ordered by id ascending so cursor pagination is stable.
         """
         stmt = select(Plant).order_by(Plant.id)
+        if not include_archived:
+            stmt = stmt.where(Plant.archived_at.is_(None))
         if filter_cluster_id is not None:
             stmt = stmt.where(Plant.cluster_id == filter_cluster_id)
         if filter_category is not None:
@@ -206,10 +213,11 @@ class ClusterMixin(SensorMixin):
             self.session.scalars(
                 select(Plant)
                 .where(
+                    Plant.archived_at.is_(None),
                     or_(
                         func.lower(Plant.species).like(func.lower(pattern)),
                         func.lower(Plant.notes).like(func.lower(pattern)),
-                    )
+                    ),
                 )
                 .limit(limit)
             )

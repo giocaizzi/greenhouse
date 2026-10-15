@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from greenhouse_core.models import Plant
-from greenhouse_core.repository import SameClusterMoveError
+from greenhouse_core.repository import NotArchivedError, SameClusterMoveError
 from greenhouse_core.schemas import (
     CreatePlantRequest,
     MovePlantRequest,
@@ -35,12 +35,14 @@ router = APIRouter(tags=["plants"])
 
 
 @router.get("/plants", response_model=PlantListResponse, summary="List plants across all clusters")
-def list_all_plants(
+def list_all_plants(  # noqa: PLR0913 — one parameter per query filter: FastAPI reads them from the signature
     repo: RepoDep,
     cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
     category: Annotated[str | None, Query(description="Restrict results to a plant category")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
+    *,
+    include_archived: Annotated[bool, Query(description="Also list archived (soft-deleted) rows")] = False,
 ) -> PlantListResponse:
     """List every plant across all clusters, with optional filters and cursor pagination.
 
@@ -54,6 +56,7 @@ def list_all_plants(
         limit: Page size (default 100, max 500).
         cursor: Id-based cursor — pass the previous response's ``next_cursor``
             to fetch the next page.
+        include_archived: Also list archived plants (left out by default).
 
     Returns:
         The page of plants plus a ``next_cursor`` (None when the page was not
@@ -64,6 +67,7 @@ def list_all_plants(
         filter_category=category,
         limit=limit,
         after_id=cursor,
+        include_archived=include_archived,
     )
     next_cursor = rows[-1].id if len(rows) == limit else None
     return PlantListResponse(
@@ -119,16 +123,22 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep, plant
 
 
 @router.get("/clusters/{cluster_id}/plants", response_model=list[PlantResponse])
-def list_plants(cluster_id: int, repo: RepoDep) -> list[Plant]:
+def list_plants(
+    cluster_id: int,
+    repo: RepoDep,
+    *,
+    include_archived: Annotated[bool, Query(description="Also list archived (soft-deleted) rows")] = False,
+) -> list[Plant]:
     """List every plant in a cluster.
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+        include_archived: Also list archived plants (left out by default).
 
     Returns:
         The cluster's plants (empty for an unknown cluster).
     """
-    return repo.get_plants_in_cluster(cluster_id)
+    return repo.get_plants_in_cluster(cluster_id, include_archived=include_archived)
 
 
 @router.put("/clusters/{cluster_id}/plants/{plant_id}", response_model=PlantDetailResponse, summary="Update a plant")
@@ -162,29 +172,76 @@ def update_plant(
     return detail
 
 
-@router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Delete a plant")
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> SuccessResponse:
-    """Delete a plant from a cluster.
+@router.delete(
+    "/clusters/{cluster_id}/plants/{plant_id}", response_model=SuccessResponse, summary="Archive (or purge) a plant"
+)
+def delete_plant(
+    cluster_id: int,
+    plant_id: int,
+    repo: RepoDep,
+    *,
+    purge: Annotated[
+        bool, Query(description="Hard-delete instead of archiving; only allowed on an already archived row")
+    ] = False,
+) -> SuccessResponse:
+    """Archive a plant (soft delete), or purge an already archived one.
 
-    Sensors previously linked to this plant retain their cluster membership
-    but have their plant_id set to null. This operation is irreversible.
+    Archiving keeps the plant's id, health history and attributed readings, and
+    hides it from listings, health snapshots and decisions; its sensors stay in
+    the cluster, unlinked. `POST .../restore` undoes it. `purge=true`
+    hard-deletes an archived plant (its health snapshots go too); this is
+    irreversible. Both write an activity event naming the plant.
+
+    Args:
+        cluster_id: Cluster the plant belongs to.
+        plant_id: Numeric plant identifier.
+        purge: Hard-delete instead of archiving (the plant must be archived).
+
+    Returns:
+        success=True once archived (idempotent) or purged.
+
+    Raises:
+        HTTPException: 404 if the plant does not exist or belongs to a
+            different cluster; 409 on `purge=true` for a plant that is not archived.
+    """
+    require_plant_in_cluster(repo, cluster_id, plant_id)
+    if purge:
+        try:
+            repo.purge_plant(plant_id)
+        except NotArchivedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+    else:
+        repo.archive_plant(plant_id)
+    clear_care_alert(repo, plant_id)
+    repo.commit()
+    return SuccessResponse(success=True)
+
+
+@router.post(
+    "/clusters/{cluster_id}/plants/{plant_id}/restore",
+    response_model=PlantResponse,
+    summary="Restore an archived plant",
+)
+def restore_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Plant | None:
+    """Bring an archived plant back, with the same id and history (no-op for an active plant).
+
+    Its former sensors are not re-linked: move them back with the sensor move tool.
 
     Args:
         cluster_id: Cluster the plant belongs to.
         plant_id: Numeric plant identifier.
 
     Returns:
-        success=True on successful deletion.
+        The restored plant.
 
     Raises:
         HTTPException: 404 if the plant does not exist or belongs to a
             different cluster.
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    repo.delete_plant(plant_id)
-    clear_care_alert(repo, plant_id)
+    plant = repo.restore_plant(plant_id)
     repo.commit()
-    return SuccessResponse(success=True)
+    return plant
 
 
 @router.post("/plants/{plant_id}/move", response_model=PlantResponse)

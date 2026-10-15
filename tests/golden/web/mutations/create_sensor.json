@@ -17,6 +17,7 @@
   "sensors": {
    "added": [
     {
+     "archived_at": null,
      "cluster_id": 1,
      "config": "{}",
      "id": 5,

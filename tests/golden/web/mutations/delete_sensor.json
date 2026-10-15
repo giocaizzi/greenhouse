@@ -3,21 +3,30 @@
   ""
  ],
  "db_effect": {
-  "sensor_readings": {
-   "removed": [
-    "4",
-    "17",
-    "30",
-    "43",
-    "56",
-    "69",
-    "82"
+  "activity_events": {
+   "added": [
+    {
+     "code": "sensor_archived",
+     "entity_id": 4,
+     "entity_type": "sensor",
+     "id": 5,
+     "message": "archived sensor Room Climate (fake_tuya_sensor_00000004), 7 readings",
+     "payload_json": "{\"name\": \"Room Climate\", \"tuya_device_id\": \"fake_tuya_sensor_00000004\", \"cluster_id\": 1, \"plant_id\": null, \"reading_count\": 7}",
+     "severity": "info",
+     "source": "sensor",
+     "timestamp": 1776247200
+    }
    ]
   },
   "sensors": {
-   "removed": [
-    "4"
-   ]
+   "changed": {
+    "4": {
+     "archived_at": [
+      null,
+      1776247200
+     ]
+    }
+   }
   }
  },
  "device_calls": {

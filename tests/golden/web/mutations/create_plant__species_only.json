@@ -31,6 +31,7 @@
   "plants": {
    "added": [
     {
+     "archived_at": null,
      "category": null,
      "cluster_id": 3,
      "id": 4,

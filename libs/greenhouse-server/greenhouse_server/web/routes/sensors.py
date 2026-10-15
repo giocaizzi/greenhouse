@@ -148,8 +148,8 @@ def update_sensor(repo: RepoDep, registry: DeviceRegistryDep, form: Annotated[_E
 
 @router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_class=HTMLResponse)
 def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Response:
-    """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
+    """HTMX-targeted delete: archives the sensor (soft delete, like the API default); empty body removes the row."""
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    repo.delete_sensor(sensor_id)
+    repo.archive_sensor(sensor_id)
     repo.commit()
     return HTMLResponse("")

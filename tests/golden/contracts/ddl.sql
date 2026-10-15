@@ -216,6 +216,7 @@ CREATE TABLE plants (
 	ideal_humidity_min DOUBLE,
 	ideal_humidity_max DOUBLE,
 	notes VARCHAR,
+	archived_at INTEGER,
 	PRIMARY KEY (id),
 	FOREIGN KEY(cluster_id) REFERENCES clusters (id)
 )
@@ -246,6 +247,7 @@ CREATE TABLE sensors (
 	type VARCHAR NOT NULL,
 	config VARCHAR,
 	plant_id INTEGER,
+	archived_at INTEGER,
 	PRIMARY KEY (id),
 	FOREIGN KEY(cluster_id) REFERENCES clusters (id),
 	UNIQUE (tuya_device_id),

@@ -151,6 +151,9 @@ class Plant(Base):
     ideal_humidity_min: Mapped[float | None] = mapped_column()
     ideal_humidity_max: Mapped[float | None] = mapped_column()
     notes: Mapped[str | None] = mapped_column(String)
+    # Soft delete (issue #149): set when archived; archived plants drop out of listings,
+    # snapshots and decisions but keep their id, health history and attributed readings.
+    archived_at: Mapped[int | None] = mapped_column(Integer)
 
     cluster: Mapped["Cluster"] = relationship(back_populates="plants")
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="plant")
@@ -192,6 +195,9 @@ class Sensor(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)
     config: Mapped[str | None] = mapped_column(String)
     plant_id: Mapped[int | None] = mapped_column(ForeignKey("plants.id"))
+    # Soft delete (issue #149): an archived sensor is out of listings, sync, health and
+    # decisions but keeps its readings and its tuya_device_id (freed only by a purge).
+    archived_at: Mapped[int | None] = mapped_column(Integer)
 
     cluster: Mapped["Cluster"] = relationship(back_populates="sensors")
     plant: Mapped["Plant | None"] = relationship(back_populates="sensors")

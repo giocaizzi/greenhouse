@@ -132,8 +132,8 @@ class TestSensorCRUD:
         resp = client.put("/api/v1/clusters/1/sensors/999", json={"name": "X"})
         assert resp.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_sensor(self, client: TestClient) -> None:
-        """Delete sensor."""
+    def test_delete_sensor_archives_it(self, client: TestClient) -> None:
+        """Delete archives the sensor (#149): gone from the listing, still readable by id."""
         client.post("/api/v1/clusters", json={"name": "C1"})
         client.post(
             "/api/v1/clusters/1/sensors",
@@ -143,8 +143,8 @@ class TestSensorCRUD:
         assert resp.status_code == HTTPStatus.OK
         assert resp.json()["success"] is True
 
-        resp = client.get("/api/v1/clusters/1/sensors/1")
-        assert resp.status_code == HTTPStatus.NOT_FOUND
+        assert client.get("/api/v1/clusters/1/sensors").json() == []
+        assert client.get("/api/v1/clusters/1/sensors/1").json()["archived_at"] is not None
 
     def test_delete_wrong_cluster_returns_404(self, client: TestClient) -> None:
         """Delete wrong cluster returns 404."""

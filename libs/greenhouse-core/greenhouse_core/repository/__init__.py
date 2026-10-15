@@ -44,7 +44,7 @@ from greenhouse_core.models import (
     UserPreferences,
     VacationWindow,
 )
-from greenhouse_core.repository._clusters import ClusterMixin
+from greenhouse_core.repository._archive import ArchiveMixin
 from greenhouse_core.repository._irrigation import IrrigatorMixin
 from greenhouse_core.repository._settings import SettingsMixin
 from greenhouse_core.repository._types import (
@@ -62,6 +62,7 @@ from greenhouse_core.repository._types import (
     IrrigationWindowPatch,
     IrrigatorExistsError,
     IrrigatorPatch,
+    NotArchivedError,
     PlantCareFields,
     PlantHealthScores,
     PlantPatch,
@@ -106,6 +107,7 @@ __all__ = [
     "Irrigator",
     "IrrigatorExistsError",
     "IrrigatorPatch",
+    "NotArchivedError",
     "Plant",
     "PlantCareFields",
     "PlantHealthDaily",
@@ -131,7 +133,7 @@ __all__ = [
 ]
 
 
-class IrrigationRepository(ClusterMixin, IrrigatorMixin, SettingsMixin):
+class IrrigationRepository(ArchiveMixin, IrrigatorMixin, SettingsMixin):
     """Repository for irrigation system data access."""
 
     # ── Irrigation Events ─────────────────────────────────────────────────────

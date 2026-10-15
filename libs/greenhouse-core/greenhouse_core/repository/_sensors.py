@@ -68,9 +68,12 @@ class SensorMixin(AssignmentMixin):
             self._open_sensor_assignment(sensor.id, plant_id, when=ts)
         return sensor.id
 
-    def get_sensors_in_cluster(self, cluster_id: int) -> list[Sensor]:
-        """Get all sensors in a cluster ordered by name."""
-        return list(self.session.scalars(select(Sensor).where(Sensor.cluster_id == cluster_id).order_by(Sensor.name)))
+    def get_sensors_in_cluster(self, cluster_id: int, *, include_archived: bool = False) -> list[Sensor]:
+        """Get the sensors in a cluster ordered by name (archived ones only when asked)."""
+        stmt = select(Sensor).where(Sensor.cluster_id == cluster_id).order_by(Sensor.name)
+        if not include_archived:
+            stmt = stmt.where(Sensor.archived_at.is_(None))
+        return list(self.session.scalars(stmt))
 
     # ── Sensor Readings ───────────────────────────────────────────────────────
 
@@ -231,6 +234,7 @@ class SensorMixin(AssignmentMixin):
         filter_cluster_id: int | None = None,
         limit: int | None = None,
         after_id: int | None = None,
+        include_archived: bool = False,
     ) -> list[Sensor]:
         """All sensors regardless of cluster (used by health pulse, anomaly).
 
@@ -238,11 +242,14 @@ class SensorMixin(AssignmentMixin):
             filter_cluster_id: Restrict results to one cluster.
             limit: Maximum rows to return; ``None`` means no cap.
             after_id: Id-based cursor — return only rows with ``id > after_id``.
+            include_archived: Also return archived sensors.
 
         Returns:
             Sensors ordered by id ascending so cursor pagination is stable.
         """
         stmt = select(Sensor).order_by(Sensor.id)
+        if not include_archived:
+            stmt = stmt.where(Sensor.archived_at.is_(None))
         if filter_cluster_id is not None:
             stmt = stmt.where(Sensor.cluster_id == filter_cluster_id)
         return list(self.session.scalars(self._page(stmt, Sensor.id, limit=limit, after_id=after_id)))
@@ -265,10 +272,11 @@ class SensorMixin(AssignmentMixin):
             self.session.scalars(
                 select(Sensor)
                 .where(
+                    Sensor.archived_at.is_(None),
                     or_(
                         func.lower(Sensor.name).like(func.lower(pattern)),
                         Sensor.tuya_device_id.like(f"{prefix}%"),
-                    )
+                    ),
                 )
                 .limit(limit)
             )
