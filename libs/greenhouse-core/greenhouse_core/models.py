@@ -4,7 +4,7 @@ import json
 from enum import StrEnum
 from typing import Any
 
-from sqlalchemy import Float, ForeignKey, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from greenhouse_core.constants import FULL_WEEKDAY_MASK
@@ -208,7 +208,8 @@ class SensorAssignment(Base):
     measuring at reading time, even after the sensor is reassigned.
 
     Lifecycle:
-    - One open row per sensor at any time (``ended_at IS NULL`` means current).
+    - One open row per sensor at any time (``ended_at IS NULL`` means current),
+      enforced by the partial unique index ``uq_sensor_assignments_open``.
     - Assignment opens when a sensor is created with ``plant_id`` set OR when a
       PUT changes its ``plant_id`` to a non-NULL value.
     - Assignment closes (``ended_at`` is stamped) when ``plant_id`` changes
@@ -222,6 +223,7 @@ class SensorAssignment(Base):
         Index("idx_sensor_assignments_sensor", "sensor_id"),
         Index("idx_sensor_assignments_plant", "plant_id"),
         Index("idx_sensor_assignments_time", "started_at", "ended_at"),
+        Index("uq_sensor_assignments_open", "sensor_id", unique=True, sqlite_where=text("ended_at IS NULL")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -440,6 +442,8 @@ class PlantHealthDaily(Base):
     humidity_in_band_pct: Mapped[float | None] = mapped_column()
     efficiency: Mapped[float | None] = mapped_column()
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Provenance: the sensors whose readings fed the score (None on rows written before it was recorded).
+    sensor_ids: Mapped[list[int] | None] = mapped_column(JSON)
 
 
 class IrrigationWindow(Base):

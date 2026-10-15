@@ -1780,6 +1780,73 @@
     }
    }
   },
+  "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/move": {
+   "post": {
+    "tags": [
+     "sensors"
+    ],
+    "summary": "Move a sensor to another plant, effective at a given time",
+    "description": "Record that a sensor was physically moved to another plant (or detached), and when.\n\nReadings are attributed to a plant by the sensor's assignment history, so\ndating the move right matters: readings before `effective_at` stay with the\nold plant, readings after it (past a settle window, 30 min by default, while\nthe probe is not judged) count for the new one. Sending the plant the sensor\nis already on re-dates its last move instead — e.g. a move done at 09:00 but\nentered at 14:00. Writes a `sensor_reassigned` activity event.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: `plant_id` (null detaches) and optional `effective_at` (Unix\n        seconds, default now).\n\nReturns:\n    The sensor's assignment history after the move, oldest first.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if `plant_id` is not a plant of that cluster;\n        400 if `effective_at` is in the future, before the current\n        assignment started, or would overlap the previous assignment.",
+    "operationId": "move_sensor",
+    "security": [
+     {
+      "HTTPBearer": []
+     }
+    ],
+    "parameters": [
+     {
+      "name": "cluster_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Cluster Id"
+      }
+     },
+     {
+      "name": "sensor_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "integer",
+       "title": "Sensor Id"
+      }
+     }
+    ],
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MoveSensorRequest"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SensorAssignmentListResponse"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
   "/api/v1/clusters/{cluster_id}/config": {
    "put": {
     "tags": [
@@ -6758,6 +6825,40 @@
     "title": "MovePlantRequest",
     "description": "Body for POST /plants/{plant_id}/move."
    },
+   "MoveSensorRequest": {
+    "properties": {
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Plant Id",
+      "description": "Plant the sensor now measures; null detaches it from any plant"
+     },
+     "effective_at": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Effective At",
+      "description": "Unix seconds the physical move happened (default: now); not in the future and not before the current assignment started. Same plant as now = re-date the last move."
+     }
+    },
+    "type": "object",
+    "required": [
+     "plant_id"
+    ],
+    "title": "MoveSensorRequest",
+    "description": "Move a sensor to another plant (or detach it), effective at a given time."
+   },
    "MultiMetricOverlayResponse": {
     "properties": {
      "cluster_id": {
@@ -7035,6 +7136,21 @@
      "sample_count": {
       "type": "integer",
       "title": "Sample Count"
+     },
+     "sensor_ids": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sensor Ids",
+      "description": "Sensors whose readings fed the score (null on snapshots taken before it was recorded)"
      }
     },
     "type": "object",

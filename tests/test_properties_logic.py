@@ -428,6 +428,15 @@ class FakeRepo:
         del hours  # signature mirrors the real one; unused by this fake
         return sorted(self._readings[sensor_id], key=lambda r: r.timestamp, reverse=True)
 
+    def judged_since(self, sensor_id: int) -> int:
+        """No assignment history in this fake: every reading counts."""
+        del sensor_id  # no assignment history in this fake: no sensor was moved
+        return 0
+
+    def get_judged_readings(self, sensor_id: int, hours: int = 24) -> list[Row]:
+        """Every reading of the sensor (nothing was moved)."""
+        return self.get_recent_readings(sensor_id, hours)
+
     def get_irrigator_for_cluster(self, cluster_id: int) -> SimpleNamespace | None:
         """Return the pump, or None when the cluster has none."""
         del cluster_id  # signature mirrors the real one; unused by this fake

@@ -616,6 +616,24 @@
   "include_in_schema": true,
   "kind": "APIRoute",
   "methods": [
+   "POST"
+  ],
+  "name": "move_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/move",
+  "response_class": "JSONResponse",
+  "response_model": "SensorAssignmentListResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
    "DELETE"
   ],
   "name": "delete_sensor",

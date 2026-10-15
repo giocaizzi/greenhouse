@@ -89,6 +89,7 @@ class SensorSpec:
     name: str
     readings: tuple[Reading, ...]
     plant: int | None = None
+    moved: tuple[int, int] | None = None  # (old plant index, move age_s): on that plant until the move
 
 
 @dataclass(frozen=True)
@@ -394,9 +395,11 @@ def _seed_sensors(repo: IrrigationRepository, case: Case, cluster_id: int, plant
             name=spec.name,
             sensor_type="tuya.tr301z",
             config={},
-            plant_id=plant_ids[spec.plant] if spec.plant is not None else None,
+            plant_id=plant_ids[spec.moved[0] if spec.moved else spec.plant] if spec.plant is not None else None,
             assignment_started_at=0,
         )
+        if spec.moved is not None and spec.plant is not None:
+            repo.reassign_sensor_to_plant(sid, plant_ids[spec.plant], when=now - spec.moved[1])
         sensor_ids.append(sid)
         rows: list[ReadingRow] = [
             (sid, now - r.age_s, r.temp, r.soil, r.light, r.hum, None, r.water_warning) for r in spec.readings
@@ -1375,6 +1378,35 @@ def _misc_family() -> list[Case]:
         Case(id="misc/no-plants", family="misc", at=BASE_AT, plants=(), sensors=(_sensor(38.0, plant=None),)),
         Case(id="misc/no-plants-no-sensors", family="misc", at=BASE_AT, plants=()),
         Case(id="misc/no-irrigator-dry", family="misc", at=BASE_AT, irrigator=False, sensors=(_sensor(38.0),)),
+        # Sensor moves (issue #145): a reading measured in the old pot never judges the new plant.
+        Case(
+            id="misc/sensor-just-moved",
+            family="misc",
+            at=BASE_AT,
+            plants=MIXED_PLANTS,
+            sensors=(
+                SensorSpec(
+                    name="Moved Soil",
+                    readings=(Reading(age_s=HOUR, soil=20.0, temp=22.0), Reading(age_s=300, soil=60.0, temp=22.0)),
+                    plant=1,
+                    moved=(0, 600),
+                ),
+            ),
+        ),
+        Case(
+            id="misc/sensor-moved-settled",
+            family="misc",
+            at=BASE_AT,
+            plants=MIXED_PLANTS,
+            sensors=(
+                SensorSpec(
+                    name="Moved Soil",
+                    readings=(Reading(age_s=3 * HOUR, soil=20.0, temp=22.0), Reading(age_s=HOUR, soil=60.0, temp=22.0)),
+                    plant=1,
+                    moved=(0, 2 * HOUR),
+                ),
+            ),
+        ),
         Case(
             id="misc/manual-trigger-dry",
             family="misc",

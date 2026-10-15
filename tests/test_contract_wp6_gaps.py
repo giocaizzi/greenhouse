@@ -189,6 +189,13 @@ class _LearningRepo:
         self.calls.append((sensor_id, hours))
         return list(self._readings.get((sensor_id, hours), []))
 
+    def judged_since(self, sensor_id: int) -> int:
+        del sensor_id  # no assignment history in this fake: no sensor was moved
+        return 0
+
+    def get_judged_readings(self, sensor_id: int, hours: int = 24) -> list[SimpleNamespace]:
+        return self.get_recent_readings(sensor_id, hours)
+
     def get_preferences(self) -> None:
         return None  # no preferences row: the learning light season reads the UTC month
 
@@ -412,6 +419,13 @@ class _TrendRepo:
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SimpleNamespace]:
         self.calls.append(("readings", sensor_id, hours))
         return list(self._rows)
+
+    def judged_since(self, sensor_id: int) -> int:
+        del sensor_id  # no assignment history in this fake: no sensor was moved
+        return 0
+
+    def get_judged_readings(self, sensor_id: int, hours: int = 24) -> list[SimpleNamespace]:
+        return self.get_recent_readings(sensor_id, hours)
 
     def get_irrigator_for_cluster(self, cluster_id: int) -> SimpleNamespace | None:
         del cluster_id  # signature mirrors the real one; unused by this fake

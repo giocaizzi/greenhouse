@@ -6,7 +6,7 @@
 - ``contracts/orm_columns.json`` — per column what DDL does not show: Python-side
   ``default`` / ``onupdate``, ``index`` / ``unique`` flags, foreign keys; plus the
   mapped class → table map;
-- the literal Alembic head ``b2e4a6c8d013`` and the full revision chain;
+- the literal Alembic head ``b3c5e7f9a104`` and the full revision chain;
 - ``contracts/migrated_schema.json`` — SQLAlchemy reflection of a temp-file SQLite
   after ``init_db`` (the schema production actually runs), which must equal
   ``Base.metadata.create_all`` on another temp file (no drift; only ``alembic_version``
@@ -34,16 +34,17 @@ if TYPE_CHECKING:
 
     from sqlalchemy import Constraint, Engine, FetchedValue, FromClause
     from sqlalchemy.engine import Inspector
+    from sqlalchemy.engine.interfaces import ReflectedIndex
     from sqlalchemy.schema import DefaultGenerator
 
 TABLE_COUNT = 17
 
-# sha256 of "\n".join(DDL statements), re-recorded for alerts.last_notified_at (#146).
+# sha256 of "\n".join(DDL statements), re-recorded for the open-assignment partial unique index (#145).
 PHASE0_DDL_SHA256 = (
     "b90ba1eb067d3a7bf0d33772dd74905b51d8b9b4c241c1998785952df38dbd6d"  # gitleaks:allow — content hash, not a secret
 )
 
-ALEMBIC_HEAD = "b2e4a6c8d013"
+ALEMBIC_HEAD = "b3c5e7f9a104"
 ALEMBIC_CHAIN = [
     ("1c9b09f02432", None),
     ("2a4d1e7c8f02", "1c9b09f02432"),
@@ -57,6 +58,7 @@ ALEMBIC_CHAIN = [
     ("9f2b5e7c6a31", "8e1a4d6c5f20"),
     ("a1d3f5b7c902", "9f2b5e7c6a31"),
     ("b2e4a6c8d013", "a1d3f5b7c902"),
+    ("b3c5e7f9a104", "b2e4a6c8d013"),
 ]
 
 
@@ -171,6 +173,12 @@ def _sqlite_columns(insp: Inspector, table: str) -> list[dict[str, Any]]:
     return [dict(c) for c in insp.get_columns(table)]
 
 
+def _plain_index(index: ReflectedIndex) -> dict[str, Any]:
+    """The reflected index with a partial index's ``WHERE`` clause as text (a TextClause compares by identity)."""
+    options = {key: str(value) for key, value in index.get("dialect_options", {}).items()}
+    return {**index, "dialect_options": options}
+
+
 def _reflect(engine: Engine) -> dict[str, Any]:
     insp = inspect(engine)
     out: dict[str, Any] = {}
@@ -190,7 +198,7 @@ def _reflect(engine: Engine) -> dict[str, Any]:
             ],
             "primary_key": insp.get_pk_constraint(name),
             "foreign_keys": insp.get_foreign_keys(name),
-            "indexes": sorted(insp.get_indexes(name), key=lambda i: i["name"] or ""),
+            "indexes": sorted((_plain_index(i) for i in insp.get_indexes(name)), key=lambda i: i["name"] or ""),
             "unique_constraints": sorted(
                 insp.get_unique_constraints(name), key=lambda u: (u["name"] or "", u["column_names"])
             ),

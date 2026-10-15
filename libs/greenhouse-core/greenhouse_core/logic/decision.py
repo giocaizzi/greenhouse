@@ -101,6 +101,9 @@ class TriggerCode(StrEnum):
     # before the pump: the run is evaluated and logged, then turned into a SKIP
     # led by this reason instead of actuating.
     DRY_RUN_GLOBAL = "dry_run_global"
+    # Advisory: a sensor was moved between plants within SENSOR_MOVE_SETTLE_SECONDS,
+    # so its readings are not judged yet (issue #145). Appended last, never primary.
+    SENSOR_SETTLING = "sensor_settling"
 
 
 DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(
@@ -169,6 +172,10 @@ class SensorSnapshot(BaseModel):
     avg_light: float | None = None
     per_sensor: list[PerSensorSnapshot] = Field(default_factory=list)
     water_warnings: list[str] = Field(default_factory=list)
+    # Sensors inside their post-move settle window (SENSOR_MOVE_SETTLE_SECONDS): they
+    # neither drive nor veto. Reported as a SENSOR_SETTLING reason, so left out of
+    # the persisted payload (exclude=True) and the decision-log schema is unchanged.
+    settling: list[str] = Field(default_factory=list, exclude=True)
 
     @property
     def has_data(self) -> bool:

@@ -13,13 +13,10 @@ from greenhouse_core.constants import (
     SECONDS_PER_HOUR,
 )
 from greenhouse_core.models import (
-    ENTITY_SENSOR,
-    SOURCE_SENSOR,
     Sensor,
-    SensorAssignment,
     SensorReading,
 )
-from greenhouse_core.repository._audit import AuditMixin
+from greenhouse_core.repository._assignments import AssignmentMixin
 from greenhouse_core.repository._types import (
     ReadingValues,
     SensorPatch,
@@ -32,7 +29,7 @@ if TYPE_CHECKING:
     from sqlalchemy.engine import CursorResult
 
 
-class SensorMixin(AuditMixin):
+class SensorMixin(AssignmentMixin):
     """Sensors, sensor assignments and sensor readings."""
 
     # ── Sensors ───────────────────────────────────────────────────────────────
@@ -70,97 +67,6 @@ class SensorMixin(AuditMixin):
             ts = assignment_started_at if assignment_started_at is not None else int(time.time())
             self._open_sensor_assignment(sensor.id, plant_id, when=ts)
         return sensor.id
-
-    # ── Sensor assignment history ────────────────────────────────────────────
-    # Sensor.plant_id is the current pointer; SensorAssignment is the history.
-    # The two are kept in lock-step by reassign_sensor_to_plant() — never
-    # mutate Sensor.plant_id directly outside this module.
-
-    def _open_sensor_assignment(self, sensor_id: int, plant_id: int, *, when: int) -> SensorAssignment:
-        row = SensorAssignment(sensor_id=sensor_id, plant_id=plant_id, started_at=when, ended_at=None)
-        self.session.add(row)
-        self.session.flush()
-        return row
-
-    def _close_open_sensor_assignment(self, sensor_id: int, *, when: int) -> None:
-        open_row = self.session.scalars(
-            select(SensorAssignment).where(
-                SensorAssignment.sensor_id == sensor_id,
-                SensorAssignment.ended_at.is_(None),
-            )
-        ).first()
-        if open_row is not None and open_row.ended_at is None:
-            open_row.ended_at = when
-            self.session.flush()
-
-    def reassign_sensor_to_plant(self, sensor_id: int, new_plant_id: int | None, *, when: int | None = None) -> None:
-        """Atomically move a sensor to ``new_plant_id`` (or detach with None).
-
-        Closes any open assignment row for the sensor and, when ``new_plant_id``
-        is not None, opens a fresh one. The sensor's ``plant_id`` pointer is
-        updated to match. No-ops when the requested plant is already the
-        current assignment, so callers can use this as an idempotent setter.
-        Emits a ``sensor_reassigned`` activity event with the before/after plant
-        ids so the timeline can explain why a plant's chart suddenly changes
-        shape after a sensor move.
-        """
-        sensor = self.session.get(Sensor, sensor_id)
-        if sensor is None:
-            return
-        if sensor.plant_id == new_plant_id:
-            return
-        ts = when if when is not None else int(time.time())
-        from_plant_id = sensor.plant_id
-        self._close_open_sensor_assignment(sensor_id, when=ts)
-        sensor.plant_id = new_plant_id
-        if new_plant_id is not None:
-            self._open_sensor_assignment(sensor_id, new_plant_id, when=ts)
-        self.session.flush()
-        self.add_activity_event(
-            source=SOURCE_SENSOR,
-            entity_type=ENTITY_SENSOR,
-            entity_id=sensor_id,
-            code="sensor_reassigned",
-            message=f"reassigned sensor {sensor_id} from plant {from_plant_id} to plant {new_plant_id}",
-            severity="info",
-            payload={"from_plant_id": from_plant_id, "to_plant_id": new_plant_id},
-            timestamp=ts,
-        )
-
-    def list_sensor_assignments(self, sensor_id: int) -> list[SensorAssignment]:
-        """All assignment rows for one sensor, oldest first."""
-        return list(
-            self.session.scalars(
-                select(SensorAssignment)
-                .where(SensorAssignment.sensor_id == sensor_id)
-                .order_by(SensorAssignment.started_at)
-            )
-        )
-
-    def readings_for_plant(self, plant_id: int, *, since_ts: int, until_ts: int | None = None) -> list[SensorReading]:
-        """Return SensorReading rows attributed to ``plant_id`` over the window.
-
-        Joins via SensorAssignment so a reading is included only when the
-        sensor it came from was actually assigned to this plant at the reading
-        timestamp. Replaces the brittle `sensor.plant_id == plant_id` filter
-        used to lump historical readings under whichever plant the sensor
-        currently points at.
-        """
-        upper = until_ts if until_ts is not None else int(time.time())
-        stmt = (
-            select(SensorReading)
-            .join(SensorAssignment, SensorAssignment.sensor_id == SensorReading.sensor_id)
-            .where(
-                SensorAssignment.plant_id == plant_id,
-                SensorReading.timestamp >= SensorAssignment.started_at,
-                # Reading must fall inside the assignment window. NULL ended_at = still open.
-                (SensorAssignment.ended_at.is_(None)) | (SensorReading.timestamp < SensorAssignment.ended_at),
-                SensorReading.timestamp >= since_ts,
-                SensorReading.timestamp <= upper,
-            )
-            .order_by(SensorReading.timestamp)
-        )
-        return list(self.session.scalars(stmt))
 
     def get_sensors_in_cluster(self, cluster_id: int) -> list[Sensor]:
         """Get all sensors in a cluster ordered by name."""
@@ -274,6 +180,15 @@ class SensorMixin(AuditMixin):
                 .order_by(SensorReading.timestamp.desc())
             )
         )
+
+    def get_judged_readings(self, sensor_id: int, hours: int = 24) -> list[SensorReading]:
+        """``get_recent_readings`` (DESC) limited to the sensor's current link, settle window excluded.
+
+        The read every judgement about a sensor's current plant goes through, so
+        readings measured in another pot before a move never count (issue #145).
+        """
+        since = self.judged_since(sensor_id)
+        return [r for r in self.get_recent_readings(sensor_id, hours=hours) if r.timestamp >= since]
 
     def get_readings_around(
         self,

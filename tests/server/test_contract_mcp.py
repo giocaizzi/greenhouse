@@ -48,7 +48,7 @@ PHASE0_MCP_TOOLS_SHA256 = (
 )
 
 _TOKEN = TEST_MCP_TOKEN
-MCP_TOOL_COUNT = 84  # one tool per /api/v1 operation
+MCP_TOOL_COUNT = 85  # one tool per /api/v1 operation
 
 
 @pytest.fixture

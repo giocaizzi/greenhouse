@@ -230,6 +230,12 @@ SENSOR_HEALTH_BACKFILL_WINDOW = 5  # consecutive readings
 # inside the 6h actuation cooldown.
 SENSOR_READING_STALE_SECONDS = 14400  # 4h
 
+# After a sensor moves between plants (or is unlinked) its probe reads garbage for a
+# while — handling, air pockets, loose soil. Judgements (decisions, health, learning)
+# ignore its readings for this long after the move; charts still show them raw.
+# Calibration knob: raise it for probes that take longer to settle.
+SENSOR_MOVE_SETTLE_SECONDS = 1800  # 30 min
+
 # ── Open-Meteo Defaults (can be overridden via env vars) ─────────────────────
 
 DEFAULT_LATITUDE = 45.464  # Milan

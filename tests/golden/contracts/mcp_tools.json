@@ -1192,6 +1192,55 @@
    }
   },
   {
+   "name": "move_sensor",
+   "description": "Move a sensor to another plant, effective at a given time\n\nRecord that a sensor was physically moved to another plant (or detached), and when.\n\nReadings are attributed to a plant by the sensor's assignment history, so\ndating the move right matters: readings before `effective_at` stay with the\nold plant, readings after it (past a settle window, 30 min by default, while\nthe probe is not judged) count for the new one. Sending the plant the sensor\nis already on re-dates its last move instead — e.g. a move done at 09:00 but\nentered at 14:00. Writes a `sensor_reassigned` activity event.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: `plant_id` (null detaches) and optional `effective_at` (Unix\n        seconds, default now).\n\nReturns:\n    The sensor's assignment history after the move, oldest first.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if `plant_id` is not a plant of that cluster;\n        400 if `effective_at` is in the future, before the current\n        assignment started, or would overlap the previous assignment.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"sensor_id\": 1,\n  \"assignments\": [\n    {\n      \"id\": 1,\n      \"sensor_id\": 1,\n      \"plant_id\": 1,\n      \"started_at\": 1\n    }\n  ]\n}\n```",
+   "inputSchema": {
+    "type": "object",
+    "properties": {
+     "cluster_id": {
+      "type": "integer",
+      "title": "cluster_id"
+     },
+     "sensor_id": {
+      "type": "integer",
+      "title": "sensor_id"
+     },
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "plant_id",
+      "description": "Plant the sensor now measures; null detaches it from any plant",
+      "type": "integer"
+     },
+     "effective_at": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "effective_at",
+      "description": "Unix seconds the physical move happened (default: now); not in the future and not before the current assignment started. Same plant as now = re-date the last move.",
+      "type": "integer"
+     }
+    },
+    "title": "move_sensorArguments",
+    "required": [
+     "cluster_id",
+     "sensor_id",
+     "plant_id"
+    ]
+   }
+  },
+  {
    "name": "set_config",
    "description": "Set Config\n\nPatch a cluster's irrigation config.\n\nEvery field is optional and nullable: omit a field to leave it unchanged,\nset it to a value to override the global default, or set it to ``null`` to\nclear an existing override and re-inherit. Quiet hours follow the same\npattern; passing ``quiet_start_hour == quiet_end_hour`` switches quiet\nhours off at the cluster level (useful for outdoor clusters that should\nignore an inherited indoor-friendly window).\n\nArgs:\n    cluster_id: Cluster to configure.\n    request: Partial config payload — only the fields the client sets are\n        applied.\n\nReturns:\n    The declared (raw) config row after the patch.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\n### Responses:\n\n**200**: Successful Response (Success Response)\nContent-Type: application/json\n\n**Example Response:**\n```json\n{\n  \"id\": 1,\n  \"cluster_id\": 1,\n  \"last_updated\": 1\n}\n```",
    "inputSchema": {
@@ -2772,6 +2821,10 @@
   "list_sensor_assignments": {
    "method": "get",
    "path": "/api/v1/sensors/{sensor_id}/assignments"
+  },
+  "move_sensor": {
+   "method": "post",
+   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/move"
   },
   "set_config": {
    "method": "put",

@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from greenhouse_core.database import _alembic_config, head_revision, init_db
 
@@ -182,3 +182,37 @@ def test_the_alembic_command_line_still_configures_logging(monkeypatch: pytest.M
         command.upgrade(cfg, "head")
     engine.dispose()
     assert len(calls) == 1
+
+
+def test_open_assignment_upgrade_closes_duplicate_open_rows(file_db: str) -> None:
+    """``b3c5e7f9a104`` closes extra open rows before it adds the one-open-row-per-sensor index.
+
+    Each older open row ends where the sensor's next one starts, so the newest stays open
+    and the windows do not overlap; afterwards a second open row is refused.
+    """
+    engine = create_engine(file_db)
+    cfg = _alembic_config(engine)
+    with engine.connect() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "a1d3f5b7c902")
+        conn.commit()
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO clusters (id, name, environment, created_at) VALUES (1, 'C', 'indoor', 0)"))
+        conn.execute(text("INSERT INTO plants (id, cluster_id, species) VALUES (1, 1, 'A'), (2, 1, 'B'), (3, 1, 'C')"))
+        conn.execute(
+            text("INSERT INTO sensors (id, cluster_id, tuya_device_id, name, type) VALUES (1, 1, 'S1', 'S', 't')")
+        )
+        conn.execute(
+            text(
+                "INSERT INTO sensor_assignments (id, sensor_id, plant_id, started_at, ended_at) "
+                "VALUES (1, 1, 1, 0, NULL), (2, 1, 2, 100, NULL), (3, 1, 3, 200, NULL)"
+            )
+        )
+
+    init_db(engine)
+
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id, ended_at FROM sensor_assignments ORDER BY id")).fetchall()
+    assert [tuple(r) for r in rows] == [(1, 100), (2, 200), (3, None)]
+    with engine.begin() as conn, pytest.raises(IntegrityError):
+        conn.execute(text("INSERT INTO sensor_assignments (sensor_id, plant_id, started_at) VALUES (1, 1, 300)"))

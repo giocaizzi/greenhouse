@@ -992,6 +992,13 @@
     "nullable": false,
     "primary_key": 0,
     "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "sensor_ids",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "JSON"
    }
   ],
   "foreign_keys": [],
@@ -1217,6 +1224,16 @@
     "dialect_options": {},
     "name": "idx_sensor_assignments_time",
     "unique": 0
+   },
+   {
+    "column_names": [
+     "sensor_id"
+    ],
+    "dialect_options": {
+     "sqlite_where": "ended_at IS NULL"
+    },
+    "name": "uq_sensor_assignments_open",
+    "unique": 1
    }
   ],
   "primary_key": {

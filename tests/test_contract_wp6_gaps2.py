@@ -37,6 +37,13 @@ class _Repo:
         del sensor_id  # signature mirrors the real one; unused by this fake
         return list(self._rows) if hours == WEEK_HOURS else []
 
+    def judged_since(self, sensor_id: int) -> int:
+        del sensor_id  # no assignment history in this fake: no sensor was moved
+        return 0
+
+    def get_judged_readings(self, sensor_id: int, hours: int = 24) -> list[SimpleNamespace]:
+        return self.get_recent_readings(sensor_id, hours)
+
 
 class _PlantDb:
     def get_care_data(self, species: str | None = None, category: str | None = None) -> dict[str, str]:

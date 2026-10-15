@@ -33,9 +33,9 @@ def _moisture_windows(
 
 
 def _response_from(
-    sensor: Sensor, event: IrrigationEvent, pre: CleanedReading, post: CleanedReading
+    sensor: Sensor, plant_id: int | None, event: IrrigationEvent, pre: CleanedReading, post: CleanedReading
 ) -> IrrigationResponse:
-    """Response metrics between the last pre-event reading and the post-event peak."""
+    """Response metrics between the last pre-event reading and the post-event peak, for the plant measured then."""
     duration = event.duration_minutes or DEFAULT_DURATION_MINUTES
     pre_moisture = cast("float", pre.soil_moisture)
     post_moisture = cast("float", post.soil_moisture)
@@ -43,7 +43,7 @@ def _response_from(
 
     return IrrigationResponse(
         sensor_id=sensor.id,
-        plant_id=sensor.plant_id,
+        plant_id=plant_id,
         sensor_name=sensor.name,
         event_id=event.id,
         event_timestamp=event.timestamp,
@@ -83,7 +83,8 @@ def compute_sensor_response(
     # Post: use the reading with highest moisture (peak absorption)
     post = max(post_moisture_readings, key=lambda r: cast("float", r.soil_moisture))
 
-    return _response_from(sensor, event, pre, post)
+    # Attributed to the plant the sensor measured at the event, not its current one (issue #145).
+    return _response_from(sensor, db.plant_of_sensor_at(sensor.id, event.timestamp), event, pre, post)
 
 
 def analyze_irrigation_response(
@@ -158,7 +159,13 @@ def get_plant_profile(
     if irrigator is None:
         return None
 
-    cutoff = int(time.time()) - (days * SECONDS_PER_DAY)
+    # Only events whose whole baseline window falls inside the sensor's current link
+    # (settle window excluded) describe its current plant: earlier ones watered
+    # another pot (issue #145).
+    linked_since = db.judged_since(sensor.id)
+    if linked_since:
+        linked_since += RESPONSE_PRE_WINDOW_SECONDS
+    cutoff = max(int(time.time()) - (days * SECONDS_PER_DAY), linked_since)
     all_events = db.get_recent_events(irrigator.id, hours=days * 24)
     irrigation_events = [e for e in all_events if e.action == EVENT_ACTION_START and e.timestamp >= cutoff]
 
@@ -182,7 +189,7 @@ def compute_drainage_rate(db: IrrigationRepository, sensor: Sensor, days: int = 
     """
     # Cleaned view, chronological: drainage is read off consecutive deltas, so
     # a spike would register as both an impossible gain and a fake steep loss.
-    readings = clean_readings(db.get_recent_readings(sensor.id, hours=days * 24))
+    readings = clean_readings(db.get_judged_readings(sensor.id, hours=days * 24))
 
     # Find consecutive readings where moisture is declining
     declines = []
