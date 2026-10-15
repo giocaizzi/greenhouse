@@ -45,6 +45,7 @@ from greenhouse_core.models import (
     VacationWindow,
 )
 from greenhouse_core.repository._archive import ArchiveMixin
+from greenhouse_core.repository._assignments import AssignmentWindow
 from greenhouse_core.repository._irrigation import IrrigatorMixin
 from greenhouse_core.repository._settings import SettingsMixin
 from greenhouse_core.repository._types import (
@@ -88,6 +89,7 @@ __all__ = [
     "ActivityFilters",
     "Alert",
     "AlertOptions",
+    "AssignmentWindow",
     "Cluster",
     "ClusterPatch",
     "DecisionLog",
