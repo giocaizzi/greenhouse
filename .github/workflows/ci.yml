@@ -87,6 +87,26 @@ jobs:
         run: make sizecheck
 
   # ────────────────────────────────────────────────────────────────────────────
+  # deps — pip-audit over uv.lock (published advisories) and deptry per package
+  # (missing / unused / transitive imports). `make audit`. Fails when a new
+  # advisory is published against the lock, independent of the diff.
+  # ────────────────────────────────────────────────────────────────────────────
+  deps:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync
+      - run: make audit
+
+  # ────────────────────────────────────────────────────────────────────────────
   # hygiene — pre-commit's file-hygiene hooks (trailing whitespace, EOF, yaml,
   # toml, merge conflicts, large files, private keys, mixed line endings).
   # Skips ruff/hadolint/gitleaks since they have their own jobs.
@@ -172,7 +192,7 @@ jobs:
   # even when upstream jobs were *skipped* on a mechanical-only PR.
   # ────────────────────────────────────────────────────────────────────────────
   check:
-    needs: [detect-changes, lint, static, hygiene, dockerfile, secrets, test]
+    needs: [detect-changes, lint, static, deps, hygiene, dockerfile, secrets, test]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -181,6 +201,7 @@ jobs:
           R_DETECT: ${{ needs.detect-changes.result }}
           R_LINT: ${{ needs.lint.result }}
           R_STATIC: ${{ needs.static.result }}
+          R_DEPS: ${{ needs.deps.result }}
           R_HYGIENE: ${{ needs.hygiene.result }}
           R_DOCKERFILE: ${{ needs.dockerfile.result }}
           R_SECRETS: ${{ needs.secrets.result }}
@@ -190,13 +211,14 @@ jobs:
           printf '  detect-changes: %s\n' "$R_DETECT"
           printf '  lint:           %s\n' "$R_LINT"
           printf '  static:         %s\n' "$R_STATIC"
+          printf '  deps:           %s\n' "$R_DEPS"
           printf '  hygiene:        %s\n' "$R_HYGIENE"
           printf '  dockerfile:     %s\n' "$R_DOCKERFILE"
           printf '  secrets:        %s\n' "$R_SECRETS"
           printf '  test:           %s\n' "$R_TEST"
           fail=0
           [ "$R_SECRETS" = success ] || fail=1
-          for r in "$R_DETECT" "$R_LINT" "$R_STATIC" "$R_HYGIENE" "$R_DOCKERFILE" "$R_TEST"; do
+          for r in "$R_DETECT" "$R_LINT" "$R_STATIC" "$R_DEPS" "$R_HYGIENE" "$R_DOCKERFILE" "$R_TEST"; do
             case "$r" in
               success|skipped) ;;
               *) fail=1 ;;
