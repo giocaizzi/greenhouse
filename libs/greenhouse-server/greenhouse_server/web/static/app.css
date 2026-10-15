@@ -77,7 +77,8 @@
   --info:        #8EB7DD;
   --info-soft:   rgba(142, 183, 221, 0.10);
 
-  --ch-1: #7CC98F; --ch-2: #E5B060; --ch-3: #8EB7DD; --ch-4: #E37E6B;
+  /* Chart series (blue, magenta, yellow, green): CVD-validated all-pairs per mode, distinct from the status tokens. */
+  --ch-1: #3987E5; --ch-2: #D55181; --ch-3: #C98500; --ch-4: #008300;
 
   --shadow: none;
 
@@ -110,7 +111,7 @@
     --danger-soft: rgba(161, 64, 48, 0.08);
     --info:        #34618A;
     --info-soft:   rgba(52, 97, 138, 0.08);
-    --ch-1: #2E7A4C; --ch-2: #8A5D0E; --ch-3: #34618A; --ch-4: #A14030;
+    --ch-1: #2A78D6; --ch-2: #E87BA4; --ch-3: #EDA100; --ch-4: #008300;
     --shadow: 0 1px 2px rgba(30, 20, 0, 0.03), 0 0 0 1px var(--border);
     --atmosphere:
       radial-gradient(1200px 700px at 8% -10%,  rgba(46, 122, 76, 0.07), transparent 60%),
@@ -140,7 +141,7 @@
   --danger-soft: rgba(161, 64, 48, 0.08);
   --info:        #34618A;
   --info-soft:   rgba(52, 97, 138, 0.08);
-  --ch-1: #2E7A4C; --ch-2: #8A5D0E; --ch-3: #34618A; --ch-4: #A14030;
+  --ch-1: #2A78D6; --ch-2: #E87BA4; --ch-3: #EDA100; --ch-4: #008300;
   --shadow: 0 1px 2px rgba(30, 20, 0, 0.03), 0 0 0 1px var(--border);
   --atmosphere:
     radial-gradient(1200px 700px at 8% -10%,  rgba(46, 122, 76, 0.07), transparent 60%),
