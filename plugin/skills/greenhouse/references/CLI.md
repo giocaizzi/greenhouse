@@ -90,7 +90,8 @@ Notable flags:
 greenhouse cluster    add <name> [--location S] [--environment indoor|outdoor] | list | get <id>
                       | update <id> [--name S] [--location S] [--environment E] | delete <id> [--yes]
 greenhouse plant      add <species> --cluster N [--category S] [--water-needs low|medium|high] [--light-needs …]
-                          [--temp-min C] [--temp-max C] [--humidity-min %] [--humidity-max %] [--notes S]
+                          [--temp-min C] [--temp-max C] [--humidity-min %] [--humidity-max %]
+                          [--soil-target MIN-MAX] [--notes S]
                       | list [--cluster N] | sync [--plant-id N] [--cluster N] | move <id> --to-cluster N
                       | update <id> --cluster N [--species S] [same optional flags as add]
                       | delete <id> --cluster N [--yes]
