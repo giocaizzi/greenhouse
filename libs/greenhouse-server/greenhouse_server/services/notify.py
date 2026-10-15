@@ -7,10 +7,11 @@ never raise or block actuation — it always fires *after* the triggering action
 is persisted.
 
 ntfy reads the request **body** as the message and takes ``X-Title`` /
-``X-Tags`` / ``X-Priority`` headers (priority 1=min … 5=max); a bearer token is
-sent via ``Authorization`` when configured.
+``X-Tags`` / ``X-Priority`` headers (priority 1=min … 5=max); a non-ASCII title is
+RFC 2047 encoded. A bearer token is sent via ``Authorization`` when configured.
 """
 
+import base64
 import logging
 import urllib.request
 from collections.abc import Callable
@@ -54,13 +55,16 @@ def irrigator_label(irrigator: "Irrigator") -> str:
     return f"{irrigator.name} · {irrigator.cluster.name}"
 
 
-def _ascii(text: str) -> str:
-    """Strip a string to latin-1-safe bytes for use in an HTTP header value.
+def _header_text(text: str) -> str:
+    """Encode ``text`` for an HTTP header so ntfy shows it as written.
 
-    urllib rejects non-latin-1 header bytes, so unicode in device/cluster names
-    is dropped from the title; emoji live in ``X-Tags`` instead.
+    urllib sends header values as latin-1, which ntfy reads as UTF-8: an emoji is
+    rejected and even ``·`` or ``è`` arrives as ``�``. ntfy decodes RFC 2047
+    encoded words in its headers, so non-ASCII text goes as one UTF-8 base64 word.
     """
-    return text.encode("latin-1", "ignore").decode("latin-1")
+    if text.isascii():
+        return text
+    return f"=?UTF-8?B?{base64.b64encode(text.encode()).decode('ascii')}?="
 
 
 class NtfyClient:
@@ -75,7 +79,7 @@ class NtfyClient:
     def _publish(self, *, title: str, message: str, tags: str, priority: str) -> bool:
         """POST one notification. Returns True on success; never raises."""
         headers = {
-            "X-Title": _ascii(title),
+            "X-Title": _header_text(title),
             "X-Tags": tags,
             "X-Priority": priority,
         }

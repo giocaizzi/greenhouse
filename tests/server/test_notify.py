@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import email.header
 import time
 import urllib.request
 from http import HTTPStatus
@@ -140,14 +141,22 @@ class TestNtfyClient:
         NtfyClient("https://n", "t").notify_irrigation(triggered_by=TRIGGERED_BY_EMERGENCY, irrigator_name="all")
         assert captured["request"].headers["X-priority"] == "5"
 
-    def test_unicode_title_stripped_to_latin1(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Unicode title stripped to latin1."""
+    def test_non_ascii_title_is_rfc2047_encoded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """An emoji, ``·`` or accent in the title reaches ntfy intact as one RFC 2047 UTF-8 word."""
         captured = _capture_urlopen(monkeypatch)
-        # Emoji/CJK in the title would break urllib's latin-1 header encoding.
-        NtfyClient("https://n", "t").notify_alert(severity="warning", title="水 plant 🌱", message="m")
-        title = captured["request"].headers["X-title"]
-        assert title.encode("latin-1")  # does not raise
-        assert "plant" in title
+        title = "💨 Rapid drainage · Sensore 2 è"
+        NtfyClient("https://ntfy.example", "t").notify_alert(severity="warning", title=title, message="mè 💧")
+
+        req = captured["request"]
+        encoded = req.headers["X-title"]
+        assert encoded == "=?UTF-8?B?8J+SqCBSYXBpZCBkcmFpbmFnZSDCtyBTZW5zb3JlIDIgw6g=?="
+        assert encoded.isascii()
+        [(raw, charset)] = email.header.decode_header(encoded)
+        assert isinstance(raw, bytes)
+        assert raw.decode(charset or "") == title
+        assert req.data == "mè 💧".encode()
+        assert req.headers["X-tags"] == "warning"
+        assert req.headers["X-priority"] == "4"
 
     def test_publish_fail_silent(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Publish fail silent."""
