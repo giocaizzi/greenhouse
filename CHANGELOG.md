@@ -4,6 +4,22 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.3.0](https://github.com/giocaizzi/greenhouse/compare/v6.2.0...v6.3.0) (2026-10-15)
+
+
+### Added
+
+* **web:** plant health chart on the cluster and plant pages ([#176](https://github.com/giocaizzi/greenhouse/issues/176)) ([0a9fed7](https://github.com/giocaizzi/greenhouse/commit/0a9fed7472ea5efa2c8de524f7e75d5aa7867548))
+
+
+### Fixed
+
+* **alerts:** name the plant and cluster in sensor alerts and irrigation pushes ([#172](https://github.com/giocaizzi/greenhouse/issues/172)) ([b086335](https://github.com/giocaizzi/greenhouse/commit/b086335da027d651fd3487b7ea92fed630560343))
+* **anomaly:** resolve sensor_drift once the latest reading is back in range ([#170](https://github.com/giocaizzi/greenhouse/issues/170)) ([fd6c76e](https://github.com/giocaizzi/greenhouse/commit/fd6c76e1f55b6aa9bed11d292b5afe1f5f0fd5d6))
+* **api:** mask the irrigator device_ip in responses like the local key ([#175](https://github.com/giocaizzi/greenhouse/issues/175)) ([75cfe6b](https://github.com/giocaizzi/greenhouse/commit/75cfe6b011e3d04404f6e011f38a1360ebbf9594))
+* **notify:** keep emoji and accents in ntfy push titles ([#174](https://github.com/giocaizzi/greenhouse/issues/174)) ([4742adc](https://github.com/giocaizzi/greenhouse/commit/4742adc0fbe4b9bbe234815caa01811b36dc341c))
+* **web:** title the plant page with the species, not the notes ([#173](https://github.com/giocaizzi/greenhouse/issues/173)) ([dc47420](https://github.com/giocaizzi/greenhouse/commit/dc47420fa656e40847ff4590f59724c9e9fe6422))
+
 ## [6.2.0](https://github.com/giocaizzi/greenhouse/compare/v6.1.0...v6.2.0) (2026-10-15)
 
 
