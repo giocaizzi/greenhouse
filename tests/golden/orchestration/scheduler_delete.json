@@ -1,4 +1,8 @@
 {
+ "alert_digest": [
+  409,
+  "Job alert_digest is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
+ ],
  "check_all": [
   409,
   "Job check_all is a built-in scheduler job and cannot be deleted. To stop automatic irrigation checks use POST /api/v1/scheduler/pause (resume with POST /api/v1/scheduler/resume)."
