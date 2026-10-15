@@ -884,10 +884,7 @@
   "ik10pw.json": {
    "alarm_bitmask": 1,
    "capabilities": [
-    "has_local_duration_dp",
-    "has_water_shortage_dp",
-    "supports_local_status",
-    "supports_cloud_switch"
+    "supports_local_status"
    ],
    "dp_map": {
     "alarm": 105,
@@ -946,9 +943,6 @@
   "IK10PW_PROFILE": {
    "alarm_bitmask": 1,
    "capabilities": [
-    "has_local_duration_dp",
-    "has_water_shortage_dp",
-    "supports_cloud_switch",
     "supports_local_status"
    ],
    "dp_map": {
