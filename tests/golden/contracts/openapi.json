@@ -3006,7 +3006,7 @@
        "type": "integer",
        "maximum": 8760,
        "minimum": 1,
-       "default": 24,
+       "default": 72,
        "title": "Hours"
       }
      },
@@ -3076,7 +3076,7 @@
        "type": "integer",
        "maximum": 8760,
        "minimum": 1,
-       "default": 24,
+       "default": 72,
        "title": "Hours"
       }
      },

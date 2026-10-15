@@ -856,13 +856,6 @@
     "light",
     "overlay"
    ],
-   "RANGES": [
-    6,
-    24,
-    72,
-    168,
-    720
-   ],
    "STATS_DAYS": 7
   },
   "greenhouse_cli.tui.screens.dashboard": {

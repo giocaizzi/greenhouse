@@ -6,6 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from greenhouse_core.constants import DEFAULT_CHART_RANGE_HOURS
 from greenhouse_core.schemas import (
     ChartPayloadResponse,
     HeatmapResponse,
@@ -65,7 +66,7 @@ def plant_chart_data(
     plant_id: int,
     repo: RepoDep,
     plant_db: PlantDbDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
     metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload for a single plant.
@@ -94,7 +95,7 @@ def plant_chart_data(
 def cluster_chart_data(
     cluster_id: int,
     repo: RepoDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
     metric: Annotated[str, Query()] = "soil_moisture",
 ) -> ChartPayload:
     """Return the time-series chart payload aggregated across every sensor in a cluster.
@@ -120,7 +121,7 @@ def cluster_chart_data(
 def cluster_overlay(
     cluster_id: int,
     repo: RepoDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 72,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
 ) -> MultiMetricOverlayResponse:
     """Return a multi-metric overlay payload with soil moisture, humidity, and light normalised to 0-100.
 

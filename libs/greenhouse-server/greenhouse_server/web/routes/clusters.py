@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Annotated, Any
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from greenhouse_core.constants import CHART_RANGE_HOURS, DEFAULT_CHART_RANGE_HOURS
 from greenhouse_core.logic.timing import active_quiet_window
 from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
@@ -20,7 +21,6 @@ from greenhouse_server.deps import (
     require_metric,
 )
 from greenhouse_server.services.charts import (
-    ALLOWED_HOURS,
     build_cluster_chart_payload,
     build_heatmap_payload,
     build_overlay_payload,
@@ -158,7 +158,7 @@ def _detail_data(repo: IrrigationRepository, cluster_id: int, hours: int) -> dic
     """
     chart_payloads_json, chart_thresholds = _cluster_chart_payloads(repo, cluster_id, hours)
     return {
-        "allowed_hours": sorted(ALLOWED_HOURS),
+        "allowed_hours": CHART_RANGE_HOURS,
         "metrics": CLUSTER_METRICS,
         "chart_payloads": chart_payloads_json,
         "chart_thresholds": chart_thresholds,
@@ -184,7 +184,7 @@ def cluster_detail(
     cluster_id: int,
     svc: ClusterServiceDep,
     repo: RepoDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
 ) -> Response:
     """Render the unified cluster detail page (status, charts, config, windows, devices)."""
     with not_found_as_404("Cluster not found"):
@@ -252,7 +252,7 @@ def cluster_chart_fragment(
     cluster_id: int,
     repo: RepoDep,
     metric: Annotated[str, Query()] = "soil_moisture",
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 24,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
 ) -> Response:
     """Render one metric's cluster chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):
@@ -269,7 +269,7 @@ def cluster_overlay_fragment(
     request: Request,
     cluster_id: int,
     repo: RepoDep,
-    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = 72,
+    hours: Annotated[int, Query(ge=1, le=MAX_LOOKBACK_HOURS)] = DEFAULT_CHART_RANGE_HOURS,
 ) -> Response:
     """Render the multi-metric overlay chart panel (HTMX fragment)."""
     with not_found_as_404("Cluster not found"):

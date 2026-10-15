@@ -105,8 +105,8 @@ STATUS_MEAN_TEMPERATURE = 22.0
 STATUS_NEWEST_READING_AT = 200
 STATUS_IRRIGATOR_ID = 3
 
-CHART_HOURS_AFTER_NEXT = 72  # ``]`` from the 24 h default
-CHART_HOURS_SHORTEST = 6  # ``[`` pressed past the shortest range
+CHART_HOURS_AFTER_NEXT = 336  # ``]`` from the 3-day default: 14 days
+CHART_HOURS_SHORTEST = 72  # ``[`` pressed past the shortest range: 3 days
 FORM_INT_VALUE = 5
 FORM_FLOAT_VALUE = 2.5
 MAY_FIRST_2026_UTC = 1777593600  # 2026-05-01 00:00 UTC, the fallback when the zone is unknown

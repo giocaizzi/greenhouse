@@ -6855,15 +6855,15 @@
      "query": [
       [
        "hours",
-       "24"
+       "72"
       ],
       [
        "metric",
        "soil_moisture"
       ]
      ],
-     "raw_path": "/api/v1/clusters/3/chart-data?hours=24&metric=soil_moisture",
-     "url": "http://client.example:8123/api/v1/clusters/3/chart-data?hours=24&metric=soil_moisture"
+     "raw_path": "/api/v1/clusters/3/chart-data?hours=72&metric=soil_moisture",
+     "url": "http://client.example:8123/api/v1/clusters/3/chart-data?hours=72&metric=soil_moisture"
     }
    ],
    "returned": {
@@ -8536,15 +8536,15 @@
      "query": [
       [
        "hours",
-       "24"
+       "72"
       ],
       [
        "metric",
        "soil_moisture"
       ]
      ],
-     "raw_path": "/api/v1/plants/5/chart-data?hours=24&metric=soil_moisture",
-     "url": "http://client.example:8123/api/v1/plants/5/chart-data?hours=24&metric=soil_moisture"
+     "raw_path": "/api/v1/plants/5/chart-data?hours=72&metric=soil_moisture",
+     "url": "http://client.example:8123/api/v1/plants/5/chart-data?hours=72&metric=soil_moisture"
     }
    ],
    "returned": {

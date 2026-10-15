@@ -1877,7 +1877,7 @@
       "type": "integer",
       "maximum": 8760,
       "minimum": 1,
-      "default": 24,
+      "default": 72,
       "title": "hours"
      },
      "metric": {
@@ -1906,7 +1906,7 @@
       "type": "integer",
       "maximum": 8760,
       "minimum": 1,
-      "default": 24,
+      "default": 72,
       "title": "hours"
      },
      "metric": {
