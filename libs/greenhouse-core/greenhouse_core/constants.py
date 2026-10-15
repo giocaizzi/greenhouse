@@ -355,6 +355,9 @@ MAINTENANCE_HUMIDITY_DEFICIT = 10  # % below the ideal humidity minimum
 MONITOR_LOOKBACK_HOURS = 2
 MONITOR_VERY_DRY_MARGIN = 15  # % below target minimum
 MONITOR_WET_MARGIN = 10  # % above target maximum
+# A sensor-only cluster's sensor must read dry for this long before it raises a needs_water alert,
+# so one dry reading between hourly checks does not push.
+NEEDS_WATER_PERSIST_HOURS = 3
 FALLBACK_TEMPERATURE_C = 20.0  # used when no temperature source is available
 
 # ── Pump watcher defaults ────────────────────────────────────────────────────

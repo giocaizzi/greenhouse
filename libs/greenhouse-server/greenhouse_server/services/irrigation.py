@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Any, Literal, Required, TypedDict, Unpack, cas
 from greenhouse_core.constants import (
     FALLBACK_TEMPERATURE_C,
     MONITOR_LOOKBACK_HOURS,
-    MONITOR_VERY_DRY_MARGIN,
-    MONITOR_WET_MARGIN,
     SECONDS_PER_HOUR,
     SNAPSHOT_LOOKBACK_HOURS,
 )
@@ -35,6 +33,12 @@ from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
 from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation_jobs import _schedule_leak_check, record_leak_check_armed
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
+from greenhouse_server.services.needs_water import (
+    NEEDS_WATER_STATUSES,
+    MonitorSensorRow,
+    reconcile_needs_water_alerts,
+    soil_status,
+)
 from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from greenhouse_server.services.plant_care import reconcile_cluster_care_alerts
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
@@ -94,18 +98,6 @@ class PipelineResult(TypedDict, total=False):
     temperature: float
     temperature_source: str
     blocking_alarms: list[str]
-
-
-class MonitorSensorRow(TypedDict):
-    """One ``MonitorResult.sensors`` row: the sensor's latest cleaned soil value against its target band."""
-
-    sensor_id: int
-    sensor_name: str
-    plant_species: str | None
-    soil_moisture: float | None
-    status: str
-    target_min: float
-    target_max: float
 
 
 class MonitorResult(TypedDict):
@@ -217,19 +209,6 @@ def _monitor_readings(repo: IrrigationRepository, sensor_id: int) -> "list[Clean
 def _latest_soil(readings: "Sequence[CleanedReading]") -> float | None:
     """Newest non-null soil value of a newest-first (cleaned) series, or None."""
     return next((r.soil_moisture for r in readings if r.soil_moisture is not None), None) if readings else None
-
-
-def _soil_status(latest_soil: float | None, t_min: float, t_max: float) -> str:
-    """Classify one sensor's latest soil value against the target band."""
-    if latest_soil is None:
-        return "no_data"
-    if latest_soil < t_min - MONITOR_VERY_DRY_MARGIN:
-        return "very_dry"
-    if latest_soil < t_min:
-        return "dry"
-    if latest_soil > t_max + MONITOR_WET_MARGIN:
-        return "wet"
-    return "ok"
 
 
 def _check_result(
@@ -600,7 +579,7 @@ class IrrigationService:
                 species=plant.species if plant else None, category=plant.category if plant else None
             )
             t_min, t_max = moisture_target_range(care)
-            status = _soil_status(latest_soil, t_min, t_max)
+            status = soil_status(latest_soil, t_min, t_max)
 
             sensor_statuses.append(
                 {
@@ -614,7 +593,7 @@ class IrrigationService:
                 }
             )
 
-            if status in ("very_dry", "dry"):
+            if status in NEEDS_WATER_STATUSES:
                 needs_water.append(f"{sensor.name} ({plant.species if plant else 'unknown'}): {latest_soil:.0f}%")
 
         return {"cluster_name": cluster.name, "sensors": sensor_statuses, "needs_water": needs_water}
@@ -631,15 +610,18 @@ class IrrigationService:
 
         detail_key: Literal["notes", "needs_water"] = "notes"
         detail: str | list[str]
+        monitored: list[MonitorSensorRow] = []  # stays empty with an irrigator: the pipeline waters, no reminder
         if not irrigator:
             monitor = self.monitor_cluster(cluster_id)
             action, detail_key, detail = "monitored", "needs_water", monitor.get("needs_water", [])
+            monitored = monitor.get("sensors", [])
         elif not self._repo.get_effective_config(cluster_id)["auto_run"]["value"]:
             action, detail = "skipped", "auto_run disabled"
         else:
             result = self.run_irrigation_pipeline(cluster_id)
             action, detail = result.get("action", "error"), result.get("reason", "")
         sync_cluster_alerts(self._repo, cluster_id, self._plant_db, notifier=self._notifier)
+        reconcile_needs_water_alerts(self._repo, cluster_id, monitored, notifier=self._notifier)
         reconcile_cluster_care_alerts(self._repo, self._plant_db, cluster_id)
         head: CheckResult = {"cluster_id": cluster_id, "cluster_name": cluster.name, "action": action}
         return _check_result(head, detail_key, detail, alerts=alerts, maintenance=maintenance)
