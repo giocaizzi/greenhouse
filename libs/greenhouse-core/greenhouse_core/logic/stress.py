@@ -115,13 +115,29 @@ def _heat_stress(snapshot: SensorSnapshot, trends: Trends, care: list[dict[str, 
     return None
 
 
-def _over_watering(snapshot: SensorSnapshot, trends: Trends) -> str | None:
-    """Saturated soil that keeps being watered often or keeps getting wetter."""
-    if snapshot.avg_soil_moisture is not None and snapshot.avg_soil_moisture > SOIL_MOISTURE_SATURATED:
-        if trends.irrigation_frequency_high:
-            return f"soil saturated ({snapshot.avg_soil_moisture:.0f}%) + high frequency"
-        if trends.soil_moisture_trend == "rising":
-            return f"soil very wet ({snapshot.avg_soil_moisture:.0f}%) + rising"
+def _over_watering(soil: list[SoilNow], trends: Trends) -> str | None:
+    """Saturated soil that keeps being watered often or keeps getting wetter — per sensor, current reading.
+
+    Judged like the soil rule and critical stress (invariant #2): each sensor's
+    current cleaned reading (a stale sensor has none) against its own plant's
+    band, and the wettest decides. A reading is saturated above the plant's
+    band maximum, never below ``SOIL_MOISTURE_SATURATED``: a plant merely above
+    its band is the soil rule's business, and a thirsty plant whose band ends
+    above 70 % is not over-watered inside it. The 24 h average would keep the
+    skip going for a day after a wet spell has drained (issue #121).
+
+    While another sensor reads below its band the cluster is mixed: a terminal
+    skip would starve that plant, so the soil rule's conflict burst decides
+    (as for :func:`wettest_above_band` vetoing water stress).
+    """
+    saturated = [s.value for s in soil if s.value > max(SOIL_MOISTURE_SATURATED, s.band[1])]
+    if not saturated or any(s.value < s.band[0] for s in soil):
+        return None
+    wettest = max(saturated)
+    if trends.irrigation_frequency_high:
+        return f"soil saturated ({wettest:.0f}%) + high frequency"
+    if trends.soil_moisture_trend == "rising":
+        return f"soil very wet ({wettest:.0f}%) + rising"
     return None
 
 
@@ -152,7 +168,7 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
         stress.low_env_humidity = low_env_humidity
     if (low_light := _low_light(snapshot, plant_care, month)) is not None:
         stress.low_light = low_light
-    over_watering = _over_watering(snapshot, trends)
+    over_watering = _over_watering(soil, trends)
     # Over-watering, or any plant currently above its band, vetoes the water-stress override.
     water_stress = _water_stress(soil, trends)
     if water_stress is not None and over_watering is None and wettest_above_band(soil) is None:
