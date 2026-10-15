@@ -236,6 +236,25 @@ class TestSensorDrift:
         (row,) = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_drift"]
         assert (row.id, row.status) == (alert.id, "resolved")
 
+    def test_open_drift_resolves_once_the_latest_reading_is_back_in_range(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """A spike that passes: the next scan whose latest reading has |z| <= 4 resolves the alert."""
+        cluster_id, sensor_id = cluster_and_sensor
+        self._seed_baseline(repo, sensor_id, count=49, moisture=50.0, interval_s=600)
+        self._seed_tail(repo, sensor_id, (95.0,))
+        svc = SensorAnomalyService(repo)
+        (alert,) = [a for a in svc.scan() if a.code == "sensor_drift"]
+        repo.session.commit()
+
+        with time_machine.travel(time.time() + 60, tick=False):
+            self._seed_tail(repo, sensor_id, (51.0,))
+            assert [a for a in svc.scan() if a.code == "sensor_drift"] == []
+        repo.session.commit()
+
+        (row,) = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_drift"]
+        assert (row.id, row.status) == (alert.id, "resolved")
+
     def test_falling_step_is_still_drift(self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]) -> None:
         """Only a rising step reads as a watering: a sudden drop that holds stays sensor_drift."""
         _cluster_id, sensor_id = cluster_and_sensor

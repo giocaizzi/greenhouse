@@ -14,7 +14,8 @@ the last 50 readings, flatline on everything the 72 h look-back loaded:
   hand watering nobody logged), not drift: when the newest
   ``ANOMALY_STEP_HOLD_READINGS`` values all sit well above the earlier level, no
   drift is raised and an open ``sensor_drift`` alert resolves. A lone outlier, or
-  a drop, is still drift.
+  a drop, is still drift. An open ``sensor_drift`` also resolves on the first scan
+  whose latest reading is no longer an outlier (|z| <= 4).
 - **Flatline**: a fresh sensor whose newest soil readings stay within
   ``SENSOR_FLATLINE_MAX_RANGE`` for ``SENSOR_FLATLINE_HOURS`` with a mean at an
   extreme (<= 2 % or >= 98 %) raises a ``sensor_flatline`` warning (probe out of
@@ -264,8 +265,10 @@ class SensorAnomalyService:
     def _drift_unless_step(
         self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None
     ) -> Alert | None:
-        """Judge drift, except on a rising step that holds: that is a watering, so resolve ``sensor_drift``."""
-        if _is_rising_step(window):
+        """Judge drift; resolve ``sensor_drift`` on a held rising step (a watering) or a latest reading in range."""
+        stats = _latest_soil_zscore(window)
+        settled = stats is not None and abs(stats[3]) <= ANOMALY_Z_THRESHOLD
+        if settled or _is_rising_step(window):
             clear_alert(
                 self._repo,
                 source=SOURCE_ANOMALY,
