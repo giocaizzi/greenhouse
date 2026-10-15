@@ -85,6 +85,17 @@ def test_plant_dashboard_page_renders(seeded_client: TestClient) -> None:
     assert 'id="chart-data-soil_moisture"' in resp.text
 
 
+def test_plant_dashboard_title_is_species_not_notes(seeded_client: TestClient) -> None:
+    """The page title is the species; the notes (plant-DB sources) stay a muted care-panel line."""
+    notes = "Sources: The Spruce, NY Botanical Garden"
+    resp = seeded_client.put("/api/v1/clusters/1/plants/1", json={"notes": notes})
+    assert resp.status_code == HTTPStatus.OK
+    html = seeded_client.get("/clusters/1/plants/1").text
+    assert "<h1>Monstera deliciosa</h1>" in html
+    assert f"<h1>{notes}</h1>" not in html
+    assert f'<dd class="font-sans muted"><small>{notes}</small></dd>' in html
+
+
 def test_plant_dashboard_wrong_cluster_404(seeded_client: TestClient) -> None:
     # plant 1 belongs to cluster 1; fetching it as if in cluster 99 should 404
     """Plant dashboard wrong cluster 404."""
