@@ -727,10 +727,18 @@ class HealthResponse(BaseModel):
 
 
 class ChartDatasetResponse(BaseModel):
-    """One sensor's ``(timestamp, value)`` series for a chart."""
+    """One sensor's ``(timestamp, value)`` series for a chart, while it measured one plant.
+
+    A sensor that moved between plants contributes one series per stretch it spent on a
+    plant (its assignment history). ``label`` names the plant first and the sensor second
+    (``"Ficus · Sensore 1"``); a stretch with no assignment is ``"Sensore 1 (unassigned)"``
+    with ``plant_id`` null.
+    """
 
     sensor_id: int
     sensor_name: str
+    plant_id: int | None
+    label: str
     points: list[tuple[int, float]]
 
 

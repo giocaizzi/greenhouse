@@ -9,10 +9,12 @@ if TYPE_CHECKING:
 
 
 class ChartDataset(TypedDict):
-    """One sensor's series: ``(timestamp, value)`` points, oldest first."""
+    """One sensor's series while it measured one plant: ``(timestamp, value)`` points, oldest first."""
 
     sensor_id: int
     sensor_name: str
+    plant_id: int | None
+    label: str
     points: list[tuple[int, float]]
 
 

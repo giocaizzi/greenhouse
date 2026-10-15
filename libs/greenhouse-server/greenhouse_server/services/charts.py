@@ -22,13 +22,14 @@ from greenhouse_core.schemas import (
     OverlayDataset,
     PlantHealthTimelineResponse,
 )
+from greenhouse_server.services.chart_series import cluster_sensor_datasets, plant_sensor_datasets
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Plant, Sensor
     from greenhouse_core.plant_db import PlantDatabase
     from greenhouse_core.repository import IrrigationRepository
-    from greenhouse_server.services.chart_payload import ChartDataset, ChartEvent, ChartPayload, ChartThreshold
+    from greenhouse_server.services.chart_payload import ChartEvent, ChartPayload, ChartThreshold
 
 Metric = Literal["soil_moisture", "temperature", "light", "env_humidity"]
 
@@ -56,7 +57,7 @@ def build_plant_chart_payload(
     # to the plant that actually owned the sensor at reading time. Filtering
     # by current `sensor.plant_id` re-attributes prior history whenever a
     # sensor is reassigned, producing misleading trends.
-    datasets = _build_plant_sensor_datasets(repo, plant_id, hours, metric)
+    datasets = plant_sensor_datasets(repo, plant, hours, metric)
     events = _build_event_list(repo, plant.cluster_id, hours)
     threshold = _threshold_for_plant(plant, plant_db, metric)
 
@@ -75,13 +76,13 @@ def build_cluster_chart_payload(
     hours: int,
     metric: Metric,
 ) -> ChartPayload:
-    """A cluster's chart: one series per sensor, its irrigation events and the band; ClusterNotFoundError if none."""
+    """A cluster's chart: a series per sensor and plant, its irrigation events and the band; ClusterNotFoundError."""
     cluster = repo.get_cluster(cluster_id)
     if cluster is None:
         raise ClusterNotFoundError(cluster_id)
 
     sensors = repo.get_sensors_in_cluster(cluster_id)
-    datasets = _build_sensor_datasets(repo, sensors, hours, metric)
+    datasets = cluster_sensor_datasets(repo, sensors, hours, metric)
     events = _build_event_list(repo, cluster_id, hours)
     threshold = _threshold_for_cluster(repo, cluster_id, metric)
 
@@ -92,68 +93,6 @@ def build_cluster_chart_payload(
         "events": events,
         "threshold": threshold,
     }
-
-
-def _build_plant_sensor_datasets(
-    repo: IrrigationRepository,
-    plant_id: int,
-    hours: int,
-    metric: Metric,
-) -> list[ChartDataset]:
-    """Assignment-aware plant series: one dataset per sensor that served the plant in the window.
-
-    Readings are filtered to the periods when each sensor was actually linked to this plant.
-    """
-    field: str = metric  # metric names are SensorReading column names
-    since = int(time.time()) - hours * SECONDS_PER_HOUR
-    readings = repo.readings_for_plant(plant_id, since_ts=since)
-    by_sensor: dict[int, list[tuple[int, float]]] = defaultdict(list)
-    for r in readings:
-        val = getattr(r, field, None)
-        if val is None:
-            continue
-        by_sensor[r.sensor_id].append((r.timestamp, float(val)))
-
-    sensor_names: dict[int, str] = {}
-    if by_sensor:
-        for s in repo.list_sensors_by_ids(by_sensor.keys()):
-            sensor_names[s.id] = s.name
-
-    datasets: list[ChartDataset] = []
-    for sensor_id, points in by_sensor.items():
-        points.sort(key=lambda p: p[0])
-        datasets.append(
-            {
-                "sensor_id": sensor_id,
-                "sensor_name": sensor_names.get(sensor_id, f"sensor#{sensor_id}"),
-                "points": points,
-            }
-        )
-    return datasets
-
-
-def _build_sensor_datasets(
-    repo: IrrigationRepository,
-    sensors: list[Sensor],
-    hours: int,
-    metric: Metric,
-) -> list[ChartDataset]:
-    datasets: list[ChartDataset] = []
-    field: str = metric  # metric names are SensorReading column names
-    for sensor in sensors:
-        readings = repo.get_recent_readings(sensor.id, hours=hours)
-        points: list[tuple[int, float]] = []
-        for r in readings:
-            val = getattr(r, field, None)
-            if val is None:
-                continue
-            points.append((r.timestamp, float(val)))
-        if not points:
-            continue
-        # readings come ordered DESC; chart wants ASC
-        points.sort(key=lambda p: p[0])
-        datasets.append({"sensor_id": sensor.id, "sensor_name": sensor.name, "points": points})
-    return datasets
 
 
 def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -> list[ChartEvent]:

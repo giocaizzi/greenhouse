@@ -4914,6 +4914,21 @@
       "type": "string",
       "title": "Sensor Name"
      },
+     "plant_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Plant Id"
+     },
+     "label": {
+      "type": "string",
+      "title": "Label"
+     },
      "points": {
       "items": {
        "prefixItems": [
@@ -4936,10 +4951,12 @@
     "required": [
      "sensor_id",
      "sensor_name",
+     "plant_id",
+     "label",
      "points"
     ],
     "title": "ChartDatasetResponse",
-    "description": "One sensor's ``(timestamp, value)`` series for a chart."
+    "description": "One sensor's ``(timestamp, value)`` series for a chart, while it measured one plant.\n\nA sensor that moved between plants contributes one series per stretch it spent on a\nplant (its assignment history). ``label`` names the plant first and the sensor second\n(``\"Ficus · Sensore 1\"``); a stretch with no assignment is ``\"Sensore 1 (unassigned)\"``\nwith ``plant_id`` null."
    },
    "ChartEventResponse": {
     "properties": {

@@ -425,8 +425,12 @@ def test_metric_chart_skips_empty_series_and_non_start_events() -> None:
     """``show_payload`` with an empty dataset next to a real one; ``show_overlay`` with a ``stop`` event."""
     payload = {
         "datasets": [
-            {"sensor_name": "empty", "points": []},
-            {"sensor_name": "probe", "points": [[NOW - 7200, 40.0], [NOW - 3600, 38.0], [NOW, 36.5]]},
+            {"sensor_name": "empty", "label": "empty", "points": []},
+            {
+                "sensor_name": "probe",
+                "label": "Fern · probe",
+                "points": [[NOW - 7200, 40.0], [NOW - 3600, 38.0], [NOW, 36.5]],
+            },
         ],
         "threshold": {"min": 30, "max": None},
         "events": [{"action": "start", "timestamp": NOW - 5400}, {"action": "stop", "timestamp": NOW - 1800}],

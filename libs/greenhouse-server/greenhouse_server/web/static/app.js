@@ -38,7 +38,7 @@
       const color = ramp[i % ramp.length];
       const data = (d.points || []).map(([x, y]) => ({ x: x * 1000, y }));
       const ds = {
-        label: d.sensor_name,
+        label: d.label || d.sensor_name,
         data,
         borderColor: color,
         borderWidth: i === 0 ? 1.75 : 1.5,

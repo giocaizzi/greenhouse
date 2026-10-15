@@ -259,7 +259,7 @@ class MetricChart(PlotextPlot):
                 continue
             xs = [(ts - reference) / 3600 for ts, _ in points]
             ys = [v for _, v in points]
-            self.plt.plot(xs, ys, label=dataset.get("sensor_name", "?"), marker="braille", color=SERIES_COLORS[i % 7])
+            self.plt.plot(xs, ys, label=dataset.get("label", "?"), marker="braille", color=SERIES_COLORS[i % 7])
             plotted = True
         return plotted
 
