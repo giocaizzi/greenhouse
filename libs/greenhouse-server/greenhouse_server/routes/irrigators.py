@@ -155,8 +155,8 @@ def update_irrigator(
     left unchanged. An explicit `null` clears an optional field and is
     ignored for a required one; `config: null` clears the whole config,
     `local_key` included. A `config` object replaces the stored one; its
-    `local_key` is masked as `••••••••` in every response, and sending that
-    mask back keeps the stored key.
+    `local_key` and `device_ip` are masked as `••••••••` in every response,
+    and sending that mask back keeps the stored value.
 
     Args:
         cluster_id: Cluster whose irrigator to update.

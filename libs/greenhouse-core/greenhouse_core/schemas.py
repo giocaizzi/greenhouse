@@ -176,8 +176,8 @@ class CreateIrrigatorRequest(IrrigatorBase):
 class IrrigatorResponse(IrrigatorBase):
     """An irrigator as stored, with the cluster it waters.
 
-    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
-    unchanged in an update to keep the stored key.
+    A stored ``config.local_key`` or ``config.device_ip`` is masked as ``••••••••``;
+    send the mask back unchanged in an update to keep the stored value.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -252,8 +252,8 @@ class CreateSensorRequest(SensorBase):
 class SensorResponse(SensorBase):
     """A sensor as stored, with its cluster and current plant assignment.
 
-    A stored ``config.local_key`` is masked as ``••••••••``; send the mask back
-    unchanged in an update to keep the stored key.
+    A stored ``config.local_key`` or ``config.device_ip`` is masked as ``••••••••``;
+    send the mask back unchanged in an update to keep the stored value.
     """
 
     model_config = ConfigDict(from_attributes=True)

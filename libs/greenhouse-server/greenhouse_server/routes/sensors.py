@@ -158,8 +158,9 @@ def update_sensor(
     left unchanged. An explicit `null` clears an optional field (`plant_id:
     null` unassigns the sensor) and is ignored for a required one;
     `config: null` clears the whole config, `local_key` included. The sensor
-    must belong to the specified cluster. A `config.local_key` is masked as
-    `••••••••` in every response; sending that mask back keeps the stored key.
+    must belong to the specified cluster. A `config.local_key` or
+    `config.device_ip` is masked as `••••••••` in every response; sending that
+    mask back keeps the stored value.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
