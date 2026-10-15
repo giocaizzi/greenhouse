@@ -114,3 +114,22 @@ def test_submitting_the_mask_keeps_the_stored_key(client: TestClient) -> None:
     )
     assert resp.status_code == HTTPStatus.SEE_OTHER
     assert _stored_config(client, cluster_id)["local_key"] == SECRET_KEY
+
+
+def test_submitting_the_mask_as_ip_keeps_the_stored_ip(client: TestClient) -> None:
+    """An IP field carrying the API's ``••••••••`` mask (pasted from a response) keeps the stored IP."""
+    cluster_id = _seed_local_irrigator(client)
+    resp = client.post(
+        f"/clusters/{cluster_id}/irrigators/edit",
+        data={"name": "Local Pump", "type": "rainpoint.ik10pw", "device_ip": "••••••••", "local_key": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == HTTPStatus.SEE_OTHER
+    assert _stored_config(client, cluster_id) == {"device_ip": "192.0.2.10", "local_key": SECRET_KEY}
+
+
+def test_edit_page_shows_the_stored_ip(client: TestClient) -> None:
+    """The in-process edit page reads the stored row, so the operator still sees and keeps the IP."""
+    cluster_id = _seed_local_irrigator(client)
+    resp = client.get(f"/clusters/{cluster_id}/irrigators/edit")
+    assert 'value="192.0.2.10"' in resp.text

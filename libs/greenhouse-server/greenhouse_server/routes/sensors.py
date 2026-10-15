@@ -31,7 +31,7 @@ from greenhouse_server.services.inventory import (
     UnknownDeviceTypeError,
     create_sensor,
     ensure_plant_in_cluster,
-    keep_masked_local_key,
+    keep_masked_device_secrets,
     require_known_device_type,
 )
 
@@ -158,8 +158,9 @@ def update_sensor(
     left unchanged. An explicit `null` clears an optional field (`plant_id:
     null` unassigns the sensor) and is ignored for a required one;
     `config: null` clears the whole config, `local_key` included. The sensor
-    must belong to the specified cluster. A `config.local_key` is masked as
-    `••••••••` in every response; sending that mask back keeps the stored key.
+    must belong to the specified cluster. A `config.local_key` or
+    `config.device_ip` is masked as `••••••••` in every response; sending that
+    mask back keeps the stored value.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
@@ -186,7 +187,7 @@ def update_sensor(
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     fields = request.model_dump(exclude_unset=True)
     if fields.get("config"):
-        fields["config"] = keep_masked_local_key(fields["config"], sensor.config)
+        fields["config"] = keep_masked_device_secrets(fields["config"], sensor.config)
     updated = repo.update_sensor(sensor_id, **fields)
     repo.commit()
     return updated

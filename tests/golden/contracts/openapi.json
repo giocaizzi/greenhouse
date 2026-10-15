@@ -1191,7 +1191,7 @@
      "irrigators"
     ],
     "summary": "Update the cluster's irrigator",
-    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one; `config: null` clears the whole config,\n`local_key` included. A `config` object replaces the stored one; its\n`local_key` is masked as `••••••••` in every response, and sending that\nmask back keeps the stored key.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator, 422 if a changed\n        `type` is not a registered irrigator model key.",
+    "description": "Partially update the metadata of the cluster's irrigator.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one; `config: null` clears the whole config,\n`local_key` included. A `config` object replaces the stored one; its\n`local_key` and `device_ip` are masked as `••••••••` in every response,\nand sending that mask back keeps the stored value.\n\nArgs:\n    cluster_id: Cluster whose irrigator to update.\n    request: Fields to update — any subset of `name`, `type`, `config`,\n        `reservoir_l`, and `flow_rate_l_per_min`.\n\nReturns:\n    The updated irrigator (its `local_key` masked).\n\nRaises:\n    HTTPException: 404 if the cluster has no irrigator, 422 if a changed\n        `type` is not a registered irrigator model key.",
     "operationId": "update_irrigator",
     "security": [
      {
@@ -1733,7 +1733,7 @@
      "sensors"
     ],
     "summary": "Update a sensor",
-    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field (`plant_id:\nnull` unassigns the sensor) and is ignored for a required one;\n`config: null` clears the whole config, `local_key` included. The sensor\nmust belong to the specified cluster. A `config.local_key` is masked as\n`••••••••` in every response; sending that mask back keeps the stored key.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if a changed `type` is not a registered sensor model key.",
+    "description": "Partially update a sensor's metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field (`plant_id:\nnull` unassigns the sensor) and is ignored for a required one;\n`config: null` clears the whole config, `local_key` included. The sensor\nmust belong to the specified cluster. A `config.local_key` or\n`config.device_ip` is masked as `••••••••` in every response; sending that\nmask back keeps the stored value.\n\nArgs:\n    cluster_id: Cluster the sensor belongs to.\n    sensor_id: Numeric sensor identifier.\n    request: Fields to update — any subset of name, type, config,\n        and plant_id.\n\nReturns:\n    The updated sensor.\n\nRaises:\n    HTTPException: 404 if the sensor does not exist or belongs to a\n        different cluster, or if ``plant_id`` is not a plant of that cluster;\n        422 if a changed `type` is not a registered sensor model key.",
     "operationId": "update_sensor",
     "security": [
      {
@@ -6847,7 +6847,7 @@
      "cluster_id"
     ],
     "title": "IrrigatorResponse",
-    "description": "An irrigator as stored, with the cluster it waters.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
+    "description": "An irrigator as stored, with the cluster it waters.\n\nA stored ``config.local_key`` or ``config.device_ip`` is masked as ``••••••••``;\nsend the mask back unchanged in an update to keep the stored value."
    },
    "LearnResponse": {
     "properties": {
@@ -8283,7 +8283,7 @@
      "cluster_id"
     ],
     "title": "SensorResponse",
-    "description": "A sensor as stored, with its cluster and current plant assignment.\n\nA stored ``config.local_key`` is masked as ``••••••••``; send the mask back\nunchanged in an update to keep the stored key."
+    "description": "A sensor as stored, with its cluster and current plant assignment.\n\nA stored ``config.local_key`` or ``config.device_ip`` is masked as ``••••••••``;\nsend the mask back unchanged in an update to keep the stored value."
    },
    "SensorStatusResponse": {
     "properties": {

@@ -312,7 +312,7 @@ class TestSensorLocalKeyMasking:
                 "config": {"device_ip": "192.0.2.20", "local_key": self.SECRET},
             },
         ).json()
-        masked = {"device_ip": "192.0.2.20", "local_key": self.MASK}
+        masked = {"device_ip": self.MASK, "local_key": self.MASK}
         sid = created["id"]
         assert created["config"] == masked
         assert client.get(f"/api/v1/clusters/{cid}/sensors").json()[0]["config"] == masked

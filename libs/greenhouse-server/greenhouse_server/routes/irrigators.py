@@ -31,7 +31,7 @@ from greenhouse_server.services.inventory import (
     IrrigatorExistsError,
     UnknownDeviceTypeError,
     create_irrigator,
-    keep_masked_local_key,
+    keep_masked_device_secrets,
     require_known_device_type,
 )
 from greenhouse_server.services.manual_control import (
@@ -155,8 +155,8 @@ def update_irrigator(
     left unchanged. An explicit `null` clears an optional field and is
     ignored for a required one; `config: null` clears the whole config,
     `local_key` included. A `config` object replaces the stored one; its
-    `local_key` is masked as `••••••••` in every response, and sending that
-    mask back keeps the stored key.
+    `local_key` and `device_ip` are masked as `••••••••` in every response,
+    and sending that mask back keeps the stored value.
 
     Args:
         cluster_id: Cluster whose irrigator to update.
@@ -178,7 +178,7 @@ def update_irrigator(
             raise HTTPException(status_code=422, detail=str(exc)) from None
     fields = request.model_dump(exclude_unset=True)
     if fields.get("config"):
-        fields["config"] = keep_masked_local_key(fields["config"], irrigator.config)
+        fields["config"] = keep_masked_device_secrets(fields["config"], irrigator.config)
     updated = repo.update_irrigator(irrigator.id, **fields)
     repo.commit()
     return updated
