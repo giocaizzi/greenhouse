@@ -3999,7 +3999,7 @@
      "scheduler"
     ],
     "summary": "System Health",
-    "description": "Return a detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.\n\nA richer sibling of GET /health. Checks every sensor's most recent reading\ntimestamp to classify devices as ok / stale / cold, infers cloud\nreachability from recent data, counts open alerts, and reports whether the\nbackground scheduler is running.\n\nReturns:\n    SystemHealthResponse with status (\"ok\" / \"degraded\" / \"down\"),\n    sensor and irrigator counts, open alert count, last sync timestamp,\n    and a per-device status list (up to 20 devices).",
+    "description": "Return a detailed system health pulse: sensor freshness, irrigator inventory, and cloud reachability.\n\nA richer sibling of GET /health. Checks every sensor's most recent reading\ntimestamp to classify sensors as ok / stale / cold, marks an irrigator\nfailing after 3 failed starts in a row (or one while its cluster's\nactuation_failed alert is open; a successful start resets it), infers cloud\nreachability from recent data, counts open alerts, and reports whether the\nbackground scheduler is running. A failing irrigator makes the status degraded.\n\nReturns:\n    SystemHealthResponse with status (\"ok\" / \"degraded\" / \"down\"),\n    sensor and irrigator counts, how many irrigators are failing, open alert\n    count, last sync timestamp, and a per-device status list (up to 20\n    devices; an irrigator row carries its consecutive failed starts).",
     "operationId": "system_health",
     "responses": {
      "200": {
@@ -8351,6 +8351,17 @@
        }
       ],
       "title": "Note"
+     },
+     "consecutive_failures": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Consecutive Failures"
      }
     },
     "type": "object",
@@ -8403,6 +8414,10 @@
       "type": "integer",
       "title": "Irrigators Total"
      },
+     "irrigators_failing": {
+      "type": "integer",
+      "title": "Irrigators Failing"
+     },
      "open_alerts": {
       "type": "integer",
       "title": "Open Alerts"
@@ -8425,6 +8440,7 @@
      "sensors_stale",
      "sensors_fresh",
      "irrigators_total",
+     "irrigators_failing",
      "open_alerts",
      "devices"
     ],

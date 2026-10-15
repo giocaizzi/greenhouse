@@ -59,7 +59,7 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 | "Refresh the health scores now" | `plants/health/snapshot` (trigger a snapshot) |
 | "When will it next water?" | `clusters/{id}/forecast` |
 | "How well is irrigation working?" | `clusters/{id}/efficacy` or `clusters/{id}/insights` |
-| "Is anything offline / are sensors stale?" | `health/system` (device + cloud + scheduler pulse) |
+| "Is anything offline / are sensors stale?" / "is the irrigator working?" | `health/system` (device + cloud + scheduler pulse). An irrigator reads `failing` after 3 failed starts in a row (or one while its `actuation_failed` alert is open), with `consecutive_failures` on its row and `irrigators_failing` at the top level; any failing irrigator makes the status `degraded`, and its next successful start puts it back to `ok` |
 | "Is my setup configured right?" | `quality/report` (config gaps, stale sensors, duplicate device IDs) |
 | "Find …" / search across resources | `search` |
 | "Stop / start push alerts" / "notify me when it waters" | `preferences` — `notify_manual` / `notify_emergency` / `notify_alerts` / `notify_auto` toggles |

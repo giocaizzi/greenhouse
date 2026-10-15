@@ -888,6 +888,7 @@ class SystemHealthDevice(BaseModel):
     status: str
     age_seconds: int | None = None
     note: str | None = None
+    consecutive_failures: int | None = None
 
 
 class SystemHealthResponse(BaseModel):
@@ -901,6 +902,7 @@ class SystemHealthResponse(BaseModel):
     sensors_stale: int
     sensors_fresh: int
     irrigators_total: int
+    irrigators_failing: int
     open_alerts: int
     devices: list[SystemHealthDevice]
 

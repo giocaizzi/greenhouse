@@ -245,11 +245,18 @@ class AlertEntity(TypedDict, total=False):
     plant_id: int | None
 
 
+def find_open_alert(
+    repo: IrrigationRepository, *, source: ActivitySource, code: str, **entity: Unpack[AlertEntity]
+) -> Alert | None:
+    """The unresolved alert :func:`raise_alert` keyed on ``code`` and this cluster / sensor / plant, if any."""
+    key = _entity_key(source, code, entity.get("cluster_id"), entity.get("sensor_id"), entity.get("plant_id"))
+    return repo.get_open_alert_by_key(key)
+
+
 def clear_alert(
     repo: IrrigationRepository, *, source: ActivitySource, code: str, **entity: Unpack[AlertEntity]
 ) -> None:
     """Resolve the open alert :func:`raise_alert` keyed on ``code`` and this cluster / sensor / plant."""
-    key = _entity_key(source, code, entity.get("cluster_id"), entity.get("sensor_id"), entity.get("plant_id"))
-    alert = repo.get_open_alert_by_key(key)
+    alert = find_open_alert(repo, source=source, code=code, **entity)
     if alert is not None:
         repo.resolve_alert(alert.id)
