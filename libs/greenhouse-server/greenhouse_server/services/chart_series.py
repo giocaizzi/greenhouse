@@ -78,9 +78,13 @@ def _segments(points: list[Point], assignments: list[SensorAssignment]) -> list[
 
 
 def _plant_at(ts: int, assignments: list[SensorAssignment]) -> int | None:
-    """The plant whose assignment covers ``ts`` (start inclusive, end exclusive), or ``None``."""
-    for a in assignments:
-        if a.started_at <= ts and (a.ended_at is None or ts < a.ended_at):
+    """The plant whose assignment covers ``ts`` (start inclusive, end exclusive), or ``None``.
+
+    The first assignment reaches back to 0, like the judging windows: the Tuya backfill
+    stores readings from before the sensor was registered, and they belong to its first plant.
+    """
+    for i, a in enumerate(assignments):
+        if (i == 0 or a.started_at <= ts) and (a.ended_at is None or ts < a.ended_at):
             return a.plant_id
     return None
 
