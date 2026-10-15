@@ -1,7 +1,7 @@
 """Sensor anomaly detection service.
 
-Two detectors run across all sensors on a rolling window of the last 50
-readings:
+Three detectors run across all sensors: stale and drift on a rolling window of
+the last 50 readings, flatline on everything the 72 h look-back loaded:
 
 - **Stale**: if (now - latest_timestamp) exceeds both 2 x the median sample
   interval and one sync interval + ``SENSOR_OFFLINE_GRACE_MINUTES``, the sensor
@@ -15,8 +15,15 @@ readings:
   ``ANOMALY_STEP_HOLD_READINGS`` values all sit well above the earlier level, no
   drift is raised and an open ``sensor_drift`` alert resolves. A lone outlier, or
   a drop, is still drift.
+- **Flatline**: a fresh sensor whose newest soil readings stay within
+  ``SENSOR_FLATLINE_MAX_RANGE`` for ``SENSOR_FLATLINE_HOURS`` with a mean at an
+  extreme (<= 2 % or >= 98 %) raises a ``sensor_flatline`` warning (probe out of
+  the soil, in water, or faulty); it resolves once the series moves. A stale
+  sensor is left to ``sensor_stale``. The opposite blind spot of drift: a flat
+  series can never be a z-score outlier.
 
-Both emit into the shared alert inbox via ``raise_alert``.
+Every detector reads raw rows (cleaning could mask the pattern) and emits into
+the shared alert inbox via ``raise_alert``.
 """
 
 import logging
@@ -34,6 +41,11 @@ from greenhouse_core.constants import (
     ANOMALY_Z_THRESHOLD,
     CLEANING_MAD_SCALE,
     DEFAULT_SYNC_INTERVAL_MINUTES,
+    SECONDS_PER_HOUR,
+    SENSOR_FLATLINE_HIGH,
+    SENSOR_FLATLINE_HOURS,
+    SENSOR_FLATLINE_LOW,
+    SENSOR_FLATLINE_MAX_RANGE,
     SENSOR_OFFLINE_GRACE_MINUTES,
 )
 from greenhouse_core.models import SOURCE_ANOMALY, Alert
@@ -89,6 +101,28 @@ def _is_rising_step(window: "list[SensorReading]") -> bool:
     return (min(held) - level) / spread > ANOMALY_Z_THRESHOLD
 
 
+def _flatline(readings: "list[SensorReading]") -> tuple[float, int] | None:
+    """(mean, span seconds) of the newest flat soil run when it sits at an extreme long enough; else None.
+
+    ``readings`` is DESC. The run is the newest values whose max - min stays within
+    ``SENSOR_FLATLINE_MAX_RANGE``; a watering step ends it, so a moving series never flatlines.
+    """
+    soil = [(r.timestamp, r.soil_moisture) for r in readings if r.soil_moisture is not None]
+    if not soil:
+        return None
+    newest_ts, first = soil[0]
+    run, oldest_ts, low, high = [first], newest_ts, first, first
+    for ts, value in soil[1:]:
+        low, high = min(low, value), max(high, value)
+        if high - low > SENSOR_FLATLINE_MAX_RANGE:
+            break
+        run.append(value)
+        oldest_ts = ts
+    level, span = statistics.mean(run), newest_ts - oldest_ts
+    at_extreme = level <= SENSOR_FLATLINE_LOW or level >= SENSOR_FLATLINE_HIGH
+    return (level, span) if at_extreme and span >= SENSOR_FLATLINE_HOURS * SECONDS_PER_HOUR else None
+
+
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
@@ -108,12 +142,14 @@ class SensorAnomalyService:
         self._min_stale_seconds = (sync_interval_minutes + SENSOR_OFFLINE_GRACE_MINUTES) * 60
 
     def scan(self) -> list[Alert]:
-        """Detect stale and drifting sensors across the entire fleet.
+        """Detect stale, flat-lined and drifting sensors across the entire fleet.
 
         For each sensor with at least 10 readings in the last 72 hours:
 
         - **Stale**: ``(now - latest_ts) > max(2 * median_interval, sync interval + grace)``;
           a fresh sensor resolves its open ``sensor_stale`` alert.
+        - **Flatline** (fresh sensors only): the newest soil readings stay within 1 pp
+          for 48 h at <= 2 % or >= 98 % (``SENSOR_FLATLINE_*``); resolves once the series moves.
         - **Drift**: ``|z-score of latest soil_moisture| > 4`` versus the
           rolling mean and std of the last 50 soil-moisture readings.
           A minimum std of 1.0 % is applied to avoid false alarms on near-constant
@@ -144,6 +180,9 @@ class SensorAnomalyService:
             stale = self._stale_alert(sensor, timestamps_asc, median_interval, now)
             if stale is not None:
                 alerts.append(stale)
+            else:  # a stale sensor is flat because nothing arrives: sensor_stale says it
+                flat = self._flatline_alert(sensor, readings)
+                alerts.extend([flat] if flat is not None else [])
             drift = self._drift_unless_step(sensor, window, median_interval)
             if drift is not None:
                 alerts.append(drift)
@@ -191,6 +230,36 @@ class SensorAnomalyService:
             self._repo, source=SOURCE_ANOMALY, code="sensor_stale", cluster_id=sensor.cluster_id, sensor_id=sensor.id
         )
         return None
+
+    def _flatline_alert(self, sensor: "Sensor", readings: "list[SensorReading]") -> Alert | None:
+        """Raise ``sensor_flatline`` on a fresh sensor flat at 0 % / 100 %; resolve it once the series moves."""
+        found = _flatline(readings)
+        if found is None:
+            clear_alert(
+                self._repo,
+                source=SOURCE_ANOMALY,
+                code="sensor_flatline",
+                cluster_id=sensor.cluster_id,
+                sensor_id=sensor.id,
+            )
+            return None
+        level, span = found
+        logger.warning("Sensor flatline %d (%s): soil %.1f%% for %ds", sensor.id, sensor.name, level, span)
+        return raise_alert(
+            self._repo,
+            notifier=self._notifier,
+            source=SOURCE_ANOMALY,
+            code="sensor_flatline",
+            severity="warning",
+            title=f"Sensor flat-lined: {sensor.name}",
+            message=(
+                f"{sensor.name}: soil moisture flat at {level:.1f}% for {span // SECONDS_PER_HOUR} h while "
+                "readings keep arriving (probe out of the soil, in water, or faulty?)"
+            ),
+            cluster_id=sensor.cluster_id,
+            sensor_id=sensor.id,
+            payload={"sensor_id": sensor.id, "sensor_name": sensor.name, "level": level, "span_seconds": span},
+        )
 
     def _drift_unless_step(
         self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None

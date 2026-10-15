@@ -1,4 +1,4 @@
-"""Tests for the sensor anomaly detection service (stale + drift)."""
+"""Tests for the sensor anomaly detection service (stale, drift, flatline)."""
 
 import time
 from collections.abc import Iterator
@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.constants import SENSOR_OFFLINE_GRACE_MINUTES
+from greenhouse_core.constants import SENSOR_FLATLINE_HOURS, SENSOR_OFFLINE_GRACE_MINUTES
 from greenhouse_core.database import init_db
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.anomaly import SensorAnomalyService
@@ -253,3 +253,94 @@ class TestSensorDrift:
         self._seed_tail(repo, sensor_id, (95.0, 95.0))
 
         assert [a.code for a in SensorAnomalyService(repo).scan()] == ["sensor_drift"]
+
+
+class TestSensorFlatline:
+    """#147: a fresh soil sensor flat at 0 % / 100 % for SENSOR_FLATLINE_HOURS."""
+
+    def _seed_series(
+        self, repo: IrrigationRepository, sensor_id: int, values: list[float], *, end_offset_s: int = 0
+    ) -> None:
+        """Seed ``values`` (oldest first) every 30 min, the newest ``end_offset_s`` seconds ago."""
+        newest = int(time.time()) - end_offset_s
+        for i, moisture in enumerate(values):
+            repo.add_sensor_reading(sensor_id, timestamp=newest - (len(values) - 1 - i) * 1800, soil_moisture=moisture)
+        repo.session.commit()
+
+    @staticmethod
+    def _flat(hours: int, level: float) -> list[float]:
+        """A flat series covering ``hours`` at 30-min spacing (inclusive of both ends)."""
+        return [level] * (2 * hours + 1)
+
+    @pytest.mark.parametrize("level", [0.0, 100.0])
+    def test_flat_at_an_extreme_with_fresh_readings(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int], level: float
+    ) -> None:
+        """48 h of 0 % or 100 % with fresh timestamps → one sensor_flatline warning."""
+        cluster_id, sensor_id = cluster_and_sensor
+        self._seed_series(repo, sensor_id, self._flat(SENSOR_FLATLINE_HOURS, level))
+
+        (alert,) = SensorAnomalyService(repo).scan()
+
+        assert (alert.code, alert.severity, alert.cluster_id) == ("sensor_flatline", "warning", cluster_id)
+        assert alert.message == (
+            f"Test Sensor: soil moisture flat at {level:.1f}% for 48 h while readings keep arriving "
+            "(probe out of the soil, in water, or faulty?)"
+        )
+
+    def test_saturated_within_one_point_still_flat(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """A 99-100 % series (the live Dracaena case) is flat within SENSOR_FLATLINE_MAX_RANGE."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        series = [99.0 + (i % 2) for i in range(2 * SENSOR_FLATLINE_HOURS + 1)]
+        self._seed_series(repo, sensor_id, series)
+
+        assert [a.code for a in SensorAnomalyService(repo).scan()] == ["sensor_flatline"]
+
+    def test_watering_step_ends_the_flatline(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """The same 0 % series with a held watering step raises nothing (no flatline, no drift)."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_series(repo, sensor_id, [*self._flat(SENSOR_FLATLINE_HOURS, 0.0), 40.0, 40.0, 39.0])
+
+        assert SensorAnomalyService(repo).scan() == []
+
+    def test_open_flatline_resolves_once_the_series_moves(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """An open sensor_flatline alert resolves on the first scan that sees the series move."""
+        cluster_id, sensor_id = cluster_and_sensor
+        self._seed_series(repo, sensor_id, self._flat(SENSOR_FLATLINE_HOURS, 0.0), end_offset_s=3 * 1800)
+        svc = SensorAnomalyService(repo)
+        (alert,) = svc.scan()
+        repo.session.commit()
+
+        self._seed_series(repo, sensor_id, [40.0, 40.0, 39.0])
+        assert svc.scan() == []
+        repo.session.commit()
+
+        (row,) = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_flatline"]
+        assert (row.id, row.status) == (alert.id, "resolved")
+
+    def test_stale_sensor_is_only_stale(self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]) -> None:
+        """A flat series that stopped arriving is sensor_stale, not sensor_flatline."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_series(repo, sensor_id, self._flat(SENSOR_FLATLINE_HOURS, 0.0), end_offset_s=6 * 3600)
+
+        assert [a.code for a in SensorAnomalyService(repo).scan()] == ["sensor_stale"]
+
+    @pytest.mark.parametrize(
+        ("hours", "level"),
+        [(SENSOR_FLATLINE_HOURS - 1, 0.0), (SENSOR_FLATLINE_HOURS, 50.0), (SENSOR_FLATLINE_HOURS, 3.0)],
+        ids=["too-short", "mid-range", "just-above-dry-extreme"],
+    )
+    def test_no_flatline(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int], hours: int, level: float
+    ) -> None:
+        """Shorter than SENSOR_FLATLINE_HOURS, or flat away from an extreme, is not a flatline."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_series(repo, sensor_id, self._flat(hours, level))
+
+        assert SensorAnomalyService(repo).scan() == []
