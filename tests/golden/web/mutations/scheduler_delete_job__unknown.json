@@ -30,6 +30,7 @@
  },
  "scheduler_jobs_after": [
   "adhoc_contract_job",
+  "alert_digest",
   "check_all",
   "device_health_monitor",
   "plant_health_snapshot",

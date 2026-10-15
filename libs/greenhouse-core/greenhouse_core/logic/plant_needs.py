@@ -87,6 +87,10 @@ def analyze_water_needs(plant_care_data: list[dict[str, Any]]) -> str:
     return "medium"
 
 
+# SoilNow.source of a sensor judged against the cluster's widest band (unlinked, or its plant unknown).
+CLUSTER_BAND_SOURCE = "cluster"
+
+
 class _HasId(Protocol):
     id: int
 
@@ -96,12 +100,16 @@ class SoilNow:
     """One sensor's current soil reading and the moisture band it is judged against.
 
     ``band`` is the linked plant's own target; an unlinked sensor (or one whose
-    plant is unknown) is judged against the cluster's widest band.
+    plant is unknown) is judged against the cluster's widest band. ``source`` names
+    the plant-DB layer the band comes from (``species``, ``category_defaults``,
+    ``category``, ``builtin_fallback``) or ``cluster`` for the widest-band fallback,
+    so the decision trail can say why a plant reads dry.
     """
 
     name: str
     value: float
     band: tuple[float, float]
+    source: str = CLUSTER_BAND_SOURCE
 
 
 def cluster_band(plant_care: Iterable[Mapping[str, Any]]) -> tuple[float, float]:
@@ -118,16 +126,25 @@ def plant_bands(plants: Iterable[_HasId], plant_care: Iterable[Mapping[str, Any]
 
 
 def current_soil(
-    snapshot: SensorSnapshot, bands: Mapping[int, tuple[float, float]], fallback: tuple[float, float]
+    snapshot: SensorSnapshot,
+    bands: Mapping[int, tuple[float, float]],
+    fallback: tuple[float, float],
+    sources: Mapping[int, str] | None = None,
 ) -> list[SoilNow]:
     """Every sensor with a current soil reading, paired with the band its plant needs.
 
     The per-sensor band is what keeps one plant's needs from deciding for
     another: a cactus in the cluster must not lower the dry threshold of the
-    Monstera next to it.
+    Monstera next to it. ``sources`` (plant id → band source) labels each linked
+    band; a sensor on the cluster fallback is labelled ``cluster``.
     """
-    return [
-        SoilNow(s.name, s.latest_soil_moisture, bands.get(s.plant_id, fallback) if s.plant_id is not None else fallback)
-        for s in snapshot.per_sensor
-        if s.latest_soil_moisture is not None
-    ]
+    soil: list[SoilNow] = []
+    for s in snapshot.per_sensor:
+        if s.latest_soil_moisture is None:
+            continue
+        if s.plant_id is not None and s.plant_id in bands:
+            source = (sources or {}).get(s.plant_id, CLUSTER_BAND_SOURCE)
+            soil.append(SoilNow(s.name, s.latest_soil_moisture, bands[s.plant_id], source))
+        else:
+            soil.append(SoilNow(s.name, s.latest_soil_moisture, fallback))
+    return soil

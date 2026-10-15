@@ -70,7 +70,7 @@
       "cluster_name": "Alpha",
       "maintenance": [],
       "needs_water": [],
-      "notes": "soil moderately dry (driest=35%)"
+      "notes": "soil moderately dry (driest=35% < 45.0%, species band)"
      },
      {
       "action": "error",
@@ -88,7 +88,7 @@
       "cluster_name": "Charlie",
       "maintenance": [],
       "needs_water": [],
-      "notes": "soil moderately dry (driest=35%)"
+      "notes": "soil moderately dry (driest=35% < 45.0%, species band)"
      }
     ]
    },

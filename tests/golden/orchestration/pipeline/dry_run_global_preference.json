@@ -9,7 +9,7 @@
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35%)",
+    "reason": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "reasons": [
      {
       "code": "dry_run_global",
@@ -24,7 +24,7 @@
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      }
     ],
@@ -44,7 +44,7 @@
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35%)",
+    "message": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "payload_json": {
      "dry_run_global": true,
      "duration_minutes": 2,
@@ -87,7 +87,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       }
      ],
@@ -129,7 +129,7 @@
      "weather": null
     },
     "primary_code": "dry_run_global",
-    "reason_text": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35%)",
+    "reason_text": "global dry run: would have irrigated 2min on 'Irrigator 1' (pump not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "triggered_by": "auto"
    }
   ],

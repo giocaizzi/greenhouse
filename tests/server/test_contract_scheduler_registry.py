@@ -2,7 +2,7 @@
 
 ``greenhouse_server.scheduler.scheduler`` is one process-wide ``BackgroundScheduler``.
 ``create_app`` → ``init_scheduler`` re-configures it (timezone from
-``UserPreferences.timezone``, job defaults) and registers the five core jobs. Apps
+``UserPreferences.timezone``, job defaults) and registers the six core jobs. Apps
 are built with ``enable_scheduler=False``, so after ``create_app`` the jobs are
 *pending* (APScheduler applies ``job_defaults`` and computes ``next_run_time`` only
 when the scheduler starts). This module snapshots both states:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from sqlalchemy import Engine
 
 # sensor_sync, check_all, plant_health_snapshot, sensor_anomaly, device_health_monitor
-BUILT_IN_JOB_COUNT = 5
+BUILT_IN_JOB_COUNT = 6
 
 _BASE = {
     "db_url": "sqlite://",
@@ -173,7 +173,7 @@ def test_scheduler_registry_matches_golden() -> None:
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
 def test_registration_order_and_identity() -> None:
-    """The five core jobs, in ``init_scheduler`` registration order, bound to the app."""
+    """The six core jobs, in ``init_scheduler`` registration order, bound to the app."""
     app, engine = _build({}, None)
     try:
         jobs = sched_mod.scheduler.get_jobs()
@@ -185,12 +185,13 @@ def test_registration_order_and_identity() -> None:
                 "Daily plant health snapshot",
                 "greenhouse_server.scheduler:_health_snapshot_job",
             ),
+            ("alert_digest", "Daily critical alert digest", "greenhouse_server.scheduler:_alert_digest_job"),
             ("sensor_anomaly", "Sensor anomaly scan", "greenhouse_server.scheduler:_anomaly_job"),
             ("device_health_monitor", "Device health monitor", "greenhouse_server.scheduler:_health_monitor_job"),
         ]
         assert sched_mod._app is app  # noqa: SLF001 — pins the module-global app binding (no public accessor)
         assert sched_mod.CHECK_ALL_JOB_ID == "check_all"
-        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot")  # noqa: SLF001 — pins scheduler internals (no public accessor)
+        assert sched_mod._TZ_BOUND_CRON_JOBS == ("check_all", "plant_health_snapshot", "alert_digest")  # noqa: SLF001 — pins scheduler internals (no public accessor)
         assert sched_mod._JOB_DEFAULTS == {"misfire_grace_time": None, "coalesce": True, "max_instances": 1}  # noqa: SLF001 — pins scheduler internals (no public accessor)
     finally:
         engine.dispose()

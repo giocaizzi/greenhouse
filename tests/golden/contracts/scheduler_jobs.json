@@ -2,6 +2,7 @@
  "custom_cadence": {
   "check_all_paused": false,
   "core_job_ids": [
+   "alert_digest",
    "check_all",
    "device_health_monitor",
    "plant_health_snapshot",
@@ -32,6 +33,14 @@
     "next_run_time": null,
     "paused": false,
     "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
    },
    {
     "core": true,
@@ -193,6 +202,66 @@
    {
     "args": [],
     "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "kwargs": {},
+    "name": "Daily critical alert digest",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "9",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='9', minute='0', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='9', minute='0']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
     "func_ref": "greenhouse_server.scheduler:_anomaly_job",
     "id": "sensor_anomaly",
     "kwargs": {},
@@ -269,6 +338,14 @@
     "next_run_time": "2026-04-16 00:30:00+00:00",
     "paused": false,
     "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": "2026-04-16 09:00:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
    }
   ],
   "scheduler": {
@@ -331,12 +408,23 @@
     "misfire_grace_time": null,
     "next_run_time": "2026-04-16T00:30:00+00:00",
     "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T09:00:00+00:00",
+    "pending": false
    }
   ]
  },
  "default": {
   "check_all_paused": false,
   "core_job_ids": [
+   "alert_digest",
    "check_all",
    "device_health_monitor",
    "plant_health_snapshot",
@@ -367,6 +455,14 @@
     "next_run_time": null,
     "paused": false,
     "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
    },
    {
     "core": true,
@@ -528,6 +624,66 @@
    {
     "args": [],
     "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "kwargs": {},
+    "name": "Daily critical alert digest",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "9",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='9', minute='0', timezone='UTC')>",
+     "start_date": null,
+     "str": "cron[hour='9', minute='0']",
+     "timezone": "UTC",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
     "func_ref": "greenhouse_server.scheduler:_anomaly_job",
     "id": "sensor_anomaly",
     "kwargs": {},
@@ -604,6 +760,14 @@
     "next_run_time": "2026-04-16 00:30:00+00:00",
     "paused": false,
     "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": "2026-04-16 09:00:00+00:00",
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
    }
   ],
   "scheduler": {
@@ -666,12 +830,23 @@
     "misfire_grace_time": null,
     "next_run_time": "2026-04-16T00:30:00+00:00",
     "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T09:00:00+00:00",
+    "pending": false
    }
   ]
  },
  "persisted_tz_and_pause": {
   "check_all_paused": true,
   "core_job_ids": [
+   "alert_digest",
    "check_all",
    "device_health_monitor",
    "plant_health_snapshot",
@@ -702,6 +877,14 @@
     "next_run_time": null,
     "paused": false,
     "trigger": "cron[hour='0', minute='30']"
+   },
+   {
+    "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": null,
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
    },
    {
     "core": true,
@@ -863,6 +1046,66 @@
    {
     "args": [],
     "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "kwargs": {},
+    "name": "Daily critical alert digest",
+    "pending": true,
+    "trigger": {
+     "end_date": null,
+     "fields": [
+      [
+       "year",
+       "*",
+       true
+      ],
+      [
+       "month",
+       "*",
+       true
+      ],
+      [
+       "day",
+       "*",
+       true
+      ],
+      [
+       "week",
+       "*",
+       true
+      ],
+      [
+       "day_of_week",
+       "*",
+       true
+      ],
+      [
+       "hour",
+       "9",
+       false
+      ],
+      [
+       "minute",
+       "0",
+       false
+      ],
+      [
+       "second",
+       "0",
+       true
+      ]
+     ],
+     "jitter": null,
+     "repr": "<CronTrigger (hour='9', minute='0', timezone='Europe/Rome')>",
+     "start_date": null,
+     "str": "cron[hour='9', minute='0']",
+     "timezone": "Europe/Rome",
+     "type": "CronTrigger"
+    }
+   },
+   {
+    "args": [],
+    "executor": "default",
     "func_ref": "greenhouse_server.scheduler:_anomaly_job",
     "id": "sensor_anomaly",
     "kwargs": {},
@@ -934,6 +1177,14 @@
    },
    {
     "core": true,
+    "id": "alert_digest",
+    "name": "Daily critical alert digest",
+    "next_run_time": "2026-04-16 09:00:00+02:00",
+    "paused": false,
+    "trigger": "cron[hour='9', minute='0']"
+   },
+   {
+    "core": true,
     "id": "check_all",
     "name": "Check all clusters",
     "next_run_time": null,
@@ -990,6 +1241,16 @@
     "max_instances": 1,
     "misfire_grace_time": null,
     "next_run_time": "2026-04-16T00:30:00+02:00",
+    "pending": false
+   },
+   {
+    "coalesce": true,
+    "executor": "default",
+    "func_ref": "greenhouse_server.scheduler:_alert_digest_job",
+    "id": "alert_digest",
+    "max_instances": 1,
+    "misfire_grace_time": null,
+    "next_run_time": "2026-04-16T09:00:00+02:00",
     "pending": false
    },
    {

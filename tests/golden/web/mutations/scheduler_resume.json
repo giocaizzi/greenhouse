@@ -17,6 +17,7 @@
   "url": "/scheduler/resume"
  },
  "scheduler_jobs_after": [
+  "alert_digest",
   "check_all",
   "device_health_monitor",
   "plant_health_snapshot",

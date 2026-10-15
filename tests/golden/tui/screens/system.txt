@@ -9,20 +9,20 @@
 │ Scheduler                                        │ Sensor data sync · built-in             interval[3:00:00]  —
 │ automatic runs  active                           │ Check all clusters · built-in           cron               —
 │ scheduler       stopped                          │ Daily plant health snapshot · built-in  cron               —
-│ last sync       5m ago                           │ Sensor anomaly scan · built-in          interval[0:15:00]  —
-│                 p pause/resume · S sync · P      │ Device health monitor · built-in        interval[0:05:00]  —
-│                 plant DB · H health snapshot ·   │                                                            ▏
-│                 del remove job                   │
+│ last sync       5m ago                           │ Daily critical alert digest · built-in  cron               —
+│                 p pause/resume · S sync · P      │ Sensor anomaly scan · built-in          interval[0:15:00]  —
+│                 plant DB · H health snapshot ·   │ Device health monitor · built-in        interval[0:05:00]  —
+│                 del remove job                   │                                                            ▏
 ╰──────────────────────────────────────────────────╯
  Devices
 
  ID  Device             Status  Age     Note
+ 1   Living Room pump   ok      —
+ 2   Balcony pump       ok      —
  1   Monstera probe     ok      5m ago
  2   Nephrolepis probe  ok      5m ago
  3   Citrus probe       ok      5m ago
  4   Echeveria probe    ok      5m ago
- 1   Living Room pump   ok      —
- 2   Balcony pump       ok      —
  Data quality  1 plant_without_sensor, 4 unknown_species
  Severity  Code                  Entity    Label                 Message
  warning   unknown_species       plant #2  Nephrolepis exaltata  Species 'Nephrolepis exaltata' is not in the plant data

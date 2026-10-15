@@ -22,6 +22,7 @@ from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.irrigation import IrrigationService
 from greenhouse_server.services.notify import NtfyClient
 from greenhouse_server.services.sync import SyncService
+from greenhouse_server.services.system_health import SystemHealthService
 from greenhouse_server.services.vacation import VacationRangeError, validate_vacation_range
 from greenhouse_server.services.weather import WeatherClient
 from greenhouse_server.services.windows import WindowValidationError, validate_window
@@ -268,6 +269,16 @@ def get_forecast_service(repo: RepoDep, plant_db: PlantDbDep, weather: WeatherCl
 
 
 ForecastServiceDep = Annotated[ForecastService, Depends(get_forecast_service)]
+
+
+def get_system_health_service(
+    repo: RepoDep, sync_service: SyncServiceDep, health_monitor: _HealthMonitorDep
+) -> SystemHealthService:
+    """Build the system health pulse on the request's repository and the app's health monitor."""
+    return SystemHealthService(repo, sync_service, health_monitor=health_monitor)
+
+
+SystemHealthServiceDep = Annotated[SystemHealthService, Depends(get_system_health_service)]
 
 
 @dataclass(frozen=True, slots=True)
