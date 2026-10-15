@@ -4,6 +4,29 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.4.0](https://github.com/giocaizzi/greenhouse/compare/v6.3.0...v6.4.0) (2026-10-15)
+
+
+### Added
+
+* **alerts:** daily ntfy digest of critical alerts still open ([#188](https://github.com/giocaizzi/greenhouse/issues/188)) ([811ca28](https://github.com/giocaizzi/greenhouse/commit/811ca287ddda25c57c5f20bbcd5560ed13d652a9))
+* **engine:** show sensor_flatline and the soil band source in the decision trail ([#191](https://github.com/giocaizzi/greenhouse/issues/191)) ([806aae7](https://github.com/giocaizzi/greenhouse/commit/806aae71287cec272a3b9f07d53842d00688e132))
+* **plants:** per-plant soil_moisture_target override ([#196](https://github.com/giocaizzi/greenhouse/issues/196)) ([e63f07b](https://github.com/giocaizzi/greenhouse/commit/e63f07b8215faefd0298ecfda52c80ca6a60561c))
+* **system-health:** report an irrigator offline from the health monitor ([#192](https://github.com/giocaizzi/greenhouse/issues/192)) ([0432dd1](https://github.com/giocaizzi/greenhouse/commit/0432dd1f30cd1ff8d4ffb0d7252986063076f1e1))
+* **web:** move, restore and purge sensors and plants from the web UI and CLI ([#195](https://github.com/giocaizzi/greenhouse/issues/195)) ([9709245](https://github.com/giocaizzi/greenhouse/commit/97092458de38e3cee96d5eece5e5d037b7e1de45))
+* **web:** use a colour-blind-safe chart palette ([#190](https://github.com/giocaizzi/greenhouse/issues/190)) ([edcce7b](https://github.com/giocaizzi/greenhouse/commit/edcce7b55e542c00528893e9be7b38d81ad5eb17))
+
+
+### Fixed
+
+* **alerts:** move a plant's open alerts with the plant ([#186](https://github.com/giocaizzi/greenhouse/issues/186)) ([49d84f9](https://github.com/giocaizzi/greenhouse/commit/49d84f919fd925733fc35ccf75bacc0e06f776c4))
+* **efficacy:** attribute readings by sensor assignment in the efficacy score ([#193](https://github.com/giocaizzi/greenhouse/issues/193)) ([dd4468d](https://github.com/giocaizzi/greenhouse/commit/dd4468dfdfab7286a4eb83ae6d8ce2480420acc5))
+
+
+### Performance
+
+* **charts:** bucket readings hourly for chart ranges beyond 14 days ([#194](https://github.com/giocaizzi/greenhouse/issues/194)) ([20f181a](https://github.com/giocaizzi/greenhouse/commit/20f181ae150e301971040e4e8c74da45517ce444))
+
 ## [6.3.0](https://github.com/giocaizzi/greenhouse/compare/v6.2.0...v6.3.0) (2026-10-15)
 
 
