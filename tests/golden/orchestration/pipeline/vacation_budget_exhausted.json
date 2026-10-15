@@ -9,7 +9,7 @@
     "duration_minutes": 0,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
+    "reason": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 10d)",
     "reasons": [
      {
       "code": "vacation_budget_exhausted",
@@ -24,7 +24,7 @@
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      },
      {
@@ -52,7 +52,7 @@
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
+    "message": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 10d)",
     "payload_json": null,
     "severity": "info",
     "source": "irrigation",
@@ -91,7 +91,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       },
       {
@@ -141,7 +141,7 @@
      "weather": null
     },
     "primary_code": "vacation_budget_exhausted",
-    "reason_text": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35%); vacation active (returns in 10d)",
+    "reason_text": "vacation water budget exhausted this cycle — skipping to conserve reservoir; soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 10d)",
     "triggered_by": "auto"
    }
   ],

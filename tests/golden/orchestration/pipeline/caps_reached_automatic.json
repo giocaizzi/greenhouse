@@ -9,7 +9,7 @@
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
+    "reason": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "reasons": [
      {
       "code": "daily_cap_hit",
@@ -24,7 +24,7 @@
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      }
     ],
@@ -44,7 +44,7 @@
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
+    "message": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "payload_json": {
      "daily_cap": "cluster max_events_per_day reached",
      "duration_minutes": 2,
@@ -87,7 +87,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       }
      ],
@@ -129,7 +129,7 @@
      "weather": null
     },
     "primary_code": "daily_cap_hit",
-    "reason_text": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35%)",
+    "reason_text": "daily cap hit: cluster max_events_per_day reached (2min run on 'Irrigator 1' not started); soil moderately dry (driest=35% < 45.0%, species band)",
     "triggered_by": "auto"
    }
   ],
