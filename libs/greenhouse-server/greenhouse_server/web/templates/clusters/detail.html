@@ -425,6 +425,24 @@
       {% endfor %}
     </nav>
   </header>
+  {% if health_charts %}
+  <article class="card chart-card" id="plant-health">
+    <header class="chart-head">
+      <div class="chart-title">
+        <h3>Plant health</h3>
+        <small class="muted">daily score and the components it averages · last {{ health_charts[0].days }}d + today</small>
+      </div>
+    </header>
+    <div class="chart-body health-multiples">
+      {% for chart in health_charts %}
+        <section class="health-multiples__item">
+          <h4><a href="/clusters/{{ cluster_id }}/plants/{{ chart.plant_id }}"><i class="species">{{ chart.species }}</i></a></h4>
+          {% include "partials/_plant_health_breakdown.html" %}
+        </section>
+      {% endfor %}
+    </div>
+  </article>
+  {% endif %}
   {% for metric in metrics %}
     {% set payload_json = chart_payloads[metric] %}
     <article class="card chart-card">

@@ -160,6 +160,18 @@
     </nav>
   </header>
   {% if plant_sensors %}
+    <article class="card chart-card" id="plant-health">
+      <header class="chart-head">
+        <div class="chart-title">
+          <h3>Plant health</h3>
+          <small class="muted">daily score and the components it averages · last {{ health_chart.days }}d + today</small>
+        </div>
+      </header>
+      <div class="chart-body">
+        {% set chart = health_chart %}
+        {% include "partials/_plant_health_breakdown.html" %}
+      </div>
+    </article>
     {% for metric in metrics %}
       {% set payload_json = chart_payloads[metric] %}
       <article class="card chart-card">
@@ -173,14 +185,6 @@
         </div>
       </article>
     {% endfor %}
-
-    <article class="card chart-card"
-             hx-get="/clusters/{{ cluster.id }}/plants/{{ plant.id }}/health-fragment"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-      <header class="chart-head"><h3>Plant health (90d)</h3></header>
-      <div class="chart-body skeleton"><div class="skeleton__line med"></div></div>
-    </article>
   {% else %}
     <div class="alert alert--info">
       <span class="alert__icon"><svg class="icon"><use href="/static/icons/sprite.svg#i-info"></use></svg></span>

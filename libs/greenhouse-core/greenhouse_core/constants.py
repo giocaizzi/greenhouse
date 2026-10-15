@@ -478,6 +478,7 @@ PLANT_PAGE_READINGS_LOOKBACK_HOURS = 24  # plant page: latest reading per linked
 PLANT_PAGE_RECENT_EVENTS = 10  # plant page: newest irrigation events listed
 PLANT_PAGE_HEALTH_HISTORY_DAYS = 90  # plant page: daily health-score history
 PLANT_PAGE_LAST_IRRIGATED_DAYS = 90  # plant page: window searched for the last irrigation
+HEALTH_CHART_MIN_DAYS = 7  # health charts: daily snapshots shown at least, even on a 3-day range
 EFFICACY_SCORE_PER_PCT_RISE = 5.0  # efficacy score points per percentage point of soil rise (capped at 100)
 
 # ── Tuya device-log backfill (getdevicelog pagination) ───────────────────────

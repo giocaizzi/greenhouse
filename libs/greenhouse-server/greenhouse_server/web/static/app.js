@@ -223,6 +223,8 @@
         const data = JSON.parse(raw.textContent);
         if (c.id === "chart-overlay") {
           renderMultiMetricChart(c, data);
+        } else if (c.id.startsWith("chart-plant-health-")) {
+          renderHealthBreakdown(c, data);
         } else if (c.id.startsWith("chart-health-")) {
           renderHealthTimeline(c, data);
         } else {
@@ -506,7 +508,103 @@
     });
   }
 
+  // Plant health breakdown: the composite score (bold, ink colour) over the components it
+  // averages (thin, coloured, each with its own dash so identity never rests on colour alone).
+  // One 0-100 axis: every series is a percentage. Daily data, so points are always marked.
+  function renderHealthBreakdown(canvasEl, payload) {
+    if (!window.Chart || !canvasEl) return;
+    if (canvasEl._chart) {
+      try { canvasEl._chart.destroy(); } catch (e) {}
+    }
+
+    const text = css("--text-muted") || "#9194A0";
+    const dim = css("--text-dim") || "#62656E";
+    const ink = css("--text") || "#ECECEE";
+    const grid = css("--border") || "#222529";
+    const surf = css("--surface") || "#131519";
+    const mono = "'Geist Mono', ui-monospace, monospace";
+    const sans = "'Geist', system-ui, sans-serif";
+    const styles = {
+      score: { color: ink, width: 2.5, dash: [] },
+      soil_in_band_pct: { color: css("--ch-1") || ink, width: 1.5, dash: [] },
+      temp_in_band_pct: { color: css("--ch-2") || ink, width: 1.5, dash: [6, 3] },
+      humidity_in_band_pct: { color: css("--ch-3") || ink, width: 1.5, dash: [2, 3] },
+      efficiency: { color: css("--ch-4") || ink, width: 1.5, dash: [8, 3, 2, 3] },
+    };
+
+    Chart.defaults.font.family = mono;
+    Chart.defaults.font.size = 11;
+    Chart.defaults.color = text;
+
+    const datasets = (payload.series || [])
+      .filter((s) => (s.points || []).length)
+      .map((s) => {
+        const st = styles[s.key] || styles.score;
+        return {
+          label: s.label,
+          data: s.points.map(([x, y]) => ({ x: x * 1000, y })),
+          borderColor: st.color,
+          backgroundColor: st.color,
+          borderWidth: st.width,
+          borderDash: st.dash,
+          tension: 0.25,
+          pointRadius: s.key === "score" ? 3 : 2,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: surf,
+          pointHoverBorderColor: st.color,
+          pointHoverBorderWidth: 2,
+          fill: false,
+        };
+      });
+
+    canvasEl._chart = new Chart(canvasEl.getContext("2d"), {
+      type: "line",
+      data: { datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "nearest", axis: "x", intersect: false },
+        layout: { padding: { top: 6, right: 4, bottom: 0, left: 4 } },
+        scales: {
+          x: {
+            type: "time",
+            time: { unit: "day", tooltipFormat: "MMM d, HH:mm", displayFormats: { day: "MMM d" } },
+            grid: { display: false },
+            border: { color: grid },
+            ticks: { color: dim, maxRotation: 0, autoSkipPadding: 24, padding: 6, font: { size: 10, family: mono } },
+          },
+          y: {
+            min: 0,
+            max: 100,
+            grid: { color: grid, lineWidth: 1 },
+            border: { display: false },
+            ticks: { color: dim, padding: 6, stepSize: 25, font: { size: 10, family: mono } },
+          },
+        },
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: text, usePointStyle: true, pointStyle: "line", padding: 12, font: { size: 11, family: sans } },
+          },
+          tooltip: {
+            backgroundColor: surf,
+            borderColor: grid,
+            borderWidth: 1,
+            titleColor: text,
+            bodyColor: text,
+            padding: 10,
+            cornerRadius: 8,
+            titleFont: { family: sans, size: 11, weight: "500" },
+            bodyFont: { family: mono, size: 11 },
+            callbacks: { label: (ctx) => ctx.dataset.label + ": " + Math.round(ctx.parsed.y) },
+          },
+        },
+      },
+    });
+  }
+
   window.renderIrrigationChart = renderIrrigationChart;
+  window.renderHealthBreakdown = renderHealthBreakdown;
   window.renderMultiMetricChart = renderMultiMetricChart;
   window.renderHealthTimeline = renderHealthTimeline;
   window.__rerenderCharts = rerenderAllCharts;
