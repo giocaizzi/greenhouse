@@ -879,7 +879,7 @@ class TestClusterCrud:
             await pilot.press("delete")
             await pilot.pause(0)
             await _confirm(pilot, tui)
-            assert http.get(f"/api/v1/plants/{first}").status_code == HTTPStatus.NOT_FOUND
+            assert http.get(f"/api/v1/plants/{first}").json()["archived_at"] is not None  # delete archives (#149)
 
         self._open(http, 1, body, tab="tab-plants")
 
@@ -919,7 +919,8 @@ class TestClusterCrud:
             await pilot.press("delete")
             await pilot.pause(0)
             await _confirm(pilot, tui)
-            assert http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").status_code == HTTPStatus.NOT_FOUND
+            sensor = http.get(f"/api/v1/clusters/1/sensors/{spare['id']}").json()
+            assert sensor["archived_at"] is not None  # delete archives (#149)
 
         self._open(http, 1, body, tab="tab-sensors")
 

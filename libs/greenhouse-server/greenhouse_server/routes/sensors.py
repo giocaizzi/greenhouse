@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 
 from greenhouse_core.models import Sensor
-from greenhouse_core.repository import InvalidMoveTimeError
+from greenhouse_core.repository import InvalidMoveTimeError, NotArchivedError
 from greenhouse_core.schemas import (
     CreateSensorRequest,
     MoveSensorRequest,
@@ -44,6 +44,8 @@ def list_all_sensors(
     cluster_id: Annotated[int | None, Query(description="Restrict results to a specific cluster")] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     cursor: Annotated[int | None, Query(description="Id cursor — return rows with id > cursor")] = None,
+    *,
+    include_archived: Annotated[bool, Query(description="Also list archived (soft-deleted) rows")] = False,
 ) -> SensorListResponse:
     """List every sensor across all clusters with optional cluster filter and cursor pagination.
 
@@ -52,12 +54,15 @@ def list_all_sensors(
         limit: Page size (default 100, max 500).
         cursor: Id-based cursor — pass the previous response's ``next_cursor``
             to fetch the next page.
+        include_archived: Also list archived sensors (left out by default).
 
     Returns:
         The page of sensors plus a ``next_cursor`` (None when the page was not
         full and there are no more rows to fetch).
     """
-    rows = repo.list_all_sensors(filter_cluster_id=cluster_id, limit=limit, after_id=cursor)
+    rows = repo.list_all_sensors(
+        filter_cluster_id=cluster_id, limit=limit, after_id=cursor, include_archived=include_archived
+    )
     next_cursor = rows[-1].id if len(rows) == limit else None
     return SensorListResponse(
         sensors=[SensorResponse.model_validate(r) for r in rows],
@@ -100,23 +105,29 @@ def add_sensor(cluster_id: int, request: CreateSensorRequest, repo: RepoDep, reg
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
     except DeviceIdExistsError:
-        raise HTTPException(status_code=409, detail="Device ID already exists") from None
+        raise HTTPException(status_code=409, detail=_device_id_taken(repo, request.tuya_device_id)) from None
     repo.commit()
     sensors = repo.get_sensors_in_cluster(cluster_id)
     return next(s for s in sensors if s.id == sensor_id)
 
 
 @router.get("/clusters/{cluster_id}/sensors", response_model=list[SensorResponse])
-def list_sensors(cluster_id: int, repo: RepoDep) -> list[Sensor]:
+def list_sensors(
+    cluster_id: int,
+    repo: RepoDep,
+    *,
+    include_archived: Annotated[bool, Query(description="Also list archived (soft-deleted) rows")] = False,
+) -> list[Sensor]:
     """List every sensor registered to a cluster.
 
     Args:
         cluster_id: ID of the cluster to enumerate.
+        include_archived: Also list archived sensors (left out by default).
 
     Returns:
         The cluster's sensors (empty for an unknown cluster).
     """
-    return repo.get_sensors_in_cluster(cluster_id)
+    return repo.get_sensors_in_cluster(cluster_id, include_archived=include_archived)
 
 
 @router.get("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SensorResponse, summary="Get a sensor by ID")
@@ -264,25 +275,82 @@ def move_sensor(
     )
 
 
-@router.delete("/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SuccessResponse, summary="Delete a sensor")
-def delete_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> SuccessResponse:
-    """Delete a sensor and all its historical readings.
+def _device_id_taken(repo: RepoDep, tuya_device_id: str) -> str:
+    """The 409 detail for a taken device id, pointing at the archived sensor that still holds it."""
+    held = next((s for s in repo.list_all_sensors(include_archived=True) if s.tuya_device_id == tuya_device_id), None)
+    if held is not None and held.archived_at is not None:
+        return f"Device ID already exists on archived sensor {held.id}: restore it, or purge it to register anew"
+    return "Device ID already exists"
 
-    This operation is irreversible. The sensor must belong to the specified
-    cluster.
+
+@router.delete(
+    "/clusters/{cluster_id}/sensors/{sensor_id}", response_model=SuccessResponse, summary="Archive (or purge) a sensor"
+)
+def delete_sensor(
+    cluster_id: int,
+    sensor_id: int,
+    repo: RepoDep,
+    *,
+    purge: Annotated[
+        bool, Query(description="Hard-delete instead of archiving; only allowed on an already archived row")
+    ] = False,
+) -> SuccessResponse:
+    """Archive a sensor (soft delete), or purge an already archived one.
+
+    Archiving keeps the sensor's id, readings, assignment history and Tuya
+    device id, closes its open plant assignment, and takes it out of listings,
+    sync, health checks, snapshots and decisions. `POST .../restore` undoes it.
+    `purge=true` hard-deletes an archived sensor with all its readings and frees
+    its Tuya device id; this is irreversible. Both write an activity event with
+    the sensor's name, Tuya device id, cluster, plant and reading count.
+
+    Args:
+        cluster_id: Cluster the sensor belongs to.
+        sensor_id: Numeric sensor identifier.
+        purge: Hard-delete instead of archiving (the sensor must be archived).
+
+    Returns:
+        success=True once archived (idempotent) or purged.
+
+    Raises:
+        HTTPException: 404 if the sensor does not exist or belongs to a
+            different cluster; 409 on `purge=true` for a sensor that is not archived.
+    """
+    require_sensor_in_cluster(repo, cluster_id, sensor_id)
+    if purge:
+        try:
+            repo.purge_sensor(sensor_id)
+        except NotArchivedError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from None
+    else:
+        repo.archive_sensor(sensor_id)
+    repo.commit()
+    return SuccessResponse(success=True)
+
+
+@router.post(
+    "/clusters/{cluster_id}/sensors/{sensor_id}/restore",
+    response_model=SensorResponse,
+    summary="Restore an archived sensor",
+)
+def restore_sensor(cluster_id: int, sensor_id: int, repo: RepoDep) -> Sensor | None:
+    """Bring an archived sensor back with the same id, readings and history (no-op for an active one).
+
+    It is re-linked to the plant it measured when archived, if that plant is
+    still active (a new assignment starts now); otherwise it comes back unlinked.
 
     Args:
         cluster_id: Cluster the sensor belongs to.
         sensor_id: Numeric sensor identifier.
 
     Returns:
-        success=True on successful deletion.
+        The restored sensor.
 
     Raises:
         HTTPException: 404 if the sensor does not exist or belongs to a
             different cluster.
     """
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    repo.delete_sensor(sensor_id)
+    sensor = repo.restore_sensor(sensor_id)
     repo.commit()
-    return SuccessResponse(success=True)
+    return sensor

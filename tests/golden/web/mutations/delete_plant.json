@@ -3,10 +3,30 @@
   ""
  ],
  "db_effect": {
-  "plants": {
-   "removed": [
-    "3"
+  "activity_events": {
+   "added": [
+    {
+     "code": "plant_archived",
+     "entity_id": 3,
+     "entity_type": "plant",
+     "id": 5,
+     "message": "archived plant Eriobotrya japonica, 25 attributed readings",
+     "payload_json": "{\"species\": \"Eriobotrya japonica\", \"cluster_id\": 2, \"unlinked_sensor_ids\": [3], \"reading_count\": 25}",
+     "severity": "info",
+     "source": "plant",
+     "timestamp": 1776247200
+    }
    ]
+  },
+  "plants": {
+   "changed": {
+    "3": {
+     "archived_at": [
+      null,
+      1776247200
+     ]
+    }
+   }
   },
   "sensor_assignments": {
    "changed": {

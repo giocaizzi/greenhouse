@@ -1106,6 +1106,13 @@
     "nullable": true,
     "primary_key": 0,
     "type": "VARCHAR"
+   },
+   {
+    "default": null,
+    "name": "archived_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
    }
   ],
   "foreign_keys": [
@@ -1405,6 +1412,13 @@
    {
     "default": null,
     "name": "plant_id",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "archived_at",
     "nullable": true,
     "primary_key": 0,
     "type": "INTEGER"

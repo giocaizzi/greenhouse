@@ -134,7 +134,8 @@ class PlantHealthService:
         by_sensor = self._attributed_clean_readings(plant_id, days)
         all_readings = [r for readings in by_sensor.values() for r in readings]
         soil_in_band_pct, temp_in_band_pct, humidity_in_band_pct = _band_percentages(all_readings, bands)
-        efficiency = self._first_profile_efficiency(list(plant.sensors), days)
+        active_sensors = [s for s in plant.sensors if s.archived_at is None]
+        efficiency = self._first_profile_efficiency(active_sensors, days)
 
         components = [
             c

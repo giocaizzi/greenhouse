@@ -294,6 +294,24 @@
   "methods": [
    "POST"
   ],
+  "name": "restore_plant",
+  "path": "/api/v1/clusters/{cluster_id}/plants/{plant_id}/restore",
+  "response_class": "JSONResponse",
+  "response_model": "PlantResponse",
+  "status_code": null,
+  "tags": [
+   "plants"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
   "name": "move_plant",
   "path": "/api/v1/plants/{plant_id}/move",
   "response_class": "JSONResponse",
@@ -640,6 +658,24 @@
   "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}",
   "response_class": "JSONResponse",
   "response_model": "SuccessResponse",
+  "status_code": null,
+  "tags": [
+   "sensors"
+  ]
+ },
+ {
+  "dependencies": [
+   "require_user"
+  ],
+  "include_in_schema": true,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "restore_sensor",
+  "path": "/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/restore",
+  "response_class": "JSONResponse",
+  "response_model": "SensorResponse",
   "status_code": null,
   "tags": [
    "sensors"

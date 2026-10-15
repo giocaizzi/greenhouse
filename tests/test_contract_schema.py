@@ -6,7 +6,7 @@
 - ``contracts/orm_columns.json`` — per column what DDL does not show: Python-side
   ``default`` / ``onupdate``, ``index`` / ``unique`` flags, foreign keys; plus the
   mapped class → table map;
-- the literal Alembic head ``b3c5e7f9a104`` and the full revision chain;
+- the literal Alembic head ``c4d6f8a0b215`` and the full revision chain;
 - ``contracts/migrated_schema.json`` — SQLAlchemy reflection of a temp-file SQLite
   after ``init_db`` (the schema production actually runs), which must equal
   ``Base.metadata.create_all`` on another temp file (no drift; only ``alembic_version``
@@ -39,12 +39,12 @@ if TYPE_CHECKING:
 
 TABLE_COUNT = 17
 
-# sha256 of "\n".join(DDL statements), re-recorded for the open-assignment partial unique index (#145).
+# sha256 of "\n".join(DDL statements), re-recorded for sensors/plants.archived_at (#149).
 PHASE0_DDL_SHA256 = (
     "1e66a04c2fc7e5caa9ae0b6339c19a1c771f31e8a5612b0dfc47cd62fbc3dbd4"  # gitleaks:allow — content hash, not a secret
 )
 
-ALEMBIC_HEAD = "b3c5e7f9a104"
+ALEMBIC_HEAD = "c4d6f8a0b215"
 ALEMBIC_CHAIN = [
     ("1c9b09f02432", None),
     ("2a4d1e7c8f02", "1c9b09f02432"),
@@ -59,6 +59,7 @@ ALEMBIC_CHAIN = [
     ("a1d3f5b7c902", "9f2b5e7c6a31"),
     ("b2e4a6c8d013", "a1d3f5b7c902"),
     ("b3c5e7f9a104", "b2e4a6c8d013"),
+    ("c4d6f8a0b215", "b3c5e7f9a104"),
 ]
 
 

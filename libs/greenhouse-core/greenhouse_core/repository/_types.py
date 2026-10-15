@@ -242,6 +242,10 @@ class InvalidMoveTimeError(ValueError):
     """A sensor move's ``effective_at`` would precede the current link or overlap the previous assignment."""
 
 
+class NotArchivedError(ValueError):
+    """A purge was asked for a sensor or plant that is not archived (archive comes first)."""
+
+
 class SameClusterMoveError(ValueError):
     """Raised when a plant move targets its current cluster (no-op move)."""
 

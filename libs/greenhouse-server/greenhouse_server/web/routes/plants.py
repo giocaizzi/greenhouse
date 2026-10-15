@@ -130,9 +130,9 @@ def update_plant(cluster_id: int, plant_id: int, repo: RepoDep, plant_db: PlantD
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
 def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
-    """HTMX-targeted delete; returns an empty HTML body so the row is removed."""
+    """HTMX-targeted delete: archives the plant (soft delete, like the API default); empty body removes the row."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    repo.delete_plant(plant_id)
+    repo.archive_plant(plant_id)
     clear_care_alert(repo, plant_id)
     repo.commit()
     return HTMLResponse("")
