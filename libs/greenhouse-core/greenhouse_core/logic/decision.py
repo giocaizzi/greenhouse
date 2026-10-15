@@ -104,6 +104,10 @@ class TriggerCode(StrEnum):
     # Advisory: a sensor was moved between plants within SENSOR_MOVE_SETTLE_SECONDS,
     # so its readings are not judged yet (issue #145). Appended last, never primary.
     SENSOR_SETTLING = "sensor_settling"
+    # Advisory: a sensor with a current soil reading has an unresolved ``sensor_flatline``
+    # anomaly alert (flat at 0 % / 100 %, issue #180). Its reading still counts (the soil
+    # rule is unchanged); appended last, never primary.
+    SENSOR_FLATLINE = "sensor_flatline"
 
 
 DEVICE_BLOCKING_CODES: frozenset[TriggerCode] = frozenset(

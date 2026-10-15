@@ -39,7 +39,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from greenhouse_core.constants import LEAK_ALERT_CODE
+from greenhouse_core.constants import LEAK_ALERT_CODE, SENSOR_FLATLINE_ALERT_CODE
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.models import (
     EVENT_ACTION_START,
@@ -141,6 +141,7 @@ class Case:
     windows: tuple[Window, ...] = ()
     vacation: tuple[int, int] | None = None  # (starts_at, ends_at) offsets from `at`, seconds
     leak: Leak | None = None
+    flatline: str | None = None  # status of a sensor_flatline alert on the first sensor: open | resolved
     weather: str = "none"  # none (no client) | offline (get_forecast → None) | forecast
     forecast: tuple[tuple[str, Any], ...] = ()
     current_temp: float | None = None
@@ -347,6 +348,8 @@ def _seed(repo: IrrigationRepository, case: Case) -> int:
 
     if case.leak is not None:
         _seed_leak(repo, case.leak, cluster_id, sensor_ids, now)
+    if case.flatline is not None:
+        _seed_flatline(repo, case.flatline, cluster_id, sensor_ids[0], now)
 
     repo.session.flush()
     return cluster_id
@@ -426,6 +429,23 @@ def _seed_leak(repo: IrrigationRepository, leak: Leak, cluster_id: int, sensor_i
     if leak.status == "acknowledged":
         repo.acknowledge_alert(alert.id)
     elif leak.status == "resolved":
+        repo.resolve_alert(alert.id)
+
+
+def _seed_flatline(repo: IrrigationRepository, status: str, cluster_id: int, sensor_id: int, now: int) -> None:
+    alert = repo.upsert_alert(
+        dedup_key=f"anomaly::{SENSOR_FLATLINE_ALERT_CODE}::{cluster_id}::{sensor_id}",
+        source=ActivitySource.ANOMALY,
+        code=SENSOR_FLATLINE_ALERT_CODE,
+        title="Sensor flat-lined: Soil",
+        message="Soil: soil moisture flat at 0.0% for 48 h while readings keep arriving",
+        severity="warning",
+        entity_type=EntityType.SENSOR,
+        entity_id=sensor_id,
+        cluster_id=cluster_id,
+        seen_at=now - HOUR,
+    )
+    if status == "resolved":
         repo.resolve_alert(alert.id)
 
 
@@ -1406,6 +1426,11 @@ def _misc_family() -> list[Case]:
                     moved=(0, 2 * HOUR),
                 ),
             ),
+        ),
+        # Sensor flatline (issue #180): an open alert is noted last; the soil rule is unchanged.
+        Case(id="misc/sensor-flatlined-open", family="misc", at=BASE_AT, sensors=(_sensor(0.0),), flatline="open"),
+        Case(
+            id="misc/sensor-flatlined-resolved", family="misc", at=BASE_AT, sensors=(_sensor(0.0),), flatline="resolved"
         ),
         Case(
             id="misc/manual-trigger-dry",

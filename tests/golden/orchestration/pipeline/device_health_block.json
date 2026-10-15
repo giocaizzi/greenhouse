@@ -9,7 +9,7 @@
     "duration_minutes": 2,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35%)",
+    "reason": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35% < 45.0%, species band)",
     "reasons": [
      {
       "code": "device_no_water",
@@ -24,7 +24,7 @@
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      }
     ],
@@ -44,7 +44,7 @@
     "entity_id": 1,
     "entity_type": "cluster",
     "id": 1,
-    "message": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35%)",
+    "message": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35% < 45.0%, species band)",
     "payload_json": {
      "blocking_alarms": [
       "no_water"
@@ -119,7 +119,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       }
      ],
@@ -161,7 +161,7 @@
      "weather": null
     },
     "primary_code": "device_no_water",
-    "reason_text": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35%)",
+    "reason_text": "Actuation blocked by device health: no_water on 'Irrigator 1'; soil moderately dry (driest=35% < 45.0%, species band)",
     "triggered_by": "auto"
    }
   ],

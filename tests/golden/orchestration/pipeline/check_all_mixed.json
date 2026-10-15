@@ -13,7 +13,7 @@
       "cluster_name": "Alpha",
       "maintenance": [],
       "needs_water": [],
-      "notes": "soil moderately dry (driest=35%)"
+      "notes": "soil moderately dry (driest=35% < 45.0%, species band)"
      },
      {
       "action": "skip",
@@ -122,7 +122,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       }
      ],
@@ -164,7 +164,7 @@
      "weather": null
     },
     "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%)",
+    "reason_text": "soil moderately dry (driest=35% < 45.0%, species band)",
     "triggered_by": "auto"
    },
    {
@@ -290,7 +290,7 @@
     "duration_minutes": 2,
     "id": 1,
     "irrigator_id": 1,
-    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35%)",
+    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35% < 45.0%, species band)",
     "timestamp": 1776247200,
     "triggered_by": "auto"
    }
