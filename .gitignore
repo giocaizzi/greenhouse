@@ -49,3 +49,14 @@ node_modules/
 .env
 .env.local
 .env.*.local
+
+# AI coding agents: personal and machine state (shared config is tracked)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/agent-memory-local/
+CLAUDE.local.md
+.github/copilot/settings.local.json
+.opencode/node_modules/
+.opencode/plans/
+.pi/npm/
+.pi/git/
