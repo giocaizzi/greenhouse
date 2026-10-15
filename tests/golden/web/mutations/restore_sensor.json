@@ -1,0 +1,47 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "sensor_restored",
+     "entity_id": 4,
+     "entity_type": "sensor",
+     "id": 7,
+     "message": "restored sensor Room Climate (fake_tuya_sensor_00000004), 7 readings",
+     "payload_json": "{\"name\": \"Room Climate\", \"tuya_device_id\": \"fake_tuya_sensor_00000004\", \"cluster_id\": 1, \"plant_id\": null, \"reading_count\": 7}",
+     "severity": "info",
+     "source": "sensor",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "sensors": {
+   "changed": {
+    "4": {
+     "archived_at": [
+      1776247200,
+      null
+     ]
+    }
+   }
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "location": "/clusters/1#sensors"
+ },
+ "request": {
+  "form": null,
+  "headers": {},
+  "method": "POST",
+  "url": "/clusters/1/sensors/4/restore"
+ },
+ "status": 303,
+ "templates": []
+}

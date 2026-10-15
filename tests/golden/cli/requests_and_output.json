@@ -3527,7 +3527,7 @@
     }
    ],
    "stderr": "",
-   "stdout": "Delete plant 5 from cluster 2? [y/N]: y\n{\n  \"echo\": \"DELETE /api/v1/clusters/2/plants/5\",\n  \"ok\": true\n}\n",
+   "stdout": "Archive plant 5 in cluster 2? [y/N]: y\n{\n  \"echo\": \"DELETE /api/v1/clusters/2/plants/5\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -3548,7 +3548,75 @@
    "input": "n\n",
    "requests": [],
    "stderr": "Aborted.\n",
-   "stdout": "Delete plant 5 from cluster 2? [y/N]: n\n",
+   "stdout": "Archive plant 5 in cluster 2? [y/N]: n\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "plant.delete.purge": {
+   "argv": [
+    "greenhouse",
+    "plant",
+    "delete",
+    "5",
+    "--cluster",
+    "2",
+    "--purge",
+    "--yes"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "DELETE",
+     "path": "/api/v1/clusters/2/plants/5",
+     "query": [
+      [
+       "purge",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/plants/5?purge=true",
+     "url": "http://localhost:8000/api/v1/clusters/2/plants/5?purge=true"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"DELETE /api/v1/clusters/2/plants/5\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "plant.delete.purge_prompt_declined": {
+   "argv": [
+    "greenhouse",
+    "plant",
+    "delete",
+    "5",
+    "--cluster",
+    "2",
+    "--purge"
+   ],
+   "clients": [],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": "n\n",
+   "requests": [],
+   "stderr": "Aborted.\n",
+   "stdout": "Permanently delete plant 5 in cluster 2? [y/N]: n\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -3700,6 +3768,50 @@
    "token_file_after": null,
    "token_file_before": null
   },
+  "plant.list.archived": {
+   "argv": [
+    "greenhouse",
+    "plant",
+    "list",
+    "--cluster",
+    "3",
+    "--archived"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/clusters/3/plants",
+     "query": [
+      [
+       "include_archived",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/3/plants?include_archived=true",
+     "url": "http://localhost:8000/api/v1/clusters/3/plants?include_archived=true"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"GET /api/v1/clusters/3/plants\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
   "plant.list.cluster": {
    "argv": [
     "greenhouse",
@@ -3814,6 +3926,45 @@
    ],
    "stderr": "",
    "stdout": "{\n  \"echo\": \"POST /api/v1/plants/5/move\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "plant.restore": {
+   "argv": [
+    "greenhouse",
+    "plant",
+    "restore",
+    "5",
+    "--cluster",
+    "2"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/2/plants/5/restore",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/plants/5/restore",
+     "url": "http://localhost:8000/api/v1/clusters/2/plants/5/restore"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/2/plants/5/restore\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -4356,7 +4507,7 @@
     }
    ],
    "stderr": "",
-   "stdout": "Delete sensor 20 from cluster 2? [y/N]: y\n{\n  \"echo\": \"DELETE /api/v1/clusters/2/sensors/20\",\n  \"ok\": true\n}\n",
+   "stdout": "Archive sensor 20 in cluster 2? [y/N]: y\n{\n  \"echo\": \"DELETE /api/v1/clusters/2/sensors/20\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -4377,7 +4528,75 @@
    "input": "n\n",
    "requests": [],
    "stderr": "Aborted.\n",
-   "stdout": "Delete sensor 20 from cluster 2? [y/N]: n\n",
+   "stdout": "Archive sensor 20 in cluster 2? [y/N]: n\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.delete.purge": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "delete",
+    "20",
+    "--cluster",
+    "2",
+    "--purge",
+    "--yes"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "DELETE",
+     "path": "/api/v1/clusters/2/sensors/20",
+     "query": [
+      [
+       "purge",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/sensors/20?purge=true",
+     "url": "http://localhost:8000/api/v1/clusters/2/sensors/20?purge=true"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"DELETE /api/v1/clusters/2/sensors/20\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.delete.purge_prompt_declined": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "delete",
+    "20",
+    "--cluster",
+    "2",
+    "--purge"
+   ],
+   "clients": [],
+   "env": {},
+   "exception": null,
+   "exit_code": 1,
+   "files": {},
+   "input": "n\n",
+   "requests": [],
+   "stderr": "Aborted.\n",
+   "stdout": "Permanently delete sensor 20 in cluster 2? [y/N]: n\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -4529,6 +4748,50 @@
    "token_file_after": null,
    "token_file_before": null
   },
+  "sensor.list.archived": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "list",
+    "--cluster",
+    "3",
+    "--archived"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/clusters/3/sensors",
+     "query": [
+      [
+       "include_archived",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/3/sensors?include_archived=true",
+     "url": "http://localhost:8000/api/v1/clusters/3/sensors?include_archived=true"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"GET /api/v1/clusters/3/sensors\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
   "sensor.list.cluster": {
    "argv": [
     "greenhouse",
@@ -4602,6 +4865,221 @@
    ],
    "stderr": "Error: Cluster 0 not found\n",
    "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.move.both": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "move",
+    "20",
+    "--cluster",
+    "2",
+    "--plant-id",
+    "5",
+    "--detach"
+   ],
+   "clients": [],
+   "env": {},
+   "exception": null,
+   "exit_code": 2,
+   "files": {},
+   "input": null,
+   "requests": [],
+   "stderr": "Usage: greenhouse sensor move [OPTIONS] {id}\nTry 'greenhouse sensor move --help' for help.\n╭─ Error ──────────────────────────────────────────────────────────────────────────────────────────╮\n│ Invalid value: give exactly one of --plant-id or --detach                                        │\n╰──────────────────────────────────────────────────────────────────────────────────────────────────╯\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.move.detach": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "move",
+    "20",
+    "--cluster",
+    "2",
+    "--detach"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": "{\"plant_id\":null}",
+     "content_type": "application/json",
+     "json": {
+      "plant_id": null
+     },
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/move",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/move",
+     "url": "http://localhost:8000/api/v1/clusters/2/sensors/20/move"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/2/sensors/20/move\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.move.neither": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "move",
+    "20",
+    "--cluster",
+    "2"
+   ],
+   "clients": [],
+   "env": {},
+   "exception": null,
+   "exit_code": 2,
+   "files": {},
+   "input": null,
+   "requests": [],
+   "stderr": "Usage: greenhouse sensor move [OPTIONS] {id}\nTry 'greenhouse sensor move --help' for help.\n╭─ Error ──────────────────────────────────────────────────────────────────────────────────────────╮\n│ Invalid value: give exactly one of --plant-id or --detach                                        │\n╰──────────────────────────────────────────────────────────────────────────────────────────────────╯\n",
+   "stdout": "",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.move.plant": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "move",
+    "20",
+    "--cluster",
+    "2",
+    "--plant-id",
+    "5"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": "{\"plant_id\":5}",
+     "content_type": "application/json",
+     "json": {
+      "plant_id": 5
+     },
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/move",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/move",
+     "url": "http://localhost:8000/api/v1/clusters/2/sensors/20/move"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/2/sensors/20/move\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.move.plant_at": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "move",
+    "20",
+    "--cluster",
+    "2",
+    "--plant-id",
+    "5",
+    "--at",
+    "1776240000"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": "{\"plant_id\":5,\"effective_at\":1776240000}",
+     "content_type": "application/json",
+     "json": {
+      "effective_at": 1776240000,
+      "plant_id": 5
+     },
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/move",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/move",
+     "url": "http://localhost:8000/api/v1/clusters/2/sensors/20/move"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/2/sensors/20/move\",\n  \"ok\": true\n}\n",
+   "token_file_after": null,
+   "token_file_before": null
+  },
+  "sensor.restore": {
+   "argv": [
+    "greenhouse",
+    "sensor",
+    "restore",
+    "20",
+    "--cluster",
+    "2"
+   ],
+   "clients": [
+    {
+     "base_url": "http://localhost:8000",
+     "headers": {},
+     "timeout": 30.0
+    }
+   ],
+   "env": {},
+   "exception": null,
+   "exit_code": 0,
+   "files": {},
+   "input": null,
+   "requests": [
+    {
+     "authorization": null,
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/restore",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/restore",
+     "url": "http://localhost:8000/api/v1/clusters/2/sensors/20/restore"
+    }
+   ],
+   "stderr": "",
+   "stdout": "{\n  \"echo\": \"POST /api/v1/clusters/2/sensors/20/restore\",\n  \"ok\": true\n}\n",
    "token_file_after": null,
    "token_file_before": null
   },
@@ -7141,6 +7619,40 @@
     "ok": true
    }
   },
+  "delete_plant.purge": {
+   "call": {
+    "args": [
+     2,
+     5
+    ],
+    "kwargs": {
+     "purge": true
+    },
+    "method": "delete_plant"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "DELETE",
+     "path": "/api/v1/clusters/2/plants/5",
+     "query": [
+      [
+       "purge",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/plants/5?purge=true",
+     "url": "http://client.example:8123/api/v1/clusters/2/plants/5?purge=true"
+    }
+   ],
+   "returned": {
+    "echo": "DELETE /api/v1/clusters/2/plants/5",
+    "ok": true
+   }
+  },
   "delete_scheduler_job.path_segment_escaped": {
    "call": {
     "args": [
@@ -7187,6 +7699,40 @@
      "query": [],
      "raw_path": "/api/v1/clusters/2/sensors/20",
      "url": "http://client.example:8123/api/v1/clusters/2/sensors/20"
+    }
+   ],
+   "returned": {
+    "echo": "DELETE /api/v1/clusters/2/sensors/20",
+    "ok": true
+   }
+  },
+  "delete_sensor.purge": {
+   "call": {
+    "args": [
+     2,
+     20
+    ],
+    "kwargs": {
+     "purge": true
+    },
+    "method": "delete_sensor"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "DELETE",
+     "path": "/api/v1/clusters/2/sensors/20",
+     "query": [
+      [
+       "purge",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/sensors/20?purge=true",
+     "url": "http://client.example:8123/api/v1/clusters/2/sensors/20?purge=true"
     }
    ],
    "returned": {
@@ -8145,6 +8691,39 @@
     "ok": true
    }
   },
+  "list_plants.archived": {
+   "call": {
+    "args": [
+     2
+    ],
+    "kwargs": {
+     "include_archived": true
+    },
+    "method": "list_plants"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/clusters/2/plants",
+     "query": [
+      [
+       "include_archived",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/plants?include_archived=true",
+     "url": "http://client.example:8123/api/v1/clusters/2/plants?include_archived=true"
+    }
+   ],
+   "returned": {
+    "echo": "GET /api/v1/clusters/2/plants",
+    "ok": true
+   }
+  },
   "list_sensors": {
    "call": {
     "args": [
@@ -8164,6 +8743,39 @@
      "query": [],
      "raw_path": "/api/v1/clusters/2/sensors",
      "url": "http://client.example:8123/api/v1/clusters/2/sensors"
+    }
+   ],
+   "returned": {
+    "echo": "GET /api/v1/clusters/2/sensors",
+    "ok": true
+   }
+  },
+  "list_sensors.archived": {
+   "call": {
+    "args": [
+     2
+    ],
+    "kwargs": {
+     "include_archived": true
+    },
+    "method": "list_sensors"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "GET",
+     "path": "/api/v1/clusters/2/sensors",
+     "query": [
+      [
+       "include_archived",
+       "true"
+      ]
+     ],
+     "raw_path": "/api/v1/clusters/2/sensors?include_archived=true",
+     "url": "http://client.example:8123/api/v1/clusters/2/sensors?include_archived=true"
     }
    ],
    "returned": {
@@ -8388,6 +9000,68 @@
    ],
    "returned": {
     "echo": "POST /api/v1/plants/5/move",
+    "ok": true
+   }
+  },
+  "move_sensor.detach_at": {
+   "call": {
+    "args": [
+     2,
+     20,
+     null,
+     1776240000
+    ],
+    "kwargs": {},
+    "method": "move_sensor"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": "{\"plant_id\":null,\"effective_at\":1776240000}",
+     "content_type": "application/json",
+     "json": {
+      "effective_at": 1776240000,
+      "plant_id": null
+     },
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/move",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/move",
+     "url": "http://client.example:8123/api/v1/clusters/2/sensors/20/move"
+    }
+   ],
+   "returned": {
+    "echo": "POST /api/v1/clusters/2/sensors/20/move",
+    "ok": true
+   }
+  },
+  "move_sensor.plant": {
+   "call": {
+    "args": [
+     2,
+     20,
+     5
+    ],
+    "kwargs": {},
+    "method": "move_sensor"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": "{\"plant_id\":5}",
+     "content_type": "application/json",
+     "json": {
+      "plant_id": 5
+     },
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/move",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/move",
+     "url": "http://client.example:8123/api/v1/clusters/2/sensors/20/move"
+    }
+   ],
+   "returned": {
+    "echo": "POST /api/v1/clusters/2/sensors/20/move",
     "ok": true
    }
   },
@@ -8651,6 +9325,60 @@
    ],
    "returned": {
     "echo": "POST /api/v1/alerts/11/resolve",
+    "ok": true
+   }
+  },
+  "restore_plant": {
+   "call": {
+    "args": [
+     2,
+     5
+    ],
+    "kwargs": {},
+    "method": "restore_plant"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/2/plants/5/restore",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/plants/5/restore",
+     "url": "http://client.example:8123/api/v1/clusters/2/plants/5/restore"
+    }
+   ],
+   "returned": {
+    "echo": "POST /api/v1/clusters/2/plants/5/restore",
+    "ok": true
+   }
+  },
+  "restore_sensor": {
+   "call": {
+    "args": [
+     2,
+     20
+    ],
+    "kwargs": {},
+    "method": "restore_sensor"
+   },
+   "requests": [
+    {
+     "authorization": "Bearer tok-direct",
+     "content": null,
+     "content_type": null,
+     "json": null,
+     "method": "POST",
+     "path": "/api/v1/clusters/2/sensors/20/restore",
+     "query": [],
+     "raw_path": "/api/v1/clusters/2/sensors/20/restore",
+     "url": "http://client.example:8123/api/v1/clusters/2/sensors/20/restore"
+    }
+   ],
+   "returned": {
+    "echo": "POST /api/v1/clusters/2/sensors/20/restore",
     "ok": true
    }
   },

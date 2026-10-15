@@ -1,0 +1,55 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "sensor_purged",
+     "entity_id": 4,
+     "entity_type": "sensor",
+     "id": 7,
+     "message": "purged sensor Room Climate (fake_tuya_sensor_00000004), 7 readings",
+     "payload_json": "{\"name\": \"Room Climate\", \"tuya_device_id\": \"fake_tuya_sensor_00000004\", \"cluster_id\": 1, \"plant_id\": null, \"reading_count\": 7}",
+     "severity": "info",
+     "source": "sensor",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "sensor_readings": {
+   "removed": [
+    "4",
+    "17",
+    "30",
+    "43",
+    "56",
+    "69",
+    "82"
+   ]
+  },
+  "sensors": {
+   "removed": [
+    "4"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/1/sensors/4?purge=true"
+ },
+ "status": 200,
+ "templates": []
+}

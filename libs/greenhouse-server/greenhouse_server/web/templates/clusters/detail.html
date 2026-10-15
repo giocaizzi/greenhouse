@@ -577,6 +577,29 @@
   {% endif %}
 </article>
 
+{# Archived plants and sensors: hidden everywhere else, kept with their history.
+   Restore brings one back; purge (archived rows only) deletes it for good. #}
+{% if archived_plants or archived_sensors %}
+<article class="card card--flush" id="archived">
+  <div class="card__head">
+    <h3 class="card__title">Archived <span class="n">{{ archived_plants|length + archived_sensors|length }}</span></h3>
+  </div>
+  <table aria-label="Archived plants and sensors in {{ cluster.name }}">
+    <thead><tr><th scope="col">Kind</th><th scope="col">Name</th><th scope="col">Archived</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+      {% for item in archived_plants %}
+        {% set kind, label, path = "plant", item.species, "plants" %}
+        {% include "partials/_archived_row.html" %}
+      {% endfor %}
+      {% for item in archived_sensors %}
+        {% set kind, label, path = "sensor", item.name, "sensors" %}
+        {% include "partials/_archived_row.html" %}
+      {% endfor %}
+    </tbody>
+  </table>
+</article>
+{% endif %}
+
 {# Irrigators table — unified section. The cluster↔irrigator status dot
    surfaces health right next to the device name. #}
 <article class="card card--flush" id="irrigators">

@@ -1,0 +1,23 @@
+{# One archived plant or sensor; the caller sets ``item``, ``kind`` (plant/sensor), ``label`` and ``path``. #}
+<tr id="archived-{{ kind }}-row-{{ item.id }}">
+  <td data-th="Kind">{{ kind }}</td>
+  <td data-th="Name">{% if kind == "plant" %}<i class="species">{{ label }}</i>{% else %}{{ label }}{% endif %}</td>
+  <td data-th="Archived">{{ item.archived_at | time_ago }}</td>
+  <td data-th="Actions">
+    <div class="row-actions">
+      <form method="post" action="/clusters/{{ cluster.id }}/{{ path }}/{{ item.id }}/restore" class="m-0">
+        <button type="submit" class="btn secondary btn-sm" aria-label="Restore {{ kind }} {{ label }}">Restore</button>
+      </form>
+      <button class="btn secondary btn-sm row-actions__danger"
+              type="button"
+              aria-label="Purge {{ kind }} {{ label }}"
+              hx-delete="/clusters/{{ cluster.id }}/{{ path }}/{{ item.id }}?purge=true"
+              hx-target="#archived-{{ kind }}-row-{{ item.id }}"
+              hx-swap="outerHTML swap:200ms"
+              hx-confirm="Permanently delete {{ kind }} &quot;{{ label }}&quot;{% if kind == 'sensor' %} and all its readings{% else %} and its health history{% endif %}? This cannot be undone.">
+        <svg class="icon icon--sm"><use href="/static/icons/sprite.svg#i-trash"></use></svg>
+        Purge
+      </button>
+    </div>
+  </td>
+</tr>

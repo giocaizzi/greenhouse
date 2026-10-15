@@ -1,0 +1,12 @@
+
+ Usage: greenhouse sensor restore [OPTIONS] {id}
+
+ Bring an archived sensor back, re-linked to its plant if that plant is still active.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    id      <int>  Sensor ID [required]                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster        <int>  Cluster the sensor belongs to [required]                              │
+│    --help                  Show this message and exit.                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

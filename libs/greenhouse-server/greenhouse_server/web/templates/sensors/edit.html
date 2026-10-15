@@ -50,4 +50,25 @@
     </div>
   </form>
 </article>
+
+<article class="card form-card" id="move">
+  <h3 class="card__title">Move to another plant</h3>
+  <p class="muted">Date the move to when the probe was actually moved: readings before it stay with the old plant. Picking the plant it is on now re-dates its last move.</p>
+  <form method="post" action="/clusters/{{ cluster.id }}/sensors/{{ sensor.id }}/move">
+    <label for="move_plant_id">Plant
+      <select id="move_plant_id" name="plant_id">
+        <option value="">— detach —</option>
+        {% for plant in plants %}
+          <option value="{{ plant.id }}"{% if sensor.plant_id == plant.id %} selected{% endif %}>{{ plant.species }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label for="move_effective_at">Moved at <small class="muted">(blank = now; in your timezone preference)</small>
+      <input type="datetime-local" id="move_effective_at" name="effective_at">
+    </label>
+    <div class="form-actions">
+      <button type="submit">Move sensor</button>
+    </div>
+  </form>
+</article>
 {% endblock %}

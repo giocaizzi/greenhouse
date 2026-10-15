@@ -50,7 +50,7 @@ PHASE0_OPENAPI_SHA256 = (
 # Headline counts of the pinned route table.
 API_OPERATION_COUNT = 87
 API_PATH_COUNT = 69
-WEB_ROUTE_COUNT = 85
+WEB_ROUTE_COUNT = 88
 
 
 def _package_version() -> str:
@@ -193,7 +193,7 @@ def test_route_table_matches_golden(contract_app: FastAPI) -> None:
 
 
 def test_route_table_counts(contract_app: FastAPI) -> None:
-    """Headline counts: 87 schema operations, 85 web routes."""
+    """Headline counts: 87 schema operations, 88 web routes."""
     rows = _route_rows(contract_app)
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]
     hidden = [r for r in rows if r["kind"] == "APIRoute" and not r["include_in_schema"]]
