@@ -16,6 +16,7 @@
      "ideal_temp_min": 16.0,
      "light_needs": "medium",
      "notes": "Corner",
+     "soil_moisture_target": null,
      "species": "Dracaena marginata",
      "water_needs": "low"
     }

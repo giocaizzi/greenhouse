@@ -60,6 +60,9 @@
         <label for="ideal_humidity_max">Max <input type="number" step="1" id="ideal_humidity_max" name="ideal_humidity_max"></label>
       </div>
     </fieldset>
+    <label for="soil_moisture_target">Soil moisture target (%) <small class="muted">(optional: overrides the plant database)</small>
+      <input type="text" id="soil_moisture_target" name="soil_moisture_target" placeholder="e.g. 30-50" pattern="\s*\d+(\.\d+)?\s*-\s*\d+(\.\d+)?\s*" title="Two numbers 0-100, like 30-50">
+    </label>
     <label for="notes">Notes <small class="muted">(optional)</small>
       <textarea id="notes" name="notes" rows="3"></textarea>
     </label>

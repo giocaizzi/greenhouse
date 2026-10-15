@@ -31,7 +31,9 @@ STATS_START_MINUTES = 3
 
 class _Repo:
     def __init__(self, n_plants: int = 1) -> None:
-        self._plants = [SimpleNamespace(id=i + 1, species=f"s{i}", category="c") for i in range(n_plants)]
+        self._plants = [
+            SimpleNamespace(id=i + 1, species=f"s{i}", category="c", soil_moisture_target=None) for i in range(n_plants)
+        ]
 
     def get_plants_in_cluster(self, cluster_id: int) -> list[SimpleNamespace]:
         del cluster_id  # signature mirrors the real one; unused by this fake
@@ -205,7 +207,7 @@ def _sensor(sid: int, plant_id: int | None = None) -> SimpleNamespace:
 
 
 def _plant(pid: int, species: str = "sp") -> SimpleNamespace:
-    return SimpleNamespace(id=pid, species=f"{species}{pid}", category="cat")
+    return SimpleNamespace(id=pid, species=f"{species}{pid}", category="cat", soil_moisture_target=None)
 
 
 def _profile(

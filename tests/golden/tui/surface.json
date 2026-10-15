@@ -1380,6 +1380,16 @@
    },
    {
     "kind": "text",
+    "label": "Soil target %",
+    "name": "soil_moisture_target",
+    "options": [],
+    "placeholder": "30-50",
+    "required": false,
+    "tz": null,
+    "value": null
+   },
+   {
+    "kind": "text",
     "label": "Notes",
     "name": "notes",
     "options": [],

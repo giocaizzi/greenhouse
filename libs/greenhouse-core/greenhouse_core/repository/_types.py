@@ -65,6 +65,7 @@ class PlantPatch(TypedDict, total=False):
     ideal_temp_max: float | None
     ideal_humidity_min: float | None
     ideal_humidity_max: float | None
+    soil_moisture_target: str | None
     notes: str | None
 
 
@@ -149,6 +150,7 @@ class PlantCareFields(TypedDict, total=False):
     ideal_temp_max: float | None
     ideal_humidity_min: float | None
     ideal_humidity_max: float | None
+    soil_moisture_target: str | None
     notes: str | None
 
 

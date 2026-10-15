@@ -511,7 +511,7 @@
      "plants"
     ],
     "summary": "Add Plant",
-    "description": "Add a plant to a cluster.\n\nCare thresholds (water needs, temperature/humidity ranges) can be supplied\ndirectly or left null to be filled in later via POST /plants/sync, which\nlooks them up in the evidence-based plant database. The response names the\nsoil band the plant is judged against and its source; when neither species\nnor category is in the plant database (``soil_band_source`` =\n``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened.\n\nArgs:\n    cluster_id: ID of the cluster the plant belongs to.\n    request: Species and optional plant-care fields.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist.\n\nReturns:\n    The created plant including its ID, parent cluster and effective soil band.",
+    "description": "Add a plant to a cluster.\n\nCare thresholds (water needs, temperature/humidity ranges) can be supplied\ndirectly or left null to be filled in later via POST /plants/sync, which\nlooks them up in the evidence-based plant database. The response names the\nsoil band the plant is judged against and its source; when neither species\nnor category is in the plant database (``soil_band_source`` =\n``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened. A\n``soil_moisture_target`` such as ``\"30-50\"`` gives the plant its own band,\nahead of the plant database (``soil_band_source`` = ``plant``); it is stored\nas ``\"low-high\"``.\n\nArgs:\n    cluster_id: ID of the cluster the plant belongs to.\n    request: Species and optional plant-care fields.\n\nRaises:\n    HTTPException: 404 if the cluster does not exist; 400 if\n        ``soil_moisture_target`` is not two bounds inside 0-100.\n\nReturns:\n    The created plant including its ID, parent cluster and effective soil band.",
     "operationId": "add_plant",
     "security": [
      {
@@ -631,7 +631,7 @@
      "plants"
     ],
     "summary": "Update a plant",
-    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The plant must belong to the specified cluster.\nA species or category that now resolves in the plant database resolves the\nplant's ``plant_care_defaulted`` alert; one that no longer does opens it.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant with its effective soil band and its source.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster.",
+    "description": "Partially update a plant's care metadata.\n\nOnly fields present in the request body are modified; omitted fields are\nleft unchanged. An explicit `null` clears an optional field and is\nignored for a required one. The plant must belong to the specified cluster.\nA species or category that now resolves in the plant database, or a\n``soil_moisture_target`` of the plant's own, resolves the plant's\n``plant_care_defaulted`` alert; a change that leaves the plant on the\nbuilt-in band opens it. ``soil_moisture_target: null`` returns the plant to\nthe plant database's band.\n\nArgs:\n    cluster_id: Cluster the plant belongs to.\n    plant_id: Numeric plant identifier.\n    request: Fields to update — any subset of care metadata fields.\n\nReturns:\n    The updated plant with its effective soil band and its source.\n\nRaises:\n    HTTPException: 404 if the plant does not exist or belongs to a\n        different cluster; 400 if ``soil_moisture_target`` is not two\n        bounds inside 0-100.",
     "operationId": "update_plant",
     "security": [
      {
@@ -2933,7 +2933,7 @@
      "charts"
     ],
     "summary": "Get Plant",
-    "description": "Fetch a single plant by ID across all clusters.\n\nThe response includes the soil band the plant is judged against\n(``soil_moisture_min`` / ``soil_moisture_max``) and the plant-database\nlayer it comes from (``soil_band_source``: ``species``,\n``category_defaults``, ``category`` or ``builtin_fallback``, the 45-65 %\ndefault used when neither species nor category resolves).\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The plant record including its parent ``cluster_id`` and effective soil band.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
+    "description": "Fetch a single plant by ID across all clusters.\n\nThe response includes the soil band the plant is judged against\n(``soil_moisture_min`` / ``soil_moisture_max``) and where it comes from\n(``soil_band_source``: ``plant`` for the plant's own\n``soil_moisture_target``, else the plant-database layer ``species``,\n``category_defaults``, ``category`` or ``builtin_fallback``, the 45-65 %\ndefault used when neither species nor category resolves).\n\nArgs:\n    plant_id: Numeric plant identifier.\n\nReturns:\n    The plant record including its parent ``cluster_id`` and effective soil band.\n\nRaises:\n    HTTPException: 404 if no plant with that ID exists.",
     "operationId": "get_plant",
     "security": [
      {
@@ -5763,6 +5763,18 @@
       ],
       "title": "Ideal Humidity Max"
      },
+     "soil_moisture_target": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Soil Moisture Target",
+      "description": "This plant's own soil band as \"min-max\" percent (e.g. \"30-50\"), used ahead of the plant database; null uses the plant database"
+     },
      "notes": {
       "anyOf": [
        {
@@ -7228,6 +7240,18 @@
       ],
       "title": "Ideal Humidity Max"
      },
+     "soil_moisture_target": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Soil Moisture Target",
+      "description": "This plant's own soil band as \"min-max\" percent (e.g. \"30-50\"), used ahead of the plant database; null uses the plant database"
+     },
      "notes": {
       "anyOf": [
        {
@@ -7270,6 +7294,7 @@
      "soil_band_source": {
       "type": "string",
       "enum": [
+       "plant",
        "species",
        "category_defaults",
        "category",
@@ -7288,7 +7313,7 @@
      "soil_band_source"
     ],
     "title": "PlantDetailResponse",
-    "description": "A plant with the soil band it is judged against and the plant-DB layer that band comes from.\n\n``soil_band_source`` is ``builtin_fallback`` when neither the species nor the\ncategory resolves in the plant database: the plant then runs on the default\n45-65 % band and a ``plant_care_defaulted`` info alert is open on it."
+    "description": "A plant with the soil band it is judged against and the plant-DB layer that band comes from.\n\n``soil_band_source`` is ``plant`` when the plant sets its own\n``soil_moisture_target``, and ``builtin_fallback`` when it does not and neither\nthe species nor the category resolves in the plant database: the plant then\nruns on the default 45-65 % band and a ``plant_care_defaulted`` info alert is\nopen on it."
    },
    "PlantHealthDailyResponse": {
     "properties": {
@@ -7570,6 +7595,18 @@
        }
       ],
       "title": "Ideal Humidity Max"
+     },
+     "soil_moisture_target": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Soil Moisture Target",
+      "description": "This plant's own soil band as \"min-max\" percent (e.g. \"30-50\"), used ahead of the plant database; null uses the plant database"
      },
      "notes": {
       "anyOf": [
@@ -9147,6 +9184,18 @@
        }
       ],
       "title": "Ideal Humidity Max"
+     },
+     "soil_moisture_target": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Soil Moisture Target",
+      "description": "This plant's own soil band as \"min-max\" percent (e.g. \"30-50\"), used ahead of the plant database; null uses the plant database"
      },
      "notes": {
       "anyOf": [

@@ -1373,6 +1373,30 @@
     "default": null,
     "envvar": null,
     "expose_value": true,
+    "help": "The plant's own soil band \"min-max\" %, e.g. 30-50 (overrides the plant DB)",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "soil_target",
+    "nargs": 1,
+    "opts": [
+     "--soil-target"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "str",
+    "type_class": "StringParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
     "help": null,
     "hidden": false,
     "hide_input": false,
@@ -1796,6 +1820,30 @@
     "secondary_opts": [],
     "type": "float",
     "type_class": "FloatParamType"
+   },
+   {
+    "default": null,
+    "envvar": null,
+    "expose_value": true,
+    "help": "The plant's own soil band \"min-max\" %, e.g. 30-50 (overrides the plant DB)",
+    "hidden": false,
+    "hide_input": false,
+    "is_eager": false,
+    "is_flag": false,
+    "kind": "option",
+    "max": null,
+    "min": null,
+    "multiple": false,
+    "name": "soil_target",
+    "nargs": 1,
+    "opts": [
+     "--soil-target"
+    ],
+    "prompt": null,
+    "required": false,
+    "secondary_opts": [],
+    "type": "str",
+    "type_class": "StringParamType"
    },
    {
     "default": null,

@@ -78,6 +78,7 @@ class ClusterMixin(SensorMixin):
             ideal_temp_max=care.get("ideal_temp_max"),
             ideal_humidity_min=care.get("ideal_humidity_min"),
             ideal_humidity_max=care.get("ideal_humidity_max"),
+            soil_moisture_target=care.get("soil_moisture_target"),
             notes=care.get("notes"),
         )
         self.session.add(plant)
