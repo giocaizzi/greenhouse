@@ -614,7 +614,7 @@ class IrrigationService:
         if not irrigator:
             monitor = self.monitor_cluster(cluster_id)
             action, detail_key, detail = "monitored", "needs_water", monitor.get("needs_water", [])
-            monitored = monitor["sensors"]
+            monitored = monitor.get("sensors", [])
         elif not self._repo.get_effective_config(cluster_id)["auto_run"]["value"]:
             action, detail = "skipped", "auto_run disabled"
         else:
