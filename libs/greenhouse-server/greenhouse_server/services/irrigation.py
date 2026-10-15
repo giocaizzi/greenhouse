@@ -39,7 +39,7 @@ from greenhouse_server.services.needs_water import (
     reconcile_needs_water_alerts,
     soil_status,
 )
-from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from greenhouse_server.services.notify import NtfyClient, irrigator_label, maybe_notify
 from greenhouse_server.services.plant_care import reconcile_cluster_care_alerts
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 from greenhouse_server.services.sync import ClusterSnapshot, SyncService
@@ -419,7 +419,7 @@ class IrrigationService:
             "auto" if act.triggered_by == TRIGGERED_BY_AUTO else "manual",
             lambda n: n.notify_irrigation(
                 triggered_by=act.triggered_by,
-                irrigator_name=act.irrigator.name,
+                irrigator_name=irrigator_label(act.irrigator),
                 duration_minutes=duration,
                 detail=f"confidence={act.decision.confidence:.0%}",
             ),
@@ -439,8 +439,8 @@ class IrrigationService:
             self._repo,
             source=SOURCE_IRRIGATION,
             code="actuation_failed",
-            title="Irrigation Actuation Failed",
-            message=f"Irrigator '{act.irrigator.name}' failed to start: {output}",
+            title=f"Irrigation Actuation Failed · {act.irrigator.cluster.name}",
+            message=f"Irrigator '{irrigator_label(act.irrigator)}' failed to start: {output}",
             severity="warning",
             cluster_id=act.cluster_id,
             notifier=self._notifier,

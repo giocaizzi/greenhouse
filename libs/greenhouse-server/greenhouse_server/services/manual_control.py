@@ -34,7 +34,7 @@ from greenhouse_server.services.irrigation_jobs import (
     record_leak_check_armed,
     record_leak_check_skipped,
 )
-from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from greenhouse_server.services.notify import NtfyClient, irrigator_label, maybe_notify
 from greenhouse_server.services.pump_watcher_jobs import schedule_pump_watcher
 
 if TYPE_CHECKING:
@@ -237,7 +237,7 @@ def manual_start(
         "manual",
         lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
-            irrigator_name=irrigator.name,
+            irrigator_name=irrigator_label(irrigator),
             duration_minutes=run.minutes,
             detail="started",
         ),
@@ -289,7 +289,7 @@ def manual_stop(
         "manual",
         lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
-            irrigator_name=irrigator.name,
+            irrigator_name=irrigator_label(irrigator),
             detail="stopped",
         ),
     )
@@ -338,7 +338,7 @@ def manual_log(
         "manual",
         lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_MANUAL,
-            irrigator_name=irrigator.name,
+            irrigator_name=irrigator_label(irrigator),
             duration_minutes=minutes,
             detail="logged (watered by hand)",
         ),

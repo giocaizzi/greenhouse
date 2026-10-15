@@ -52,7 +52,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.models import SOURCE_ANOMALY, Alert
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import clear_alert, raise_alert
-from greenhouse_server.services.notify import NtfyClient
+from greenhouse_server.services.notify import NtfyClient, sensor_label
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Sensor, SensorReading
@@ -204,9 +204,9 @@ class SensorAnomalyService:
                 source=SOURCE_ANOMALY,
                 code="sensor_stale",
                 severity="warning",
-                title=f"Stale sensor: {sensor.name}",
+                title=f"Stale sensor: {sensor_label(sensor)}",
                 message=(
-                    f"{sensor.name}: no reading for {gap_seconds // 60:.0f} min "
+                    f"{sensor_label(sensor)}: no reading for {gap_seconds // 60:.0f} min "
                     f"(expected every {median_interval / 60:.0f} min)"
                 ),
                 cluster_id=sensor.cluster_id,
@@ -252,9 +252,9 @@ class SensorAnomalyService:
             source=SOURCE_ANOMALY,
             code="sensor_flatline",
             severity="warning",
-            title=f"Sensor flat-lined: {sensor.name}",
+            title=f"Sensor flat-lined: {sensor_label(sensor)}",
             message=(
-                f"{sensor.name}: soil moisture flat at {level:.1f}% for {span // SECONDS_PER_HOUR} h while "
+                f"{sensor_label(sensor)}: soil moisture flat at {level:.1f}% for {span // SECONDS_PER_HOUR} h while "
                 "readings keep arriving (probe out of the soil, in water, or faulty?)"
             ),
             cluster_id=sensor.cluster_id,
@@ -295,9 +295,9 @@ class SensorAnomalyService:
                 source=SOURCE_ANOMALY,
                 code="sensor_drift",
                 severity="warning",
-                title=f"Sensor spike/drift: {sensor.name}",
+                title=f"Sensor spike/drift: {sensor_label(sensor)}",
                 message=(
-                    f"{sensor.name}: soil moisture {latest_soil:.1f}% "
+                    f"{sensor_label(sensor)}: soil moisture {latest_soil:.1f}% "
                     f"is a {z:+.1f}\N{GREEK SMALL LETTER SIGMA} outlier (mean={mean:.1f}%, std={std:.1f}%)"
                 ),
                 cluster_id=sensor.cluster_id,

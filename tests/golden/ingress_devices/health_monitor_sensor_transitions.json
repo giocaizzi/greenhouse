@@ -14,7 +14,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -29,7 +29,7 @@
     "severity": "warning",
     "source": "health",
     "status": "open",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [
@@ -37,9 +37,9 @@
   ],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "now": 1776247800,
@@ -53,7 +53,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -68,7 +68,7 @@
     "severity": "warning",
     "source": "health",
     "status": "open",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [
@@ -76,9 +76,9 @@
   ],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "now": 1776248400,
@@ -92,7 +92,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -107,15 +107,15 @@
     "severity": "warning",
     "source": "health",
     "status": "resolved",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "now": 1776249000,
@@ -129,7 +129,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -144,15 +144,15 @@
     "severity": "warning",
     "source": "health",
     "status": "resolved",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "now": 1776261600,
@@ -166,7 +166,7 @@
     "dedup_key": "health:sensor:1:device_offline",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "message": "'Health Cluster · Probe One' is unreachable. Actuation is blocked until the device comes back online.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "device_offline",
@@ -181,7 +181,7 @@
     "severity": "warning",
     "source": "health",
     "status": "open",
-    "title": "Device Offline · Probe One"
+    "title": "Device Offline · Health Cluster · Probe One"
    },
    {
     "cluster_id": 1,
@@ -189,7 +189,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -204,7 +204,7 @@
     "severity": "warning",
     "source": "health",
     "status": "resolved",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [
@@ -212,14 +212,14 @@
   ],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    },
    {
-    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "message": "'Health Cluster · Probe One' is unreachable. Actuation is blocked until the device comes back online.",
     "severity": "warning",
-    "title": "Device Offline · Probe One"
+    "title": "Device Offline · Health Cluster · Probe One"
    }
   ],
   "now": 1776261601,
@@ -233,7 +233,7 @@
     "dedup_key": "health:sensor:1:device_offline",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "message": "'Health Cluster · Probe One' is unreachable. Actuation is blocked until the device comes back online.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "device_offline",
@@ -248,7 +248,7 @@
     "severity": "warning",
     "source": "health",
     "status": "resolved",
-    "title": "Device Offline · Probe One"
+    "title": "Device Offline · Health Cluster · Probe One"
    },
    {
     "cluster_id": 1,
@@ -256,7 +256,7 @@
     "dedup_key": "health:sensor:1:low_battery",
     "entity_id": 1,
     "entity_type": "sensor",
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "occurrence_count": 1,
     "payload": {
      "alarm": "low_battery",
@@ -271,20 +271,20 @@
     "severity": "warning",
     "source": "health",
     "status": "resolved",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    }
   ],
   "derived_alarms": [],
   "notifications": [
    {
-    "message": "'Probe One' battery is low (10%). Replace soon to keep readings flowing.",
+    "message": "'Health Cluster · Probe One' battery is low (10%). Replace soon to keep readings flowing.",
     "severity": "warning",
-    "title": "Low Battery · Probe One"
+    "title": "Low Battery · Health Cluster · Probe One"
    },
    {
-    "message": "'Probe One' is unreachable. Actuation is blocked until the device comes back online.",
+    "message": "'Health Cluster · Probe One' is unreachable. Actuation is blocked until the device comes back online.",
     "severity": "warning",
-    "title": "Device Offline · Probe One"
+    "title": "Device Offline · Health Cluster · Probe One"
    }
   ],
   "now": 1776250900,

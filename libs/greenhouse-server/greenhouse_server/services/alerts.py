@@ -25,11 +25,12 @@ from greenhouse_core.models import (
     ActivitySource,
     Alert,
     Cluster,
+    Sensor,
 )
 from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.maintenance import AlertFinding, collect_learning_alerts, collect_maintenance_alerts
-from greenhouse_server.services.notify import NtfyClient, maybe_notify
+from greenhouse_server.services.notify import NtfyClient, maybe_notify, sensor_label
 
 # Alert severities that warrant a push (info is suppressed).
 _NOTIFY_SEVERITIES = ("warning", "critical")
@@ -53,6 +54,21 @@ def _title_for(code: str, message: str) -> str:
     if head and head != message:
         return f"{code.replace('_', ' ').title()} · {head}"
     return code.replace("_", " ").title()
+
+
+def _with_sensor_label(message: str, sensors: list[Sensor]) -> str:
+    """``message`` with the sensor its ``"[emoji ]<sensor>[ (<species>)]:"`` head names swapped for its label.
+
+    Learning and maintenance findings name only the sensor, which does not say which plant or
+    cluster is meant (:func:`~greenhouse_server.services.notify.sensor_label`). The dedup key
+    keeps reading the raw head, so the label never re-keys an alert, even when the sensor moves.
+    """
+    head, sep, rest = message.partition(":")
+    for sensor in sensors:
+        prefix, found, suffix = head.partition(sensor.name)
+        if found and sep and not any(c.isalnum() for c in prefix) and (not suffix or suffix.startswith(" (")):
+            return f"{prefix}{sensor_label(sensor)}{sep}{rest}"
+    return message
 
 
 def _push_due(alert: Alert, *, was_open: bool) -> bool:
@@ -130,12 +146,13 @@ def sync_cluster_alerts(
     ]
     findings.extend((SOURCE_MAINTENANCE, raw) for raw in collect_maintenance_alerts(repo, cluster_id, plant_db))
 
+    sensors = repo.get_sensors_in_cluster(cluster_id)
     seen_keys: set[str] = set()
     for source, raw in findings:
         code = raw.get("type", "alert")
-        message = raw.get("message", "")
         severity = raw.get("severity", "info")
-        key = _dedup_key(source, code, cluster_id, message)
+        key = _dedup_key(source, code, cluster_id, raw.get("message", ""))
+        message = _with_sensor_label(raw.get("message", ""), sensors)
         seen_keys.add(key)
         was_open = is_alert_open(repo, key)
         alert = repo.upsert_alert(

@@ -14,10 +14,13 @@ sent via ``Authorization`` when configured.
 import logging
 import urllib.request
 from collections.abc import Callable
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from greenhouse_core.models import TRIGGERED_BY_EMERGENCY, TriggeredBy
 from greenhouse_server.config import check_ntfy_server_url
+
+if TYPE_CHECKING:
+    from greenhouse_core.models import Irrigator, Sensor
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,23 @@ _IRRIGATION_TITLES = {
     "auto": "Automated irrigation",
 }
 _IRRIGATION_TAGS = {"manual": "potted_plant", "emergency": "octopus", "auto": "potted_plant"}
+
+
+def sensor_label(sensor: "Sensor") -> str:
+    """``"<plant species> (<cluster>) · <sensor>"``, or ``"<cluster> · <sensor>"`` without a current plant.
+
+    Sensor names repeat across clusters ("Sensore 2"), so an alert or push naming only the
+    sensor does not say which plant it is about.
+    """
+    plant = sensor.plant
+    if plant is not None and plant.archived_at is None:
+        return f"{plant.species} ({sensor.cluster.name}) · {sensor.name}"
+    return f"{sensor.cluster.name} · {sensor.name}"
+
+
+def irrigator_label(irrigator: "Irrigator") -> str:
+    """``"<irrigator> · <cluster>"``: the device name alone does not say which cluster ran."""
+    return f"{irrigator.name} · {irrigator.cluster.name}"
 
 
 def _ascii(text: str) -> str:

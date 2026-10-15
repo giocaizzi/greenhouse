@@ -68,7 +68,7 @@
     "id": 1,
     "last_notified_at": null,
     "last_seen_at": 1776247200,
-    "message": "'Irrigator 1' reported water shortage. Pump actuation will be blocked until refilled.",
+    "message": "'Irrigator 1 · Golden Cluster' reported water shortage. Pump actuation will be blocked until refilled.",
     "occurrence_count": 1,
     "payload_json": {
      "alarm": "no_water",
@@ -85,7 +85,7 @@
     "severity": "critical",
     "source": "health",
     "status": "open",
-    "title": "No Water · Irrigator 1"
+    "title": "No Water · Irrigator 1 · Golden Cluster"
    }
   ],
   "decision_logs": [

@@ -29,7 +29,7 @@ def test_web_stop_all_sends_the_emergency_push(app: FastAPI, seeded_client: Test
     resp = seeded_client.post("/bulk/stop-all")
     assert resp.status_code == HTTPStatus.OK
     assert rec.irrigations == [
-        {"triggered_by": "emergency", "irrigator_name": "1 irrigator(s)", "detail": "kill switch"}
+        {"triggered_by": "emergency", "irrigator_name": "1 irrigator(s) · Test Cluster", "detail": "kill switch"}
     ]
 
 

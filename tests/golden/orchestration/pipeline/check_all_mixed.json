@@ -309,7 +309,7 @@
   {
    "detail": "confidence=80%",
    "duration_minutes": 2,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Alpha",
    "kind": "irrigation",
    "triggered_by": "auto"
   }

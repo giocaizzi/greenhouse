@@ -310,7 +310,7 @@ def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(
     assert "device_offline" not in _poll_sensor(world)
     _move(world, last_sync + SENSOR_OFFLINE_AFTER_SECONDS + 1)  # the next sync is over the grace
     assert "device_offline" in _poll_sensor(world)
-    assert [n["title"] for n in world["notifier"].sent] == ["Device Offline · Probe One"]
+    assert [n["title"] for n in world["notifier"].sent] == ["Device Offline · Health Cluster · Probe One"]
 
 
 def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(
@@ -442,7 +442,10 @@ def test_record_infers_label_and_cluster_or_falls_back(world: World) -> None:
     monitor.record(ENTITY_SENSOR, 999, offline)
     rows = {a["dedup_key"]: (a["title"], a["cluster_id"]) for a in _alerts(world["repo"])}
     assert rows == {
-        f"health:irrigator:{world['irrigator'].id}:device_offline": ("Device Offline · Pump One", world["cluster_id"]),
+        f"health:irrigator:{world['irrigator'].id}:device_offline": (
+            "Device Offline · Pump One · Health Cluster",
+            world["cluster_id"],
+        ),
         "health:widget:5:device_offline": ("Device Offline · widget#5", None),
         "health:sensor:999:device_offline": ("Device Offline · sensor#999", None),
     }
@@ -588,7 +591,7 @@ def test_backfill_ignores_rows_older_than_a_week_and_never_duplicates(world: Wor
     assert (alert["code"], alert["occurrence_count"], alert["message"]) == (
         "low_battery",
         1,
-        "'Probe One' battery is low (None%). Replace soon to keep readings flowing.",
+        "'Health Cluster · Probe One' battery is low (None%). Replace soon to keep readings flowing.",
     )
     assert alert["payload"]["observed_at"] == FROZEN_TS
     # Back-fill writes the alert but not the cache: the next poll still sees a transition.

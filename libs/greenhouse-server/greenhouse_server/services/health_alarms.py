@@ -11,6 +11,7 @@ from greenhouse_core.devices.health import DeviceHealthState, HealthAlarm
 from greenhouse_core.logic.decision import TriggerCode
 from greenhouse_core.models import ENTITY_IRRIGATOR, ENTITY_SENSOR, SOURCE_HEALTH, EntityType
 from greenhouse_core.repository import IrrigationRepository
+from greenhouse_server.services.notify import irrigator_label, sensor_label
 
 logger = logging.getLogger("greenhouse_server.services.health_monitor")
 
@@ -89,13 +90,13 @@ def infer_cluster_id(repo: IrrigationRepository, entity_type: EntityType, entity
 
 
 def infer_label(repo: IrrigationRepository, entity_type: EntityType, entity_id: int) -> str | None:
-    """The name of an irrigator or sensor, or None."""
+    """How an alert names an irrigator or sensor (with its cluster, and a sensor's plant), or None."""
     if entity_type == ENTITY_IRRIGATOR:
         irr = repo.get_irrigator(entity_id)
-        return irr.name if irr else None
+        return irrigator_label(irr) if irr else None
     if entity_type == ENTITY_SENSOR:
         sensor = repo.get_sensor(entity_id)
-        return sensor.name if sensor else None
+        return sensor_label(sensor) if sensor else None
     return None
 
 
