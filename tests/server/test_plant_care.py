@@ -103,3 +103,28 @@ def test_the_hourly_check_reconciles_plants_written_elsewhere(tmp_db: Irrigation
     svc.check_cluster(cid)
     db.session.refresh(alert)
     assert alert.status == "resolved"
+
+
+def test_the_alert_moves_with_the_plant(client: TestClient) -> None:
+    """Moving the plant relists its open care alert under the new cluster, still one row (issue #184)."""
+    cid = _cluster(client)
+    target = cast("int", client.post("/api/v1/clusters", json={"name": "Elsewhere"}).json()["id"])
+    pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": UNKNOWN_SPECIES}).json()["id"]
+    resp = client.post(f"/api/v1/plants/{pid}/move", json={"target_cluster_id": target})
+    assert resp.status_code == HTTPStatus.OK
+    (alert,) = _care_alerts(client, pid)
+    assert alert["cluster_id"] == target
+    moved = client.get(f"/api/v1/alerts?cluster_id={target}").json()["items"]
+    assert [a["id"] for a in moved] == [alert["id"]]
+    assert client.get(f"/api/v1/alerts?cluster_id={cid}").json()["items"] == []
+
+
+def test_a_resolved_alert_stays_with_the_old_cluster(client: TestClient) -> None:
+    """Resolved alerts are history: they keep the cluster the plant was in."""
+    cid = _cluster(client)
+    target = cast("int", client.post("/api/v1/clusters", json={"name": "Elsewhere"}).json()["id"])
+    pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": "Figus"}).json()["id"]
+    client.put(f"/api/v1/clusters/{cid}/plants/{pid}", json={"species": "Ficus benjamina"})
+    client.post(f"/api/v1/plants/{pid}/move", json={"target_cluster_id": target})
+    (alert,) = _care_alerts(client, pid, status="resolved")
+    assert alert["cluster_id"] == cid
