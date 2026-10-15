@@ -2626,6 +2626,22 @@
   "include_in_schema": false,
   "kind": "APIRoute",
   "methods": [
+   "POST"
+  ],
+  "name": "restore_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/restore",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
    "GET"
   ],
   "name": "plant_dashboard",
@@ -2834,11 +2850,43 @@
   "include_in_schema": false,
   "kind": "APIRoute",
   "methods": [
+   "POST"
+  ],
+  "name": "move_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/move",
+  "response_class": "JSONResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
    "DELETE"
   ],
   "name": "delete_sensor",
   "path": "/clusters/{cluster_id}/sensors/{sensor_id}",
   "response_class": "HTMLResponse",
+  "response_model": null,
+  "status_code": null,
+  "tags": []
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
+  "include_in_schema": false,
+  "kind": "APIRoute",
+  "methods": [
+   "POST"
+  ],
+  "name": "restore_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/restore",
+  "response_class": "JSONResponse",
   "response_model": null,
   "status_code": null,
   "tags": []

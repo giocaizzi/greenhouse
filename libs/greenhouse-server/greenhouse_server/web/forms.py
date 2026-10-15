@@ -8,9 +8,13 @@ pages render exactly the errors they always did.
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime, tzinfo
 from typing import TYPE_CHECKING, TypeVar
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException
+
+from greenhouse_core.utils import get_display_timezone
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -47,6 +51,30 @@ def parsed_or_400(
     if negative_error is not None and value is not None and value < 0:
         raise HTTPException(400, negative_error)
     return value
+
+
+def preference_zone() -> tzinfo:
+    """The display timezone (``UserPreferences.timezone``, else ``IRRIGATION_TZ``); UTC if unknown."""
+    try:
+        return ZoneInfo(get_display_timezone())
+    except (ZoneInfoNotFoundError, ValueError):
+        return UTC
+
+
+def local_datetime_or_400(raw: str, *, error: str) -> int | None:
+    """A ``datetime-local`` field (wall time in the ``timezone`` preference) as Unix seconds.
+
+    Blank → ``None``; a malformed value is HTTP 400 ``error``.
+    """
+    if not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip())
+    except ValueError as exc:
+        raise HTTPException(400, error) from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=preference_zone())
+    return int(parsed.timestamp())
 
 
 def tri_bool(raw: str) -> bool | None:

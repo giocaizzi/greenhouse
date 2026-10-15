@@ -1,13 +1,15 @@
 
  Usage: greenhouse sensor delete [OPTIONS] {id}
 
- Delete a sensor. Historic readings stay attached to the cluster.
+ Archive a sensor (restore undoes it); --purge deletes an archived one and its readings for good.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    id      <int>  Sensor ID [required]                                                         │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  --cluster          <int>  Cluster the sensor belongs to [required]                            │
-│    --yes      -y             Skip confirmation prompt                                            │
-│    --help                    Show this message and exit.                                         │
+│ *  --cluster                    <int>  Cluster the sensor belongs to [required]                  │
+│    --purge        --no-purge           Hard-delete an already archived row (irreversible)        │
+│                                        [default: no-purge]                                       │
+│    --yes      -y                       Skip confirmation prompt                                  │
+│    --help                              Show this message and exit.                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

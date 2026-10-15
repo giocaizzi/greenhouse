@@ -66,11 +66,12 @@ def test_plant_edit_updates(seeded_client: TestClient) -> None:
 
 
 def test_plant_delete_removes_row(seeded_client: TestClient) -> None:
-    """Plant delete removes row."""
+    """Plant delete archives it: gone from the plants table, listed in the Archived card instead."""
     resp = seeded_client.delete("/clusters/1/plants/1")
     assert resp.status_code == HTTPStatus.OK
     resp2 = seeded_client.get("/clusters/1/plants")
-    assert "Monstera deliciosa" not in resp2.text
+    assert 'id="plant-row-1"' not in resp2.text
+    assert 'id="archived-plant-row-1"' in resp2.text
 
 
 def test_plant_edit_404_wrong_cluster(seeded_client: TestClient) -> None:
@@ -105,11 +106,12 @@ def test_sensor_edit_updates(seeded_client: TestClient) -> None:
 
 
 def test_sensor_delete_removes_row(seeded_client: TestClient) -> None:
-    """Sensor delete removes row."""
+    """Sensor delete archives it: gone from the sensors table, listed in the Archived card instead."""
     resp = seeded_client.delete("/clusters/1/sensors/1")
     assert resp.status_code == HTTPStatus.OK
     resp2 = seeded_client.get("/clusters/1/sensors")
-    assert "Test Sensor" not in resp2.text
+    assert 'id="sensor-row-1"' not in resp2.text
+    assert 'id="archived-sensor-row-1"' in resp2.text
 
 
 # --- Irrigator edit/delete ------------------------------------------------

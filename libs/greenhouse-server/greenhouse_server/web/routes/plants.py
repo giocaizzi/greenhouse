@@ -1,16 +1,18 @@
-"""Plant web routes: list, create form, create, edit, delete."""
+"""Plant web routes: list, create form, create, edit, archive, restore, purge."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Annotated, TypedDict
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from greenhouse_core.logic.plant_needs import normalize_moisture_target
+from greenhouse_core.repository import NotArchivedError
 from greenhouse_server.deps import PlantDbDep, RepoDep, require_cluster, require_plant_in_cluster
-from greenhouse_server.services.plant_care import clear_care_alert, reconcile_care_alert
+from greenhouse_server.services.inventory import remove_plant
+from greenhouse_server.services.plant_care import reconcile_care_alert
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.forms import parsed_or_400
 from greenhouse_server.web.templating import templates
@@ -143,10 +145,21 @@ def update_plant(cluster_id: int, plant_id: int, repo: RepoDep, plant_db: PlantD
 
 
 @router.delete("/clusters/{cluster_id}/plants/{plant_id}", response_class=HTMLResponse)
-def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
-    """HTMX-targeted delete: archives the plant (soft delete, like the API default); empty body removes the row."""
+def delete_plant(cluster_id: int, plant_id: int, repo: RepoDep, *, purge: Annotated[bool, Query()] = False) -> Response:
+    """HTMX-targeted delete: archive the plant, or ``purge`` an archived one; empty body drops the row."""
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    repo.archive_plant(plant_id)
-    clear_care_alert(repo, plant_id)
+    try:
+        remove_plant(repo, plant_id, purge=purge)
+    except NotArchivedError as exc:
+        raise HTTPException(409, str(exc)) from None
     repo.commit()
     return HTMLResponse("")
+
+
+@router.post("/clusters/{cluster_id}/plants/{plant_id}/restore")
+def restore_plant(cluster_id: int, plant_id: int, repo: RepoDep) -> Response:
+    """Bring an archived plant back (its sensors stay unlinked) and return to the plants section."""
+    require_plant_in_cluster(repo, cluster_id, plant_id)
+    repo.restore_plant(plant_id)
+    repo.commit()
+    return RedirectResponse(url=f"/clusters/{cluster_id}#plants", status_code=303)

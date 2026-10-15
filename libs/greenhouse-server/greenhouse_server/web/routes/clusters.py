@@ -177,6 +177,11 @@ def _detail_data(repo: IrrigationRepository, cluster_id: int, hours: int) -> dic
         # Sensor → plant lookup so the inline #sensors table can render the
         # plant↔sensor relationship with the ``↳`` glyph without extra queries.
         "plants_by_id": _plants_by_id(repo, cluster_id),
+        # The "Archived" card's rows (hidden everywhere else): restore and purge act on them.
+        "archived_plants": [p for p in repo.get_plants_in_cluster(cluster_id, include_archived=True) if p.archived_at],
+        "archived_sensors": [
+            s for s in repo.get_sensors_in_cluster(cluster_id, include_archived=True) if s.archived_at
+        ],
     }
 
 

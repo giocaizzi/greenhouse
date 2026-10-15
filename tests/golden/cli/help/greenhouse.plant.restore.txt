@@ -1,0 +1,12 @@
+
+ Usage: greenhouse plant restore [OPTIONS] {plant_id}
+
+ Bring an archived plant back with its history; move its former sensors back with `sensor move`.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    plant_id      <int>  Plant ID [required]                                                    │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster        <int>  Cluster the plant belongs to [required]                               │
+│    --help                  Show this message and exit.                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

@@ -8,10 +8,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 from greenhouse_core.constants import (
+    CHART_BUCKET_SECONDS,
+    CHART_RAW_MAX_HOURS,
     DEFAULT_SOIL_MOISTURE_MAX,
     DEFAULT_SOIL_MOISTURE_MIN,
     SECONDS_PER_DAY,
     SECONDS_PER_HOUR,
+    SECONDS_PER_MINUTE,
 )
 from greenhouse_core.logic.plant_needs import parse_moisture_target
 from greenhouse_core.schemas import (
@@ -219,15 +222,16 @@ _Buckets = dict[int, list[float]]
 def _bucket_readings(
     repo: IrrigationRepository, sensors: list[Sensor], hours: int
 ) -> tuple[_Buckets, _Buckets, _Buckets]:
-    """Soil, humidity and light values of every sensor, bucketed to the minute (in that order)."""
-    # Aggregate per-metric points: take mean across sensors per timestamp bucket (nearest minute).
+    """Soil, humidity and light values of every sensor, bucketed to the minute (hour past 14 days)."""
+    # Aggregate per-metric points: take mean across sensors per timestamp bucket.
+    bucket = CHART_BUCKET_SECONDS if hours > CHART_RAW_MAX_HOURS else SECONDS_PER_MINUTE
     soil_buckets: dict[int, list[float]] = defaultdict(list)
     humidity_buckets: dict[int, list[float]] = defaultdict(list)
     light_buckets: dict[int, list[float]] = defaultdict(list)
 
     for sensor in sensors:
         for r in repo.get_recent_readings(sensor.id, hours=hours):
-            ts = (r.timestamp // 60) * 60  # bucket to minute
+            ts = r.timestamp - r.timestamp % bucket
             if r.soil_moisture is not None:
                 soil_buckets[ts].append(float(r.soil_moisture))
             if r.env_humidity is not None:

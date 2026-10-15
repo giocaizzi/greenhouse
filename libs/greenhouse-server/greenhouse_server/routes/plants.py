@@ -30,7 +30,8 @@ from greenhouse_server.deps import (
     require_plant_in_cluster,
 )
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
-from greenhouse_server.services.plant_care import clear_care_alert, reconcile_care_alert
+from greenhouse_server.services.inventory import remove_plant
+from greenhouse_server.services.plant_care import reconcile_care_alert
 
 router = APIRouter(tags=["plants"])
 
@@ -229,14 +230,10 @@ def delete_plant(
             different cluster; 409 on `purge=true` for a plant that is not archived.
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    if purge:
-        try:
-            repo.purge_plant(plant_id)
-        except NotArchivedError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from None
-    else:
-        repo.archive_plant(plant_id)
-    clear_care_alert(repo, plant_id)
+    try:
+        remove_plant(repo, plant_id, purge=purge)
+    except NotArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     repo.commit()
     return SuccessResponse(success=True)
 

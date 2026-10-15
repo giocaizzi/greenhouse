@@ -56,6 +56,7 @@
   "web/templates/partials/_activity_rows.html",
   "web/templates/partials/_alert_list_body.html",
   "web/templates/partials/_alert_row.html",
+  "web/templates/partials/_archived_row.html",
   "web/templates/partials/_capability_notice.html",
   "web/templates/partials/_chart_overlay.html",
   "web/templates/partials/_chart_panel.html",
