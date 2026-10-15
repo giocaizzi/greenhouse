@@ -101,6 +101,12 @@ def _unregister_check_all(_app: FastAPI, _repo: IrrigationRepository) -> None:
     scheduler.remove_job(CHECK_ALL_JOB_ID)
 
 
+def _archive_loquat_and_ambient(_app: FastAPI, repo: IrrigationRepository) -> None:
+    repo.archive_plant(LOQUAT)
+    repo.archive_sensor(S_AMBIENT)
+    repo.commit()
+
+
 def _nothing() -> None:  # pragma: no cover — scheduled but never fired (scheduler starts paused)
     return None
 
@@ -421,6 +427,16 @@ MUTATIONS: tuple[Mut, ...] = (
     M("update_plant__404", "POST", f"/clusters/{OUTDOOR}/plants/{MONSTERA}/edit", {"species": "X"}),
     M("delete_plant", "DELETE", f"/clusters/{OUTDOOR}/plants/{LOQUAT}", headers=HX),
     M("delete_plant__404", "DELETE", f"/clusters/{OUTDOOR}/plants/{MONSTERA}", headers=HX),
+    M(
+        "delete_plant__purge",
+        "DELETE",
+        f"/clusters/{OUTDOOR}/plants/{LOQUAT}?purge=true",
+        headers=HX,
+        setup=_archive_loquat_and_ambient,
+    ),
+    M("delete_plant__purge_active", "DELETE", f"/clusters/{OUTDOOR}/plants/{LOQUAT}?purge=true", headers=HX),
+    M("restore_plant", "POST", f"/clusters/{OUTDOOR}/plants/{LOQUAT}/restore", setup=_archive_loquat_and_ambient),
+    M("restore_plant__404", "POST", f"/clusters/{INDOOR}/plants/{LOQUAT}/restore"),
     # preferences
     M("update_preferences", "POST", "/preferences", PREFS_FORM),
     M("update_preferences__bad_default_cluster", "POST", "/preferences", {**PREFS_FORM, "default_cluster_id": "x"}),
@@ -490,6 +506,37 @@ MUTATIONS: tuple[Mut, ...] = (
     M("update_sensor__404", "POST", f"/clusters/{OUTDOOR}/sensors/{S_MONSTERA}/edit", {"name": "R", "type": "x"}),
     M("delete_sensor", "DELETE", f"/clusters/{INDOOR}/sensors/{S_AMBIENT}", headers=HX),
     M("delete_sensor__404", "DELETE", f"/clusters/{OUTDOOR}/sensors/{S_AMBIENT}", headers=HX),
+    M(
+        "delete_sensor__purge",
+        "DELETE",
+        f"/clusters/{INDOOR}/sensors/{S_AMBIENT}?purge=true",
+        headers=HX,
+        setup=_archive_loquat_and_ambient,
+    ),
+    M("delete_sensor__purge_active", "DELETE", f"/clusters/{INDOOR}/sensors/{S_AMBIENT}?purge=true", headers=HX),
+    M("restore_sensor", "POST", f"/clusters/{INDOOR}/sensors/{S_AMBIENT}/restore", setup=_archive_loquat_and_ambient),
+    M("restore_sensor__404", "POST", f"/clusters/{OUTDOOR}/sensors/{S_AMBIENT}/restore"),
+    M("move_sensor", "POST", f"/clusters/{INDOOR}/sensors/{S_AMBIENT}/move", {"plant_id": str(MONSTERA)}),
+    M("move_sensor__detach", "POST", f"/clusters/{INDOOR}/sensors/{S_MONSTERA}/move", {"plant_id": ""}),
+    M(
+        "move_sensor__future",
+        "POST",
+        f"/clusters/{INDOOR}/sensors/{S_MONSTERA}/move",
+        {"plant_id": "", "effective_at": "2099-01-01T00:00"},
+    ),
+    M(
+        "move_sensor__bad_time",
+        "POST",
+        f"/clusters/{INDOOR}/sensors/{S_MONSTERA}/move",
+        {"plant_id": "", "effective_at": "noon"},
+    ),
+    M(
+        "move_sensor__plant_in_other_cluster",
+        "POST",
+        f"/clusters/{INDOOR}/sensors/{S_AMBIENT}/move",
+        {"plant_id": str(LOQUAT)},
+    ),
+    M("move_sensor__404", "POST", f"/clusters/{OUTDOOR}/sensors/{S_AMBIENT}/move", {"plant_id": ""}),
     # vacation
     M(
         "create_vacation",

@@ -54,18 +54,24 @@ class ClusterEndpoints(Transport):
         """Add a plant to a cluster; fields are sent as given (``POST /clusters/{id}/plants``)."""
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/plants", json=kwargs)
 
-    def list_plants(self, cluster_id: int) -> list[JSONObject]:
-        """List a cluster's plants (``GET /clusters/{id}/plants``)."""
-        return self._array("GET", f"/api/v1/clusters/{cluster_id}/plants")
+    def list_plants(self, cluster_id: int, *, include_archived: bool = False) -> list[JSONObject]:
+        """List a cluster's plants, archived ones too on request (``GET /clusters/{id}/plants``)."""
+        params = {"include_archived": "true"} if include_archived else {}
+        return self._array("GET", f"/api/v1/clusters/{cluster_id}/plants", params=params)
 
     def update_plant(self, cluster_id: int, plant_id: int, **kwargs: object) -> JSONObject:
         """Patch a plant; ``None`` fields are left unchanged (``PUT /clusters/{id}/plants/{plant_id}``)."""
         body = drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}", json=body)
 
-    def delete_plant(self, cluster_id: int, plant_id: int) -> JSONObject:
-        """Remove a plant from a cluster (``DELETE /clusters/{id}/plants/{plant_id}``)."""
-        return self._object("DELETE", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}")
+    def delete_plant(self, cluster_id: int, plant_id: int, *, purge: bool = False) -> JSONObject:
+        """Archive a plant, or purge an archived one (``DELETE /clusters/{id}/plants/{plant_id}``)."""
+        params = {"purge": "true"} if purge else {}
+        return self._object("DELETE", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}", params=params)
+
+    def restore_plant(self, cluster_id: int, plant_id: int) -> JSONObject:
+        """Bring an archived plant back (``POST /clusters/{id}/plants/{plant_id}/restore``)."""
+        return self._object("POST", f"/api/v1/clusters/{cluster_id}/plants/{plant_id}/restore")
 
     def sync_plants(self, plant_id: int | None = None, cluster_id: int | None = None) -> JSONObject:
         """Refresh plant care data from the plant DB, optionally for one plant or cluster (``POST /plants/sync``)."""

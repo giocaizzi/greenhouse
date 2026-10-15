@@ -1,0 +1,44 @@
+{
+ "body_lines": [
+  ""
+ ],
+ "db_effect": {
+  "activity_events": {
+   "added": [
+    {
+     "code": "plant_purged",
+     "entity_id": 3,
+     "entity_type": "plant",
+     "id": 7,
+     "message": "purged plant Eriobotrya japonica, 25 attributed readings",
+     "payload_json": "{\"species\": \"Eriobotrya japonica\", \"cluster_id\": 2, \"unlinked_sensor_ids\": [], \"reading_count\": 25}",
+     "severity": "info",
+     "source": "plant",
+     "timestamp": 1776247200
+    }
+   ]
+  },
+  "plants": {
+   "removed": [
+    "3"
+   ]
+  }
+ },
+ "device_calls": {
+  "irrigator": [],
+  "sensor": []
+ },
+ "headers": {
+  "content-type": "text/html; charset=utf-8"
+ },
+ "request": {
+  "form": null,
+  "headers": {
+   "HX-Request": "true"
+  },
+  "method": "DELETE",
+  "url": "/clusters/2/plants/3?purge=true"
+ },
+ "status": 200,
+ "templates": []
+}

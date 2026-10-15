@@ -1,20 +1,28 @@
-"""Device registration rules shared by the JSON API and the web UI.
+"""Inventory rules shared by the JSON API and the web UI.
 
-Both surfaces register irrigators (and sensors) through these functions so the
-validation, the duplicate-device handling and the capacity follow-up are one
+Both surfaces register irrigators and sensors, move sensors between plants, and
+archive or purge plants and sensors through these functions, so the validation,
+the duplicate-device handling and the capacity follow-up are one
 implementation. Each caller keeps its own I/O mapping (status code, detail or
 template) and commits on success; on a refusal the session is already rolled back.
 """
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 from greenhouse_core.devices import IK10PW_PROFILE, TR301Z_PROFILE
 from greenhouse_core.models import parse_device_config
-from greenhouse_core.repository import DeviceIdExistsError, IrrigationRepository, IrrigatorExistsError
+from greenhouse_core.repository import (
+    DeviceIdExistsError,
+    InvalidMoveTimeError,
+    IrrigationRepository,
+    IrrigatorExistsError,
+)
 from greenhouse_core.schemas import LOCAL_KEY_MASK, MASKED_CONFIG_FIELDS
+from greenhouse_server.services.plant_care import clear_care_alert
 
 if TYPE_CHECKING:
     from greenhouse_core.devices import DeviceRegistry
@@ -40,6 +48,9 @@ __all__ = [
     "ensure_plant_in_cluster",
     "keep_masked_device_secrets",
     "known_device_types",
+    "move_sensor",
+    "remove_plant",
+    "remove_sensor",
     "require_known_device_type",
 ]
 
@@ -206,3 +217,51 @@ def create_sensor(
             config=keep_masked_device_secrets(device.config, None),
             plant_id=plant_id,
         )
+
+
+def move_sensor(
+    repo: IrrigationRepository, cluster_id: int, sensor_id: int, plant_id: int | None, *, effective_at: int | None
+) -> None:
+    """Record that a sensor was moved to ``plant_id`` (``None`` detaches) at ``effective_at`` (default now).
+
+    The caller has checked the sensor belongs to the cluster, and commits.
+
+    Raises:
+        PlantNotInClusterError: ``plant_id`` is not one of the cluster's plants.
+        InvalidMoveTimeError: ``effective_at`` is in the future, or the repository refuses it
+            (before the current link started, or overlapping the previous assignment).
+    """
+    ensure_plant_in_cluster(repo, cluster_id, plant_id)
+    now = int(time.time())
+    when = effective_at if effective_at is not None else now
+    if when > now:
+        msg = "must not be in the future"
+        raise InvalidMoveTimeError(msg)
+    repo.move_sensor(sensor_id, plant_id, when=when)
+
+
+def remove_sensor(repo: IrrigationRepository, sensor_id: int, *, purge: bool) -> None:
+    """Archive a sensor, or with ``purge`` hard-delete an already archived one. The caller commits.
+
+    Raises:
+        NotArchivedError: ``purge`` on a sensor that is not archived.
+    """
+    if purge:
+        repo.purge_sensor(sensor_id)
+    else:
+        repo.archive_sensor(sensor_id)
+
+
+def remove_plant(repo: IrrigationRepository, plant_id: int, *, purge: bool) -> None:
+    """Archive a plant, or with ``purge`` hard-delete an already archived one; clear its care alert.
+
+    The caller commits.
+
+    Raises:
+        NotArchivedError: ``purge`` on a plant that is not archived.
+    """
+    if purge:
+        repo.purge_plant(plant_id)
+    else:
+        repo.archive_plant(plant_id)
+    clear_care_alert(repo, plant_id)

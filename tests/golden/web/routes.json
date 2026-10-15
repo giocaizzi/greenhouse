@@ -741,6 +741,18 @@
   "dependencies": [
    "_signed_in_user"
   ],
+  "endpoint": "greenhouse_server.web.routes.plants.restore_plant",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "restore_plant",
+  "path": "/clusters/{cluster_id}/plants/{plant_id}/restore"
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
   "endpoint": "greenhouse_server.web.routes.plant_dashboard.plant_dashboard",
   "include_in_schema": false,
   "methods": [
@@ -897,6 +909,18 @@
   "dependencies": [
    "_signed_in_user"
   ],
+  "endpoint": "greenhouse_server.web.routes.sensors.move_sensor",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "move_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/move"
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
   "endpoint": "greenhouse_server.web.routes.sensors.delete_sensor",
   "include_in_schema": false,
   "methods": [
@@ -904,6 +928,18 @@
   ],
   "name": "delete_sensor",
   "path": "/clusters/{cluster_id}/sensors/{sensor_id}"
+ },
+ {
+  "dependencies": [
+   "_signed_in_user"
+  ],
+  "endpoint": "greenhouse_server.web.routes.sensors.restore_sensor",
+  "include_in_schema": false,
+  "methods": [
+   "POST"
+  ],
+  "name": "restore_sensor",
+  "path": "/clusters/{cluster_id}/sensors/{sensor_id}/restore"
  },
  {
   "dependencies": [
