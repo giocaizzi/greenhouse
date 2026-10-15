@@ -402,6 +402,12 @@ ANOMALY_WINDOW_READINGS = 50  # most recent readings the z-score baseline uses
 ANOMALY_Z_THRESHOLD = 4.0
 # Newest readings that must all hold a rising step for it to count as a watering, not drift.
 ANOMALY_STEP_HOLD_READINGS = 3
+# sensor_flatline: soil readings keep arriving but sit flat at an extreme (probe out of
+# the soil, in water, or broken). Needs ANOMALY_LOOKBACK_HOURS >= SENSOR_FLATLINE_HOURS.
+SENSOR_FLATLINE_HOURS = 48  # the flat run must span at least this long
+SENSOR_FLATLINE_MAX_RANGE = 1.0  # max - min (pp) of the run; wider is not flat
+SENSOR_FLATLINE_LOW = 2.0  # run mean at or below this is the dry extreme (%)
+SENSOR_FLATLINE_HIGH = 98.0  # run mean at or above this is the saturated extreme (%)
 ANOMALY_STALE_INTERVAL_MULTIPLIER = 2.0  # stale when silent > this x the median report gap
 # Minimum std to use for z-score; prevents false alarms on near-constant series
 # while still catching large absolute deviations (e.g. 95% vs 50% baseline).
