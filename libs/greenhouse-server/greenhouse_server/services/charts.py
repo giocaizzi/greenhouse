@@ -119,6 +119,9 @@ def _build_event_list(repo: IrrigationRepository, cluster_id: int, hours: int) -
 
 def _threshold_for_plant(plant: Plant, plant_db: PlantDatabase, metric: Metric) -> ChartThreshold:
     if metric == "soil_moisture":
+        if plant.soil_moisture_target:  # the plant's own band (issue #182), validated on write
+            low, high = parse_moisture_target(plant.soil_moisture_target)
+            return {"min": low, "max": high, "source": "plant"}
         if plant.water_needs:
             info = plant_db.get_water_needs_info(plant.water_needs)
             band = _water_needs_band(info.get("soil_moisture_target"))

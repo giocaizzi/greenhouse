@@ -23,6 +23,7 @@ from greenhouse_core.logic.plant_needs import (
     get_ideal_temp_range,
     plant_bands,
 )
+from greenhouse_core.plant_db import plant_care_data
 from greenhouse_core.utils import effective_light_threshold
 
 if TYPE_CHECKING:
@@ -158,7 +159,7 @@ def detect_stress_conditions(  # noqa: PLR0913 — five pinned positionals (test
     """
     stress = StressIndicators()
     plants = db.get_plants_in_cluster(cluster_id)
-    plant_care = [plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
+    plant_care = [plant_care_data(plant_db, p) for p in plants]
     soil = current_soil(snapshot, plant_bands(plants, plant_care), cluster_band(plant_care))
 
     # Assign only detected conditions, in field order, so `model_fields_set` is unchanged.

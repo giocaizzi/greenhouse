@@ -8,6 +8,7 @@ from typing import Annotated, TypedDict
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
+from greenhouse_core.logic.plant_needs import normalize_moisture_target
 from greenhouse_core.repository import NotArchivedError
 from greenhouse_server.deps import PlantDbDep, RepoDep, require_cluster, require_plant_in_cluster
 from greenhouse_server.services.inventory import remove_plant
@@ -30,12 +31,23 @@ class PlantFormFields(TypedDict):
     ideal_temp_max: float | None
     ideal_humidity_min: float | None
     ideal_humidity_max: float | None
+    soil_moisture_target: str | None
     notes: str | None
 
 
 def _parse_bound(raw: str, field: str) -> float | None:
     """Blank → None; a non-number is a 400 page naming the field, never an unhandled 500."""
     return parsed_or_400(raw, float, error=f"Invalid {field}: must be a number")
+
+
+def _soil_target(raw: str) -> str | None:
+    """Blank → None (the plant database's band); a malformed target is a 400 with the API's wording."""
+    if not raw.strip():
+        return None
+    try:
+        return normalize_moisture_target(raw)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -54,6 +66,7 @@ class PlantForm:
     ideal_temp_max: Annotated[str, Form()] = ""
     ideal_humidity_min: Annotated[str, Form()] = ""
     ideal_humidity_max: Annotated[str, Form()] = ""
+    soil_moisture_target: Annotated[str, Form()] = ""
     notes: Annotated[str, Form()] = ""
 
     def fields(self) -> PlantFormFields:
@@ -71,6 +84,7 @@ class PlantForm:
             "ideal_temp_max": _parse_bound(self.ideal_temp_max, "ideal_temp_max"),
             "ideal_humidity_min": _parse_bound(self.ideal_humidity_min, "ideal_humidity_min"),
             "ideal_humidity_max": _parse_bound(self.ideal_humidity_max, "ideal_humidity_max"),
+            "soil_moisture_target": _soil_target(self.soil_moisture_target),
             "notes": self.notes or None,
         }
 

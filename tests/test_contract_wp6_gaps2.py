@@ -31,7 +31,7 @@ class _Repo:
 
     def get_plants_in_cluster(self, cluster_id: int) -> list[SimpleNamespace]:
         del cluster_id  # signature mirrors the real one; unused by this fake
-        return [SimpleNamespace(id=1, species="sp", category="cat")]
+        return [SimpleNamespace(id=1, species="sp", category="cat", soil_moisture_target=None)]
 
     def get_recent_readings(self, sensor_id: int, hours: int = 24) -> list[SimpleNamespace]:
         del sensor_id  # signature mirrors the real one; unused by this fake

@@ -395,6 +395,7 @@
     "ideal_temp_max",
     "ideal_humidity_min",
     "ideal_humidity_max",
+    "soil_moisture_target",
     "notes"
    ],
    "note": "Blank care fields stay blank — press P afterwards to fill them from the plant DB.",
@@ -427,6 +428,7 @@
      "ideal_temp_min": null,
      "light_needs": null,
      "notes": null,
+     "soil_moisture_target": null,
      "species": "Ficus lyrata",
      "water_needs": null
     }
@@ -445,6 +447,7 @@
     "ideal_temp_max",
     "ideal_humidity_min",
     "ideal_humidity_max",
+    "soil_moisture_target",
     "notes"
    ],
    "note": null,

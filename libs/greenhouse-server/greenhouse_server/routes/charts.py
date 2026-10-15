@@ -41,8 +41,9 @@ def get_plant(plant_id: int, repo: RepoDep, plant_db: PlantDbDep) -> PlantDetail
     """Fetch a single plant by ID across all clusters.
 
     The response includes the soil band the plant is judged against
-    (``soil_moisture_min`` / ``soil_moisture_max``) and the plant-database
-    layer it comes from (``soil_band_source``: ``species``,
+    (``soil_moisture_min`` / ``soil_moisture_max``) and where it comes from
+    (``soil_band_source``: ``plant`` for the plant's own
+    ``soil_moisture_target``, else the plant-database layer ``species``,
     ``category_defaults``, ``category`` or ``builtin_fallback``, the 45-65 %
     default used when neither species nor category resolves).
 

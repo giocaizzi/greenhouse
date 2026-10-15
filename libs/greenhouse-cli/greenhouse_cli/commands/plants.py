@@ -22,6 +22,9 @@ plant_app = typer.Typer(help="Manage plants", no_args_is_help=True, cls=HelpOnBa
 LevelOpt = Annotated[str | None, typer.Option(help="low/medium/high")]
 TextOpt = Annotated[str | None, typer.Option()]
 NumberOpt = Annotated[float | None, typer.Option()]
+SoilTargetOpt = Annotated[
+    str | None, typer.Option(help='The plant\'s own soil band "min-max" %, e.g. 30-50 (overrides the plant DB)')
+]
 
 
 @plant_app.command("add")
@@ -37,6 +40,7 @@ def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer
     temp_max: NumberOpt = None,
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
+    soil_target: SoilTargetOpt = None,
     notes: TextOpt = None,
 ) -> None:
     """Add a plant to a cluster."""
@@ -52,6 +56,7 @@ def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer
             ideal_temp_max=temp_max,
             ideal_humidity_min=humidity_min,
             ideal_humidity_max=humidity_max,
+            soil_moisture_target=soil_target,
             notes=notes,
         ),
     )
@@ -114,6 +119,7 @@ def plant_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Ty
     temp_max: NumberOpt = None,
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
+    soil_target: SoilTargetOpt = None,
     notes: TextOpt = None,
 ) -> None:
     """Patch plant metadata. Only the supplied fields are sent."""
@@ -131,6 +137,7 @@ def plant_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Ty
                 ideal_temp_max=temp_max,
                 ideal_humidity_min=humidity_min,
                 ideal_humidity_max=humidity_max,
+                soil_moisture_target=soil_target,
                 notes=notes,
             ),
         )

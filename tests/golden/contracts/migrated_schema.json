@@ -1113,6 +1113,13 @@
     "nullable": true,
     "primary_key": 0,
     "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "soil_moisture_target",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "VARCHAR"
    }
   ],
   "foreign_keys": [

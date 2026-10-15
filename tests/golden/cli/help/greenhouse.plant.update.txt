@@ -16,6 +16,8 @@
 │    --temp-max            <float>                                                                 │
 │    --humidity-min        <float>                                                                 │
 │    --humidity-max        <float>                                                                 │
+│    --soil-target         <str>    The plant's own soil band "min-max" %, e.g. 30-50 (overrides   │
+│                                   the plant DB)                                                  │
 │    --notes               <str>                                                                   │
 │    --help                         Show this message and exit.                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

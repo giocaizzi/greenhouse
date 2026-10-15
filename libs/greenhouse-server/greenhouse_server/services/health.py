@@ -15,7 +15,7 @@ from greenhouse_core.constants import (
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings
 from greenhouse_core.logic.plant_needs import moisture_target_range
-from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.plant_db import PlantDatabase, plant_care_data
 from greenhouse_core.repository import IrrigationRepository
 
 if TYPE_CHECKING:
@@ -194,7 +194,7 @@ class PlantHealthService:
         if not plant:
             return _empty_score(), []
 
-        care = self._plant_db.get_care_data(species=plant.species, category=plant.category)
+        care = plant_care_data(self._plant_db, plant)
         bands = _HealthBands.from_care(care)
 
         by_sensor = self._attributed_clean_readings(plant_id, days)

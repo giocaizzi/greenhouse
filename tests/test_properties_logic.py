@@ -460,7 +460,7 @@ _plants = st.lists(
         category=st.sampled_from(["tropical", "fern", "cacti", None]),
     ),
     max_size=3,
-).map(lambda plants: [SimpleNamespace(id=i + 1, **vars(p)) for i, p in enumerate(plants)])
+).map(lambda plants: [SimpleNamespace(id=i + 1, soil_moisture_target=None, **vars(p)) for i, p in enumerate(plants)])
 _per_sensor = st.lists(
     st.builds(
         PerSensorSnapshot,

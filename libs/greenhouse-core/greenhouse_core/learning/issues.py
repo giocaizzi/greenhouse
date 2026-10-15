@@ -31,6 +31,7 @@ from greenhouse_core.learning.models import Alert, PlantProfile
 from greenhouse_core.learning.profiling import get_plant_profile
 from greenhouse_core.logic.cleaning import clean_readings, clean_readings_desc
 from greenhouse_core.logic.plant_needs import moisture_target_range
+from greenhouse_core.plant_db import plant_care_data
 from greenhouse_core.utils import daytime_lux_readings, effective_light_threshold, seasonal_light_factor
 
 if TYPE_CHECKING:
@@ -168,7 +169,7 @@ def detect_issues(
         return alerts
 
     plants = db.get_plants_in_cluster(cluster_id)
-    plant_care = {p.id: plant_db.get_care_data(species=p.species, category=p.category) for p in plants}
+    plant_care = {p.id: plant_care_data(plant_db, p) for p in plants}
 
     for sensor in sensors:
         profile = profiles.get(sensor.id)

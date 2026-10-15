@@ -49,6 +49,13 @@ def test_plant_chart_data_shape(seeded_client: TestClient) -> None:
     assert body["threshold"]["source"] == "water_needs:medium"
 
 
+def test_plant_chart_data_uses_the_plants_own_soil_target(seeded_client: TestClient) -> None:
+    """A plant's own ``soil_moisture_target`` (issue #182) is the soil chart's band, ahead of water_needs."""
+    seeded_client.put("/api/v1/clusters/1/plants/1", json={"soil_moisture_target": "30-50"})
+    body = seeded_client.get("/api/v1/plants/1/chart-data?metric=soil_moisture").json()
+    assert body["threshold"] == {"min": 30.0, "max": 50.0, "source": "plant"}
+
+
 def test_plant_chart_data_temperature_band(seeded_client: TestClient) -> None:
     """Plant chart data temperature band."""
     resp = seeded_client.get("/api/v1/plants/1/chart-data?metric=temperature")
@@ -155,8 +162,9 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser() -> None:
     source ``"default"``; now it reads the first two parts. No ``lo-hi`` target at all still
     yields the default band labelled ``"default"``.
     """
-    # Duck-typed stand-ins: the helper reads only ``plant.water_needs`` and ``get_water_needs_info``.
-    plant = cast("Plant", SimpleNamespace(water_needs="medium"))
+    # Duck-typed stand-ins: the helper reads only the plant's own target, ``plant.water_needs`` and
+    # ``get_water_needs_info``.
+    plant = cast("Plant", SimpleNamespace(soil_moisture_target=None, water_needs="medium"))
 
     def db(target: str | None) -> PlantDatabase:
         return cast(

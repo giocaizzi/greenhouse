@@ -104,7 +104,7 @@ from greenhouse_core.logic.timing import (
 )
 from greenhouse_core.logic.trends import analyze_historical_trends
 from greenhouse_core.models import ENTITY_SENSOR, SOURCE_ANOMALY, TRIGGERED_BY_AUTO, TriggeredBy
-from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.plant_db import PlantDatabase, plant_care_data, plant_soil_band_source
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import seasonal_light_factor
 
@@ -287,9 +287,9 @@ class IrrigationLogic:
         stress = detect_stress_conditions(self.db, self.plant_db, cluster_id, snapshot, trends, month=light_month)
         self._attach_learning_alerts(cluster_id, stress)
 
-        plant_care = [self.plant_db.get_care_data(species=p.species, category=p.category) for p in plants]
+        plant_care = [plant_care_data(self.plant_db, p) for p in plants]
         band = cluster_band(plant_care)
-        sources = {p.id: self.plant_db.soil_band_source(species=p.species, category=p.category) for p in plants}
+        sources = {p.id: plant_soil_band_source(self.plant_db, p) for p in plants}
         return _EngineInputs(
             snapshot=snapshot,
             trends=trends,

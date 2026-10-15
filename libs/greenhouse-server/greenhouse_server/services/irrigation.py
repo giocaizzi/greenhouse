@@ -26,7 +26,7 @@ from greenhouse_core.models import (
     TRIGGERED_BY_MANUAL,
     TriggeredBy,
 )
-from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.plant_db import PlantDatabase, plant_care_data
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.actuation_gates import first_gate_block
 from greenhouse_server.services.alerts import raise_alert, sync_cluster_alerts
@@ -575,9 +575,7 @@ class IrrigationService:
             latest_soil = _latest_soil(_monitor_readings(self._repo, sensor.id))
 
             plant = plants_by_id.get(sensor.plant_id) if sensor.plant_id else None
-            care = self._plant_db.get_care_data(
-                species=plant.species if plant else None, category=plant.category if plant else None
-            )
+            care = plant_care_data(self._plant_db, plant)
             t_min, t_max = moisture_target_range(care)
             status = soil_status(latest_soil, t_min, t_max)
 

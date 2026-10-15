@@ -57,14 +57,38 @@ def parse_moisture_target(target: str) -> tuple[float, float]:
 
     Extra ``-``-separated parts are ignored (``"40-60-80"`` → ``(40.0, 60.0)``).
     """
+    return _parse_band(target) or (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+
+
+def normalize_moisture_target(target: str) -> str:
+    """Validate a per-plant soil target on write and return it as ``"low-high"``.
+
+    Same rules as :func:`parse_moisture_target`, but strict: a target that parser
+    would replace with the default band is refused instead of stored, so a typo
+    never silently judges a plant against 45-65 %.
+
+    Raises:
+        ValueError: The target is not two numeric bounds inside 0-100 %.
+    """
+    band = _parse_band(target)
+    if band is None:
+        msg = f"soil_moisture_target must look like '40-60' with bounds in 0-100, got {target!r}"
+        raise ValueError(msg)
+    return f"{band[0]:g}-{band[1]:g}"
+
+
+def _parse_band(target: object) -> tuple[float, float] | None:
+    """The ordered band of a ``"low-high"`` target, or None when it is unusable."""
+    if not isinstance(target, str):
+        return None
     try:
         parts = target.split("-")
         low, high = float(parts[0]), float(parts[1])
-    except (AttributeError, IndexError, TypeError, ValueError):  # not a string, no "-", or non-numeric bounds
-        return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+    except (IndexError, ValueError):  # no "-", or non-numeric bounds
+        return None
     floor, ceiling = SENSOR_PHYSICAL_RANGES["soil_moisture"]
     if not all(math.isfinite(v) and floor <= v <= ceiling for v in (low, high)):
-        return (DEFAULT_SOIL_MOISTURE_MIN, DEFAULT_SOIL_MOISTURE_MAX)
+        return None
     return (min(low, high), max(low, high))
 
 

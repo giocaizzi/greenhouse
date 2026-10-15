@@ -79,6 +79,12 @@ class ClusterDetailResponse(BaseModel):
 # --- Plant ---
 
 
+_SOIL_TARGET_HELP = (
+    'This plant\'s own soil band as "min-max" percent (e.g. "30-50"), used ahead of the plant database; '
+    "null uses the plant database"
+)
+
+
 class PlantBase(BaseModel):
     """Plant care fields; blank care values are filled from the plant database when the species is known."""
 
@@ -90,6 +96,7 @@ class PlantBase(BaseModel):
     ideal_temp_max: float | None = None
     ideal_humidity_min: float | None = None
     ideal_humidity_max: float | None = None
+    soil_moisture_target: str | None = Field(default=None, description=_SOIL_TARGET_HELP)
     notes: str | None = None
 
 
@@ -109,16 +116,19 @@ class PlantResponse(PlantBase):
     archived_at: int | None = Field(default=None, description="Unix seconds it was archived; null while active")
 
 
-# The plant-DB layer a plant's soil band comes from; ``builtin_fallback`` is the 45-65 default.
-SoilBandSource = Literal["species", "category_defaults", "category", "builtin_fallback"]
+# Where a plant's soil band comes from: its own ``soil_moisture_target`` (``plant``) or a
+# plant-DB layer; ``builtin_fallback`` is the 45-65 default.
+SoilBandSource = Literal["plant", "species", "category_defaults", "category", "builtin_fallback"]
 
 
 class PlantDetailResponse(PlantResponse):
     """A plant with the soil band it is judged against and the plant-DB layer that band comes from.
 
-    ``soil_band_source`` is ``builtin_fallback`` when neither the species nor the
-    category resolves in the plant database: the plant then runs on the default
-    45-65 % band and a ``plant_care_defaulted`` info alert is open on it.
+    ``soil_band_source`` is ``plant`` when the plant sets its own
+    ``soil_moisture_target``, and ``builtin_fallback`` when it does not and neither
+    the species nor the category resolves in the plant database: the plant then
+    runs on the default 45-65 % band and a ``plant_care_defaulted`` info alert is
+    open on it.
     """
 
     soil_moisture_min: float
@@ -1073,6 +1083,7 @@ class UpdatePlantRequest(BaseModel):
     ideal_temp_max: float | None = None
     ideal_humidity_min: float | None = None
     ideal_humidity_max: float | None = None
+    soil_moisture_target: str | None = Field(default=None, description=_SOIL_TARGET_HELP)
     notes: str | None = None
 
 

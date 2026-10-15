@@ -1682,6 +1682,19 @@
      "server_default": null,
      "type": "INTEGER",
      "unique": null
+    },
+    {
+     "autoincrement": "auto",
+     "default": null,
+     "foreign_keys": [],
+     "index": null,
+     "name": "soil_moisture_target",
+     "nullable": true,
+     "onupdate": null,
+     "primary_key": false,
+     "server_default": null,
+     "type": "VARCHAR",
+     "unique": null
     }
    ],
    "constraints": [

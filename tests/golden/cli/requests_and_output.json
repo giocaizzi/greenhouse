@@ -3418,7 +3418,7 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"species\":\"Ficus\",\"category\":\"tropical\",\"water_needs\":\"high\",\"light_needs\":\"low\",\"ideal_temp_min\":18.0,\"ideal_temp_max\":27.5,\"ideal_humidity_min\":60.0,\"ideal_humidity_max\":80.0,\"notes\":\"by the window\"}",
+     "content": "{\"species\":\"Ficus\",\"category\":\"tropical\",\"water_needs\":\"high\",\"light_needs\":\"low\",\"ideal_temp_min\":18.0,\"ideal_temp_max\":27.5,\"ideal_humidity_min\":60.0,\"ideal_humidity_max\":80.0,\"soil_moisture_target\":null,\"notes\":\"by the window\"}",
      "content_type": "application/json",
      "json": {
       "category": "tropical",
@@ -3428,6 +3428,7 @@
       "ideal_temp_min": 18.0,
       "light_needs": "low",
       "notes": "by the window",
+      "soil_moisture_target": null,
       "species": "Ficus",
       "water_needs": "high"
      },
@@ -3467,7 +3468,7 @@
    "requests": [
     {
      "authorization": null,
-     "content": "{\"species\":\"Monstera deliciosa\",\"category\":null,\"water_needs\":null,\"light_needs\":null,\"ideal_temp_min\":null,\"ideal_temp_max\":null,\"ideal_humidity_min\":null,\"ideal_humidity_max\":null,\"notes\":null}",
+     "content": "{\"species\":\"Monstera deliciosa\",\"category\":null,\"water_needs\":null,\"light_needs\":null,\"ideal_temp_min\":null,\"ideal_temp_max\":null,\"ideal_humidity_min\":null,\"ideal_humidity_max\":null,\"soil_moisture_target\":null,\"notes\":null}",
      "content_type": "application/json",
      "json": {
       "category": null,
@@ -3477,6 +3478,7 @@
       "ideal_temp_min": null,
       "light_needs": null,
       "notes": null,
+      "soil_moisture_target": null,
       "species": "Monstera deliciosa",
       "water_needs": null
      },
