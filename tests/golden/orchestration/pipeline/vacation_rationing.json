@@ -9,14 +9,14 @@
     "duration_minutes": 1,
     "interval_hours": 12,
     "learning_alerts": [],
-    "reason": "soil moderately dry (driest=35%); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
+    "reason": "soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
     "reasons": [
      {
       "code": "sensor_dry",
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil moderately dry (driest=35%)",
+      "message": "soil moderately dry (driest=35% < 45.0%, species band)",
       "severity": "info"
      },
      {
@@ -87,7 +87,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil moderately dry (driest=35%)",
+       "message": "soil moderately dry (driest=35% < 45.0%, species band)",
        "severity": "info"
       },
       {
@@ -145,7 +145,7 @@
      "weather": null
     },
     "primary_code": "sensor_dry",
-    "reason_text": "soil moderately dry (driest=35%); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
+    "reason_text": "soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
     "triggered_by": "auto"
    }
   ],
@@ -155,7 +155,7 @@
     "duration_minutes": 1,
     "id": 1,
     "irrigator_id": 1,
-    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35%); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
+    "notes": "temp=24.0C (sensor), soil=35% (driest), confidence=80%, reason=soil moderately dry (driest=35% < 45.0%, species band); vacation active (returns in 4d); trimmed to 1 min so reservoir lasts the vacation",
     "timestamp": 1776247200,
     "triggered_by": "auto"
    }

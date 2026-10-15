@@ -934,6 +934,7 @@ class SystemHealthResponse(BaseModel):
     sensors_fresh: int
     irrigators_total: int
     irrigators_failing: int
+    irrigators_offline: int
     open_alerts: int
     devices: list[SystemHealthDevice]
 

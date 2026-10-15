@@ -429,6 +429,7 @@ ANOMALY_Z_THRESHOLD = 4.0
 ANOMALY_STEP_HOLD_READINGS = 3
 # sensor_flatline: soil readings keep arriving but sit flat at an extreme (probe out of
 # the soil, in water, or broken). Needs ANOMALY_LOOKBACK_HOURS >= SENSOR_FLATLINE_HOURS.
+SENSOR_FLATLINE_ALERT_CODE = "sensor_flatline"  # the anomaly alert the engine notes in the decision trail
 SENSOR_FLATLINE_HOURS = 48  # the flat run must span at least this long
 SENSOR_FLATLINE_MAX_RANGE = 1.0  # max - min (pp) of the run; wider is not flat
 SENSOR_FLATLINE_LOW = 2.0  # run mean at or below this is the dry extreme (%)

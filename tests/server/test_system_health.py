@@ -9,7 +9,11 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
+from greenhouse_core.constants import SYSTEM_HEALTH_COLD_SECONDS, SYSTEM_HEALTH_DEVICE_LIMIT
+from greenhouse_core.devices import DeviceRegistry
+from greenhouse_core.devices.health import DeviceHealthState
 from greenhouse_core.models import (
+    ENTITY_IRRIGATOR,
     EVENT_ACTION_ATTEMPTED,
     EVENT_ACTION_START,
     EVENT_ACTION_STOP,
@@ -25,6 +29,7 @@ from greenhouse_server.app import create_app
 from greenhouse_server.config import Settings
 from greenhouse_server.deps import get_device_gateway, get_device_registry
 from greenhouse_server.services.alerts import raise_alert
+from greenhouse_server.services.health_monitor import DeviceHealthMonitor
 from greenhouse_server.services.system_health import SystemHealthService
 
 if TYPE_CHECKING:
@@ -184,6 +189,7 @@ class TestSystemHealthPulse:
             "sensors_fresh",
             "irrigators_total",
             "irrigators_failing",
+            "irrigators_offline",
             "open_alerts",
             "devices",
         }
@@ -254,3 +260,49 @@ class TestIrrigatorFailing:
         )
         row = self._irrigator_row(self._pulse(sample_cluster), sample_cluster["irrigator_id"])
         assert row.status == "failing"
+
+
+class TestIrrigatorOffline:
+    """#183: the health monitor's offline alarm marks the irrigator ``offline``; the device cap keeps it listed."""
+
+    @staticmethod
+    def _pulse(sample: "SampleCluster", monitor: DeviceHealthMonitor | None = None) -> SystemHealthResponse:
+        return SystemHealthService(sample["db"], cast("SyncService", None), health_monitor=monitor).pulse()
+
+    def test_monitor_offline_alarm_is_offline_and_degraded(self, sample_cluster: "SampleCluster") -> None:
+        """An offline observation in the monitor → row ``offline``, counted, overall ``degraded``."""
+        monitor = DeviceHealthMonitor(sample_cluster["db"], DeviceRegistry())
+        state = DeviceHealthState(observed_at=int(time.time()), offline=True)
+        monitor.record(ENTITY_IRRIGATOR, sample_cluster["irrigator_id"], state, label="irrigator")
+        pulse = self._pulse(sample_cluster, monitor)
+        row = next(d for d in pulse.devices if d.consecutive_failures is not None)
+        assert (row.status, pulse.irrigators_offline, pulse.irrigators_failing, pulse.status) == (
+            "offline",
+            1,
+            0,
+            "degraded",
+        )
+
+    def test_online_or_no_monitor_is_ok(self, sample_cluster: "SampleCluster") -> None:
+        """An online observation, or no monitor at all, leaves the irrigator ``ok``."""
+        monitor = DeviceHealthMonitor(sample_cluster["db"], DeviceRegistry())
+        state = DeviceHealthState(observed_at=int(time.time()), last_seen_ts=int(time.time()))
+        monitor.record(ENTITY_IRRIGATOR, sample_cluster["irrigator_id"], state, label="irrigator")
+        for pulse in (self._pulse(sample_cluster, monitor), self._pulse(sample_cluster)):
+            assert (pulse.irrigators_offline, pulse.status) == (0, "ok")
+
+    def test_device_cap_keeps_irrigators_and_problem_devices(self, sample_cluster: "SampleCluster") -> None:
+        """Past the cap, the irrigator and a cold sensor added last still make the list."""
+        repo = sample_cluster["db"]
+        now = int(time.time())
+        for index in range(SYSTEM_HEALTH_DEVICE_LIMIT):
+            sensor_id = repo.add_sensor(
+                sample_cluster["cluster_id"], f"fake_tuya_sensor_{index:08x}", f"Sensor {index}", "tuya.tr301z", {}
+            )
+            repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now - 60, soil_moisture=50.0)
+        cold_id = repo.add_sensor(sample_cluster["cluster_id"], "fake_tuya_sensor_c01d", "Cold", "tuya.tr301z", {})
+        repo.add_sensor_reading(sensor_id=cold_id, timestamp=now - SYSTEM_HEALTH_COLD_SECONDS - 60, soil_moisture=50.0)
+        pulse = self._pulse(sample_cluster)
+        listed = {(d.id, d.consecutive_failures is not None) for d in pulse.devices}
+        assert len(pulse.devices) == SYSTEM_HEALTH_DEVICE_LIMIT
+        assert {(cold_id, False), (sample_cluster["irrigator_id"], True)} <= listed
