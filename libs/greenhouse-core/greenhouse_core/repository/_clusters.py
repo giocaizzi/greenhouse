@@ -3,7 +3,7 @@
 import time
 from typing import Unpack
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 
 from greenhouse_core.constants import (
     SECONDS_PER_DAY,
@@ -313,9 +313,12 @@ class ClusterMixin(SensorMixin):
         sensor readings — which key off ``sensor_id`` — surface under the new
         cluster's charts instead of the old one. Sensor probes are physically
         stuck in the plant's soil; in the real world they travel with the
-        plant. Decision logs, irrigation events, and alerts are deliberately
-        left attached to the original cluster so the audit trail reflects
-        where the plant actually was at the time. Plant identity,
+        plant. The plant's own unresolved alerts (plant entity, keyed without
+        the cluster) move with it, so the inbox lists them under the cluster
+        the plant is in now. Decision logs, irrigation events, resolved alerts
+        and sensor or cluster alerts are deliberately left attached to the
+        original cluster so the audit trail reflects where the plant actually
+        was at the time. Plant identity,
         plant_health_daily history, and learning profiles follow the plant
         because they key off ``plant_id``. Writes a ``plant_moved`` activity
         event with the before/after cluster ids and the list of sensor ids
@@ -348,6 +351,11 @@ class ClusterMixin(SensorMixin):
         moved_sensors = list(self.session.scalars(select(Sensor).where(Sensor.plant_id == plant_id)))
         for sensor in moved_sensors:
             sensor.cluster_id = target_cluster_id
+        self.session.execute(
+            update(Alert)
+            .where(Alert.entity_type == ENTITY_PLANT, Alert.entity_id == plant_id, Alert.status != "resolved")
+            .values(cluster_id=target_cluster_id)
+        )
         self.session.flush()
         self.add_activity_event(
             source=SOURCE_PLANT,
