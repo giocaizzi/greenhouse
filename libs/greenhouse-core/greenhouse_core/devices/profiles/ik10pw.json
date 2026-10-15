@@ -17,9 +17,6 @@
     "auto_run": 109
   },
   "capabilities": [
-    "has_local_duration_dp",
-    "has_water_shortage_dp",
-    "supports_local_status",
-    "supports_cloud_switch"
+    "supports_local_status"
   ]
 }

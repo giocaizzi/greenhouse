@@ -39,7 +39,7 @@ class IrrigatorProfile:
             ``None`` for cloud-only devices.
         dp_map: Logical name → DP id mapping (``{"switch": 1, "duration": 102}``).
         capabilities: Free-form flags describing the model
-            (``"has_local_duration_dp"``, ``"supports_local_status"``); the
+            (``"supports_local_status"``, ``"reports_battery"``); the
             adapters consult them through :meth:`has_capability`.
         duration_unit: Unit for the Duration DP if any.
         alarm_bitmask: Bit to AND against the alarm DP value when checking
