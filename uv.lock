@@ -600,7 +600,7 @@ wheels = [
 
 [[package]]
 name = "greenhouse"
-version = "6.1.0"
+version = "6.2.0"
 source = { virtual = "." }
 dependencies = [
     { name = "greenhouse-cli" },
@@ -643,7 +643,7 @@ dev = [
 
 [[package]]
 name = "greenhouse-cli"
-version = "6.1.0"
+version = "6.2.0"
 source = { editable = "libs/greenhouse-cli" }
 dependencies = [
     { name = "httpx" },
@@ -664,7 +664,7 @@ requires-dist = [
 
 [[package]]
 name = "greenhouse-core"
-version = "6.1.0"
+version = "6.2.0"
 source = { editable = "libs/greenhouse-core" }
 dependencies = [
     { name = "alembic" },
@@ -685,7 +685,7 @@ requires-dist = [
 
 [[package]]
 name = "greenhouse-server"
-version = "6.1.0"
+version = "6.2.0"
 source = { editable = "libs/greenhouse-server" }
 dependencies = [
     { name = "apscheduler" },

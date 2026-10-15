@@ -4,6 +4,27 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.2.0](https://github.com/giocaizzi/greenhouse/compare/v6.1.0...v6.2.0) (2026-10-15)
+
+
+### Added
+
+* **alerts:** re-notify warning and critical alerts that stay open ([#158](https://github.com/giocaizzi/greenhouse/issues/158)) ([78f099c](https://github.com/giocaizzi/greenhouse/commit/78f099c0a61f145554d966938668cbeb19b43443))
+* **anomaly:** flag a soil sensor flat-lined at 0 % or 100 % as sensor_flatline ([#157](https://github.com/giocaizzi/greenhouse/issues/157)) ([a8643c7](https://github.com/giocaizzi/greenhouse/commit/a8643c7eeb75284a2bca877e9b4d31287bf76787))
+* **charts:** label chart series by the plant the sensor was measuring ([#167](https://github.com/giocaizzi/greenhouse/issues/167)) ([2ff7856](https://github.com/giocaizzi/greenhouse/commit/2ff7856da42bb7dd21de6660f7dccf5c8ea5aa4b))
+* **charts:** offer chart timeframes in days (3, 14, 30, 60, 90) ([#163](https://github.com/giocaizzi/greenhouse/issues/163)) ([6baf834](https://github.com/giocaizzi/greenhouse/commit/6baf83486fa8896a0e909d1dd0f82cf685bfc4d2))
+* **inventory:** archive instead of hard-deleting sensors and plants ([#165](https://github.com/giocaizzi/greenhouse/issues/165)) ([963417d](https://github.com/giocaizzi/greenhouse/commit/963417ddb9307ec51381c99613afc46619381601))
+* **monitor:** alert and push when a sensor-only cluster needs water ([#164](https://github.com/giocaizzi/greenhouse/issues/164)) ([c589c11](https://github.com/giocaizzi/greenhouse/commit/c589c114d0ceb7254a861f8bdaa397980a1f4827))
+* **plants:** flag plants that run on the default soil band ([#160](https://github.com/giocaizzi/greenhouse/issues/160)) ([d2c85b6](https://github.com/giocaizzi/greenhouse/commit/d2c85b6714c37d645f6fa164232b940993c27f6c))
+
+
+### Fixed
+
+* **anomaly:** treat a rising step that holds as a watering, not sensor_drift ([#153](https://github.com/giocaizzi/greenhouse/issues/153)) ([6fdbe91](https://github.com/giocaizzi/greenhouse/commit/6fdbe91144aae725275c245b8ba365e6ac58e312))
+* **plant-db:** resolve categories case-insensitively and add Ficus benjamina ([#155](https://github.com/giocaizzi/greenhouse/issues/155)) ([56016b5](https://github.com/giocaizzi/greenhouse/commit/56016b55b104cec6bdb5cb305883fd52343e0e43))
+* **sensors:** attribute readings by assignment window everywhere ([#159](https://github.com/giocaizzi/greenhouse/issues/159)) ([4e72b70](https://github.com/giocaizzi/greenhouse/commit/4e72b70bc19426b8fe30009ae4d8940db51678cb))
+* **system-health:** mark an irrigator failing after repeated failed starts ([#161](https://github.com/giocaizzi/greenhouse/issues/161)) ([3bbfca9](https://github.com/giocaizzi/greenhouse/commit/3bbfca936be02e8fcf654030b3946946115456e7))
+
 ## [6.1.0](https://github.com/giocaizzi/greenhouse/compare/v6.0.0...v6.1.0) (2026-10-13)
 
 
