@@ -10,7 +10,12 @@ becomes the single source of truth for the bell badge and /alerts page.
 import time
 from typing import Any, NotRequired, TypedDict, Unpack
 
-from greenhouse_core.constants import ALERT_SCAN_LIMIT
+from greenhouse_core.constants import (
+    ALERT_RENOTIFY_INTERVAL_SECONDS,
+    ALERT_RENOTIFY_OCCURRENCES,
+    ALERT_RENOTIFY_SEVERITIES,
+    ALERT_SCAN_LIMIT,
+)
 from greenhouse_core.models import (
     ENTITY_CLUSTER,
     ENTITY_PLANT,
@@ -50,27 +55,46 @@ def _title_for(code: str, message: str) -> str:
     return code.replace("_", " ").title()
 
 
+def _push_due(alert: Alert, *, was_open: bool) -> bool:
+    """Whether this upsert of ``alert`` earns a push (see :func:`notify_if_new_alert`)."""
+    if not was_open:
+        return True
+    if alert.severity not in ALERT_RENOTIFY_SEVERITIES:
+        return False
+    if alert.occurrence_count in ALERT_RENOTIFY_OCCURRENCES:
+        return True
+    if alert.occurrence_count < max(ALERT_RENOTIFY_OCCURRENCES):
+        return False
+    quiet_since = max(alert.last_notified_at or alert.first_seen_at, alert.acknowledged_at or 0)
+    return alert.last_seen_at - quiet_since >= ALERT_RENOTIFY_INTERVAL_SECONDS
+
+
 def notify_if_new_alert(
     repo: IrrigationRepository, notifier: NtfyClient | None, alert: Alert, *, was_open: bool
 ) -> None:
-    """Push a notification for a warning/critical alert that this upsert opened.
+    """Push a warning/critical alert this upsert opened, and re-push one that stays open.
 
     "Opened" means the row is new *or* a resolved row was re-opened (B-5: the old
     ``occurrence_count == 1`` gate kept a re-raised alert silent forever). A repeat
-    of an alert that is still open or acknowledged (``was_open``) never re-notifies,
-    and ``info`` advisories stay silent. The ``notify_alerts`` preference toggle is
+    of an alert that is still open or acknowledged (``was_open``) stays silent, except
+    that one in ``ALERT_RENOTIFY_SEVERITIES`` escalates (#146: an ``actuation_failed``
+    warning once went 44 occurrences on a single push): it pushes again at each ``ALERT_RENOTIFY_OCCURRENCES``
+    count, then at most once per ``ALERT_RENOTIFY_INTERVAL_SECONDS`` while unresolved.
+    Acknowledging restarts that interval, so an acknowledged alert is quiet until the next
+    step. ``info`` advisories stay silent. The ``notify_alerts`` preference toggle is
     honoured via :func:`maybe_notify`.
 
     Args:
         repo: Active repository session (reads the preferences row).
         notifier: ntfy client, or None when notifications are unconfigured.
-        alert: The row the upsert returned.
+        alert: The row the upsert returned; ``last_notified_at`` is stamped when a push is due.
         was_open: Whether an unresolved alert with the same dedup key existed before the upsert.
     """
-    if notifier is None or was_open:
+    if notifier is None or alert.severity not in _NOTIFY_SEVERITIES:
         return
-    if alert.severity not in _NOTIFY_SEVERITIES:
+    if not _push_due(alert, was_open=was_open):
         return
+    alert.last_notified_at = alert.last_seen_at
     maybe_notify(
         notifier,
         repo.get_preferences(),

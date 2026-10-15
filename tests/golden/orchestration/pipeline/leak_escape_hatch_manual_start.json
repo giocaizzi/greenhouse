@@ -81,6 +81,7 @@
     "entity_type": "sensor",
     "first_seen_at": 1776243600,
     "id": 1,
+    "last_notified_at": null,
     "last_seen_at": 1776243600,
     "message": "Sensor 1: soil moisture still rising after irrigation (latest=78.0%)",
     "occurrence_count": 1,

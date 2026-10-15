@@ -67,7 +67,7 @@ Every `/api/v1` endpoint on the server is exposed as an MCP tool by `fastapi-mcp
 
 For the full surface, list the MCP tools at the start of the session — every `/api/v1` endpoint is exposed as one. If you need the raw OpenAPI, the server publishes it at `/docs`.
 
-**Push notifications (ntfy):** the server can push to a phone on manual/emergency/auto irrigations and new (warning/critical) alerts. Delivery is enabled by server-side env config (`GREENHOUSE_NTFY_SERVER_URL` + `_TOPIC`); the per-category toggles in `preferences` (`notify_*`) only gate *which* categories fire. You don't send notifications — you can read/flip those toggles. If a user says "I'm not getting alerts," check the toggles, but the env config is the on/off switch and lives outside the API.
+**Push notifications (ntfy):** the server can push to a phone on manual/emergency/auto irrigations and new (warning/critical) alerts. A warning or critical alert that stays open (e.g. a repeating `actuation_failed`) pushes again at its 3rd and 10th occurrence, then at most once a day until it is resolved; acknowledging it buys a quiet day, it does not mute it. A resolved alert that comes back pushes as new. Delivery is enabled by server-side env config (`GREENHOUSE_NTFY_SERVER_URL` + `_TOPIC`); the per-category toggles in `preferences` (`notify_*`) only gate *which* categories fire. You don't send notifications — you can read/flip those toggles. If a user says "I'm not getting alerts," check the toggles, but the env config is the on/off switch and lives outside the API.
 
 ## Invariants — do not fight these
 

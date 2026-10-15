@@ -248,6 +248,13 @@
     "nullable": true,
     "primary_key": 0,
     "type": "INTEGER"
+   },
+   {
+    "default": null,
+    "name": "last_notified_at",
+    "nullable": true,
+    "primary_key": 0,
+    "type": "INTEGER"
    }
   ],
   "foreign_keys": [],

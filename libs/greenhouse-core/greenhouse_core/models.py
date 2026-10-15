@@ -413,6 +413,7 @@ class Alert(Base):
     occurrence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     acknowledged_at: Mapped[int | None] = mapped_column(Integer)
     resolved_at: Mapped[int | None] = mapped_column(Integer)
+    last_notified_at: Mapped[int | None] = mapped_column(Integer)  # last ntfy push, paces the re-notify
 
 
 class PlantHealthDaily(Base):

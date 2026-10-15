@@ -35,6 +35,7 @@ CREATE TABLE alerts (
 	occurrence_count INTEGER NOT NULL,
 	acknowledged_at INTEGER,
 	resolved_at INTEGER,
+	last_notified_at INTEGER,
 	PRIMARY KEY (id),
 	UNIQUE (dedup_key)
 )

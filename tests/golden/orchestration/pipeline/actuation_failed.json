@@ -53,6 +53,7 @@
     "entity_type": "cluster",
     "first_seen_at": 1776247200,
     "id": 1,
+    "last_notified_at": 1776247200,
     "last_seen_at": 1776247200,
     "message": "Irrigator 'Irrigator 1' failed to start: device timeout",
     "occurrence_count": 1,

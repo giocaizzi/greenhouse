@@ -43,6 +43,7 @@
    "entity_type": "cluster",
    "first_seen_at": 1776247200,
    "id": 1,
+   "last_notified_at": null,
    "last_seen_at": 1776247200,
    "message": "The scheduled check crashed and was skipped for this cluster: Boom('cluster 2 crashed after writing')",
    "occurrence_count": 2,

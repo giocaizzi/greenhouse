@@ -5,12 +5,13 @@ from __future__ import annotations
 import time
 import urllib.request
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Literal, Never, Self, TypedDict, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, Never, Self, TypedDict, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from fake_devices import FakeIrrigatorAdapter, FakeSensorAdapter
+from greenhouse_core.constants import ALERT_RENOTIFY_INTERVAL_SECONDS, ALERT_RENOTIFY_OCCURRENCES
 from greenhouse_core.devices import DeviceRegistry
 from greenhouse_core.logic import IrrigationLogic
 from greenhouse_core.models import SOURCE_LEAK, TRIGGERED_BY_EMERGENCY, ActivitySource
@@ -21,6 +22,7 @@ from greenhouse_server.services.notify import NtfyClient, maybe_notify
 from server.conftest import TEST_NTFY_TOKEN
 
 if TYPE_CHECKING:
+    import time_machine
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
@@ -235,10 +237,10 @@ class TestAlertNotification:
         )
         assert rec.alerts == []
 
-    def test_repeat_does_not_renotify(self, tmp_db: IrrigationRepository) -> None:
-        """Repeat does not renotify."""
+    def test_second_occurrence_does_not_renotify(self, tmp_db: IrrigationRepository) -> None:
+        """A repeat while the alert is open stays silent until the next escalation step."""
         rec = _RecordingNotifier()
-        for _ in range(3):
+        for _ in range(2):
             raise_alert(
                 tmp_db,
                 source=SOURCE_LEAK,
@@ -249,7 +251,6 @@ class TestAlertNotification:
                 cluster_id=1,
                 notifier=rec,
             )
-        # Only the call that opened the alert pushes; repeats while it is open stay silent.
         assert len(rec.alerts) == 1
 
     def test_reopened_alert_renotifies(self, tmp_db: IrrigationRepository) -> None:
@@ -266,11 +267,11 @@ class TestAlertNotification:
         alert = raise_alert(tmp_db, notifier=rec, **kwargs)
         raise_alert(tmp_db, notifier=rec, **kwargs)  # still open: silent
         tmp_db.acknowledge_alert(alert.id)
-        raise_alert(tmp_db, notifier=rec, **kwargs)  # acknowledged is still unresolved: silent
+        raise_alert(tmp_db, notifier=rec, **kwargs)  # acknowledged, but the 3rd occurrence escalates (#146)
         tmp_db.resolve_alert(alert.id)
         reopened = raise_alert(tmp_db, notifier=rec, **kwargs)
         assert (reopened.id, reopened.status, reopened.occurrence_count) == (alert.id, "open", 4)
-        pushes = 2  # the raise that opened the alert and the one that re-opened it
+        pushes = 3  # the opening raise, the 3rd-occurrence step and the re-opening raise
         assert len(rec.alerts) == pushes
 
     def test_pref_toggle_off_suppresses(self, tmp_db: IrrigationRepository) -> None:
@@ -297,6 +298,104 @@ class TestAlertNotification:
             tmp_db, source=SOURCE_LEAK, code="c", title="t", message="m", severity="critical", cluster_id=1
         )
         notify_if_new_alert(tmp_db, None, alert, was_open=False)
+
+
+class TestAlertEscalation:
+    """#146: a warning/critical alert that stays open re-notifies at escalating steps."""
+
+    _CRITICAL: ClassVar[NewAlert] = {
+        "source": SOURCE_LEAK,
+        "code": "actuation_failed",
+        "title": "t",
+        "message": "m",
+        "severity": "critical",
+        "cluster_id": 1,
+    }
+
+    def _pushes_per_raise(
+        self, repo: IrrigationRepository, clock: time_machine.Traveller, raises: int, *, step: int
+    ) -> list[int]:
+        """Raise the critical alert ``raises`` times, ``step`` seconds apart; the occurrence counts that pushed."""
+        rec = _RecordingNotifier()
+        pushed: list[int] = []
+        for _ in range(raises):
+            before = len(rec.alerts)
+            alert = raise_alert(repo, notifier=rec, **self._CRITICAL)
+            if len(rec.alerts) > before:
+                pushed.append(alert.occurrence_count)
+            clock.shift(step)
+        return pushed
+
+    def test_pushes_on_open_third_and_tenth(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """Open, 3rd and 10th occurrence push; the others within a day stay silent."""
+        assert self._pushes_per_raise(tmp_db, frozen_clock, 20, step=60) == [1, *ALERT_RENOTIFY_OCCURRENCES]
+
+    def test_then_at_most_once_per_interval(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """Past the last step, an hourly repeat pushes once per interval (here: every 24th raise)."""
+        hourly = 3600
+        pushed = self._pushes_per_raise(tmp_db, frozen_clock, 60, step=hourly)
+        assert pushed == [1, 3, 10, 34, 58]
+
+    def test_warning_escalates_like_critical(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """A warning (``actuation_failed`` is one) follows the same steps."""
+        rec = _RecordingNotifier()
+        warning: NewAlert = {**self._CRITICAL, "severity": "warning"}
+        for _ in range(12):
+            raise_alert(tmp_db, notifier=rec, **warning)
+            frozen_clock.shift(60)
+        assert len(rec.alerts) == 1 + len(ALERT_RENOTIFY_OCCURRENCES)
+
+    def test_info_never_pushes(self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller) -> None:
+        """Info advisories stay silent at every step."""
+        rec = _RecordingNotifier()
+        info: NewAlert = {**self._CRITICAL, "severity": "info"}
+        for _ in range(12):
+            raise_alert(tmp_db, notifier=rec, **info)
+            frozen_clock.shift(3600 * 24)
+        assert rec.alerts == []
+
+    def test_acknowledge_restarts_the_interval(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """An acknowledged alert stays quiet for a full interval after the acknowledgement."""
+        rec = _RecordingNotifier()
+        for _ in range(10):
+            alert = raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        pushes = len(rec.alerts)
+        frozen_clock.shift(ALERT_RENOTIFY_INTERVAL_SECONDS - 60)
+        tmp_db.acknowledge_alert(alert.id)
+        frozen_clock.shift(120)  # an interval since the last push, not since the ack
+        raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        assert len(rec.alerts) == pushes
+        frozen_clock.shift(ALERT_RENOTIFY_INTERVAL_SECONDS)
+        acked = raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        assert (acked.status, len(rec.alerts)) == ("acknowledged", pushes + 1)
+
+    def test_resolved_then_reopened_pushes_as_new(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """Resolve -> re-raise pushes immediately, whatever the occurrence count."""
+        rec = _RecordingNotifier()
+        alert = raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        tmp_db.resolve_alert(alert.id)
+        frozen_clock.shift(60)
+        reopened = raise_alert(tmp_db, notifier=rec, **self._CRITICAL)
+        assert (reopened.occurrence_count, len(rec.alerts)) == (3, 2)
+
+    def test_pref_toggle_off_keeps_escalation_silent(
+        self, tmp_db: IrrigationRepository, frozen_clock: time_machine.Traveller
+    ) -> None:
+        """``notify_alerts`` off silences the escalation steps too."""
+        tmp_db.update_preferences(notify_alerts=False)
+        tmp_db.session.commit()
+        assert self._pushes_per_raise(tmp_db, frozen_clock, 12, step=60) == []
 
 
 # ── Manual / emergency seams via the API ─────────────────────────────────────
