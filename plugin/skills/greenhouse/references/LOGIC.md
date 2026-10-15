@@ -261,7 +261,7 @@ Raw Tuya readings are noisy — capacitive soil probes glitch to single-sample *
 The line is drawn by what the caller does with the data:
 
 - **Judgements read the cleaned view** — decision snapshot (`logic/sensors.py`), 48h trends (`logic/trends.py`), leak detection (`services/leak.py`), efficacy scoring (`services/efficacy.py`), plant health scores (`services/health.py`), next-irrigation forecast (`services/forecast.py`), learned profiles and issue heuristics (`learning/profiling.py`, `learning/issues.py`).
-- **Archive and display read raw** — charts, cluster history, data-quality reports, the maintenance battery/staleness checks, and the `sensor_drift` anomaly scan (which must see the drift cleaning would mask).
+- **Archive and display read raw** — charts (beyond `CHART_RAW_MAX_HOURS`, 14 days, as hourly means of the raw readings, `CHART_BUCKET_SECONDS`), cluster history, data-quality reports, the maintenance battery/staleness checks, and the `sensor_drift` anomaly scan (which must see the drift cleaning would mask).
 
 Two ordering helpers keep that switch cheap: `clean_readings_desc()` mirrors `get_recent_readings`' newest-first ordering, and `clean_readings_around()` cleans a before/after pair as one series before splitting it back, so a spike sitting at the event boundary is judged against neighbours on both sides.
 

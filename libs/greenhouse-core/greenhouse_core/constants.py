@@ -290,6 +290,10 @@ SECONDS_PER_DAY = 86400
 # and 90 days); the API's ``hours`` parameter accepts any 1-8760, these are the UI choices.
 CHART_RANGE_HOURS = (72, 336, 720, 1440, 2160)
 DEFAULT_CHART_RANGE_HOURS = 72  # 3 days: default look-back of every chart (API, web, TUI)
+# Sensor charts up to 14 days send every raw reading; longer look-backs send hourly means
+# (~5 readings per sensor per hour would make a 90-day cluster page weigh megabytes).
+CHART_RAW_MAX_HOURS = 336
+CHART_BUCKET_SECONDS = SECONDS_PER_HOUR
 
 # ── Decision engine — lookbacks, baseline and weather skip ───────────────────
 
