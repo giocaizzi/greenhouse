@@ -400,6 +400,8 @@ EFFICACY_AFTER_WINDOW_SECONDS = 5400  # efficacy scoring: 90 min after the start
 ANOMALY_MIN_READINGS = 10  # readings needed before a sensor is scanned
 ANOMALY_WINDOW_READINGS = 50  # most recent readings the z-score baseline uses
 ANOMALY_Z_THRESHOLD = 4.0
+# Newest readings that must all hold a rising step for it to count as a watering, not drift.
+ANOMALY_STEP_HOLD_READINGS = 3
 ANOMALY_STALE_INTERVAL_MULTIPLIER = 2.0  # stale when silent > this x the median report gap
 # Minimum std to use for z-score; prevents false alarms on near-constant series
 # while still catching large absolute deviations (e.g. 95% vs 50% baseline).

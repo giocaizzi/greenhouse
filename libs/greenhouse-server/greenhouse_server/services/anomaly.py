@@ -10,7 +10,11 @@ readings:
   alert resolves on the first scan that finds the sensor fresh again.
 - **Drift/spike**: if |z-score| of the latest soil-moisture reading > 4
   relative to the rolling mean + std of the 50-reading window, raises a
-  ``sensor_drift`` warning.
+  ``sensor_drift`` warning. A **rising step that holds** is a watering (often a
+  hand watering nobody logged), not drift: when the newest
+  ``ANOMALY_STEP_HOLD_READINGS`` values all sit well above the earlier level, no
+  drift is raised and an open ``sensor_drift`` alert resolves. A lone outlier, or
+  a drop, is still drift.
 
 Both emit into the shared alert inbox via ``raise_alert``.
 """
@@ -25,8 +29,10 @@ from greenhouse_core.constants import (
     ANOMALY_MIN_READINGS,
     ANOMALY_MIN_STD,
     ANOMALY_STALE_INTERVAL_MULTIPLIER,
+    ANOMALY_STEP_HOLD_READINGS,
     ANOMALY_WINDOW_READINGS,
     ANOMALY_Z_THRESHOLD,
+    CLEANING_MAD_SCALE,
     DEFAULT_SYNC_INTERVAL_MINUTES,
     SENSOR_OFFLINE_GRACE_MINUTES,
 )
@@ -68,6 +74,21 @@ def _latest_soil_zscore(window: "list[SensorReading]") -> tuple[float, float, fl
     return latest_soil, mean, std, z
 
 
+def _is_rising_step(window: "list[SensorReading]") -> bool:
+    """True when the newest soil values all sit > ``ANOMALY_Z_THRESHOLD`` sigmas above the level before them.
+
+    Median and scaled MAD of the earlier readings, so the post-step readings already in
+    the window do not drag the baseline up the way a mean and std would.
+    """
+    soil = [r.soil_moisture for r in window if r.soil_moisture is not None]
+    held, before = soil[:ANOMALY_STEP_HOLD_READINGS], soil[ANOMALY_STEP_HOLD_READINGS:]
+    if len(held) < ANOMALY_STEP_HOLD_READINGS or not before:
+        return False
+    level = statistics.median(before)
+    spread = max(CLEANING_MAD_SCALE * statistics.median(abs(v - level) for v in before), ANOMALY_MIN_STD)
+    return (min(held) - level) / spread > ANOMALY_Z_THRESHOLD
+
+
 class SensorAnomalyService:
     """Rolling z-score and max-gap anomaly detector for all sensors."""
 
@@ -97,6 +118,8 @@ class SensorAnomalyService:
           rolling mean and std of the last 50 soil-moisture readings.
           A minimum std of 1.0 % is applied to avoid false alarms on near-constant
           series where tiny rounding differences would appear as infinite outliers.
+          A rising step held by the newest readings (a watering) is not drift and
+          resolves an open ``sensor_drift`` alert.
 
         Returns:
             List of Alert rows that were upserted.
@@ -121,7 +144,7 @@ class SensorAnomalyService:
             stale = self._stale_alert(sensor, timestamps_asc, median_interval, now)
             if stale is not None:
                 alerts.append(stale)
-            drift = self._drift_alert(sensor, window, median_interval)
+            drift = self._drift_unless_step(sensor, window, median_interval)
             if drift is not None:
                 alerts.append(drift)
 
@@ -168,6 +191,21 @@ class SensorAnomalyService:
             self._repo, source=SOURCE_ANOMALY, code="sensor_stale", cluster_id=sensor.cluster_id, sensor_id=sensor.id
         )
         return None
+
+    def _drift_unless_step(
+        self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None
+    ) -> Alert | None:
+        """Judge drift, except on a rising step that holds: that is a watering, so resolve ``sensor_drift``."""
+        if _is_rising_step(window):
+            clear_alert(
+                self._repo,
+                source=SOURCE_ANOMALY,
+                code="sensor_drift",
+                cluster_id=sensor.cluster_id,
+                sensor_id=sensor.id,
+            )
+            return None
+        return self._drift_alert(sensor, window, median_interval)
 
     def _drift_alert(
         self, sensor: "Sensor", window: "list[SensorReading]", median_interval: float | None
