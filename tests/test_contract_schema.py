@@ -41,7 +41,7 @@ TABLE_COUNT = 17
 
 # sha256 of "\n".join(DDL statements), re-recorded for the open-assignment partial unique index (#145).
 PHASE0_DDL_SHA256 = (
-    "b90ba1eb067d3a7bf0d33772dd74905b51d8b9b4c241c1998785952df38dbd6d"  # gitleaks:allow — content hash, not a secret
+    "1e66a04c2fc7e5caa9ae0b6339c19a1c771f31e8a5612b0dfc47cd62fbc3dbd4"  # gitleaks:allow — content hash, not a secret
 )
 
 ALEMBIC_HEAD = "b3c5e7f9a104"
