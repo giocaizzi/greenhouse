@@ -105,5 +105,12 @@ def test_scheduler_page_hides_delete_for_core_jobs(client: TestClient, running_s
     running_scheduler.add_job(lambda: None, "date", run_date="2099-01-01", id="leak-check-1-123", name="Leak")
     resp = client.get("/scheduler")
     assert 'hx-post="/scheduler/jobs/leak-check-1-123/delete"' in resp.text
-    for job_id in ("check_all", "sensor_sync", "sensor_anomaly", "plant_health_snapshot", "device_health_monitor"):
+    for job_id in (
+        "check_all",
+        "sensor_sync",
+        "sensor_anomaly",
+        "plant_health_snapshot",
+        "alert_digest",
+        "device_health_monitor",
+    ):
         assert f'hx-post="/scheduler/jobs/{job_id}/delete"' not in resp.text

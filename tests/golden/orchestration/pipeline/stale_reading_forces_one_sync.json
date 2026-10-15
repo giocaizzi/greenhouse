@@ -9,14 +9,14 @@
     "duration_minutes": 3,
     "interval_hours": 8,
     "learning_alerts": [],
-    "reason": "soil very dry (driest=30% < 45.0%)",
+    "reason": "soil very dry (driest=30% < 45.0%, species band)",
     "reasons": [
      {
       "code": "sensor_very_dry",
       "duration_delta": 0,
       "icon": "drop",
       "interval_delta": 0,
-      "message": "soil very dry (driest=30% < 45.0%)",
+      "message": "soil very dry (driest=30% < 45.0%, species band)",
       "severity": "warning"
      }
     ],
@@ -71,7 +71,7 @@
        "duration_delta": 0,
        "icon": "drop",
        "interval_delta": 0,
-       "message": "soil very dry (driest=30% < 45.0%)",
+       "message": "soil very dry (driest=30% < 45.0%, species band)",
        "severity": "warning"
       }
      ],
@@ -113,7 +113,7 @@
      "weather": null
     },
     "primary_code": "sensor_very_dry",
-    "reason_text": "soil very dry (driest=30% < 45.0%)",
+    "reason_text": "soil very dry (driest=30% < 45.0%, species band)",
     "triggered_by": "auto"
    }
   ],
@@ -123,7 +123,7 @@
     "duration_minutes": 3,
     "id": 1,
     "irrigator_id": 1,
-    "notes": "temp=23.0C (sensor), soil=30% (driest), confidence=90%, reason=soil very dry (driest=30% < 45.0%)",
+    "notes": "temp=23.0C (sensor), soil=30% (driest), confidence=90%, reason=soil very dry (driest=30% < 45.0%, species band)",
     "timestamp": 1776247200,
     "triggered_by": "auto"
    }

@@ -305,6 +305,16 @@ class AuditMixin(RepositoryBase):
             )
         )
 
+    def list_unresolved_alerts_by_severity(self, severity: str) -> list[Alert]:
+        """Every open or acknowledged alert of ``severity``, oldest first — no row cap (the digest counts them)."""
+        return list(
+            self.session.scalars(
+                select(Alert)
+                .where(Alert.severity == severity, Alert.status != "resolved")
+                .order_by(Alert.first_seen_at, Alert.id)
+            )
+        )
+
     def get_open_alert_by_key(self, dedup_key: str) -> Alert | None:
         """The unresolved (open or acknowledged) alert with ``dedup_key``, if any."""
         return self.session.scalar(select(Alert).where(Alert.dedup_key == dedup_key, Alert.status != "resolved"))
