@@ -1,8 +1,8 @@
 {
   "_metadata": {
-    "version": "1.1",
+    "version": "1.2",
     "description": "Plant care database compiled from horticultural literature and scientific sources",
-    "last_updated": "2026-05-15",
+    "last_updated": "2026-10-15",
     "sources": [
       "The Spruce (thespruce.com) - Horticultural guides",
       "New York Botanical Garden (libguides.nybg.org) - Scientific plant care",
@@ -180,6 +180,31 @@
         "autumn": 0.7
       },
       "timing_notes": "Drought-tolerant Madagascan species — primary risk is root rot, not desiccation. Damp down summer boost relative to tropical default and reduce winter further; do not increase frequency in heat."
+    },
+    "Ficus benjamina": {
+      "common_name": "Weeping Fig",
+      "aliases": [
+        "Ficus",
+        "Weeping fig"
+      ],
+      "category": "tropical",
+      "native_region": "South and Southeast Asia, northern Australia",
+      "water_needs": "medium",
+      "water_frequency_days": 7,
+      "water_notes": "Keep evenly moist in active growth, let the surface dry slightly between waterings in winter. Never waterlogged. Drops leaves under any stress, over- and under-watering included.",
+      "ideal_temp_min_c": 18,
+      "ideal_temp_max_c": 29,
+      "ideal_humidity_min": 40,
+      "ideal_humidity_max": 80,
+      "light_needs": "medium",
+      "soil_moisture_target": "25-40",
+      "sources": [
+        "Clemson HGIC Weeping Ficus factsheet: night 65-70°F, day 75-85°F (18-29°C); prefers high humidity; bright indirect light; keep soil evenly moist in active growth, dry slightly between waterings in winter; never waterlogged",
+        "Epic Gardening, Ficus benjamina: thrives at 75-85°F, cold damage below 65°F (18°C); water when the top layer of soil has dried, about once a week",
+        "Soltech, weeping fig care: humidity above 40%; avoid both bone-dry soil and standing water",
+        "RHS Ficus benjamina: moist but well-drained soil, H1C (frost-free, minimum 5-10°C)",
+        "soil_moisture_target: no source gives a sensor %; 25-40 is calibrated on a TR301Z in a potted Ficus that peaks at ~40% after a full watering and dries below 5% in ~4 days, so the 45-65 default was never reachable"
+      ]
     },
     "Alocasia amazonica": {
       "common_name": "African Mask Plant",

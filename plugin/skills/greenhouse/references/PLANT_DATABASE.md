@@ -21,11 +21,13 @@ The JSON is a single object with these top-level keys:
 3. **`_category_defaults[c]` timing fields** — merged in on top of category basics.
 4. **`species[s]` species-specific overrides** — merged last, so species wins on every shared key.
 
-The resolved category is the species' own `category` field when a species matched, otherwise the `category` argument. The returned dict always carries `category` (resolved name, when known) and `_category_defaults` (the category's timing block verbatim, or `{}`) — the latter is exposed separately so `logic.timing.seasonal_multiplier` can fall back to the category layer per season even after species overrides are applied.
+The resolved category is the species' own `category` field when a species matched, otherwise the `category` argument. Category names are trimmed and lower-cased before the lookup (the keys are lower-case), so a plant stored as `"Tropical"` resolves to `tropical`, and the returned `category` is the lower-case key. A species or category that does not resolve is logged at DEBUG (`greenhouse_core.plant_db`); with neither resolved the plant gets the built-in band 45–65. The returned dict always carries `category` (resolved name, when known) and `_category_defaults` (the category's timing block verbatim, or `{}`) — the latter is exposed separately so `logic.timing.seasonal_multiplier` can fall back to the category layer per season even after species overrides are applied.
 
 ### Species matching
 
-`lookup_species` resolves a name in three passes: exact key match, then case-insensitive `aliases` match, then fuzzy substring match (database key or any alias contained in the supplied name). This is why a `Plant` row stored as `"Areca palm"` still resolves to `"Dypsis lutescens"`.
+`lookup_species` trims the name, then resolves it in three passes: exact key match, then case-insensitive `aliases` match, then fuzzy substring match (database key or any alias contained in the supplied name). This is why a `Plant` row stored as `"Areca palm"` still resolves to `"Dypsis lutescens"`. A misspelt name that matches no key or alias (`"Figus"`) does not resolve: fix the plant's species.
+
+Bundled species: `Monstera deliciosa`, `Dypsis lutescens`, `Dracaena marginata`, `Ficus benjamina` (aliases `Ficus`, `Weeping fig`), `Alocasia amazonica`, `Eriobotrya japonica`. The `Ficus` alias also catches other figs (`"Ficus lyrata"`) by substring.
 
 ## Schema
 
