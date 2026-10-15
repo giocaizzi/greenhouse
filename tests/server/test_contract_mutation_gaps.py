@@ -150,6 +150,24 @@ def test_monitor_status_bands_around_the_plant_target(db: IrrigationRepository, 
     assert (row["target_min"], row["target_max"], row["status"]) == (45.0, 60.0, status)
 
 
+def test_monitor_band_falls_back_to_the_plant_category(db: IrrigationRepository) -> None:
+    """Issue #143: an unknown species is judged against its category's band, however the category is cased."""
+    cid = db.add_cluster("Monitor Category")
+    pid = db.add_plant(cluster_id=cid, species="Unknown planticus", category="Tropical")
+    sid = db.add_sensor(
+        cluster_id=cid,
+        tuya_device_id="fake_tuya_sensor_mon0002",
+        name="Category Probe",
+        sensor_type="tuya.tr301z",
+        config={},
+        plant_id=pid,
+    )
+    db.add_sensor_reading(sensor_id=sid, timestamp=FROZEN_TS - 600, soil_moisture=55.0)
+    svc = IrrigationService(db, None, SyncService(db, None, None), NO_WEATHER, plant_database())
+    (row,) = svc.monitor_cluster(cid)["sensors"]
+    assert (row["target_min"], row["target_max"]) == (50.0, 65.0)
+
+
 class _FakeScheduler:
     running = True
 

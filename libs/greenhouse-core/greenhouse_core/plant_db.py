@@ -3,12 +3,15 @@
 import copy
 import functools
 import json
+import logging
 import os
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 from greenhouse_core.constants import PLANT_CARE_FALLBACK
+
+logger = logging.getLogger(__name__)
 
 # One plant-database entry (species, category or mapping row) as decoded from JSON.
 CareData = dict[str, Any]
@@ -52,6 +55,7 @@ class PlantDatabase:
             dict with care requirements or None if not found
         """
         table: dict[str, CareData] = self._data["species"]
+        species = species.strip()
         # Exact match
         if species in table:
             return table[species]
@@ -79,6 +83,9 @@ class PlantDatabase:
     def lookup_category(self, category: str) -> CareData | None:
         """Look up general care requirements for a plant category.
 
+        Category keys are lower-case; the name is trimmed and lower-cased first,
+        so a plant stored as ``"Tropical"`` still resolves.
+
         Args:
             category: Category name (e.g., "tropical", "succulent")
 
@@ -86,7 +93,7 @@ class PlantDatabase:
             dict with care requirements or None if not found
         """
         categories: dict[str, CareData] = self._data["categories"]
-        return categories.get(category)
+        return categories.get(_category_key(category))
 
     def get_care_data(self, species: str | None = None, category: str | None = None) -> CareData:
         """Resolve plant care data with three-layer precedence.
@@ -112,8 +119,7 @@ class PlantDatabase:
             category name, when known) and ``_category_defaults`` (the
             category's timing override block, or ``{}``).
         """
-        species_data = self.lookup_species(species) if species else None
-        resolved_category = (species_data or {}).get("category") or category
+        species_data, resolved_category = self._resolve(species, category)
 
         # Deep copy: callers own the returned dict, including its ``sources`` list.
         merged: CareData = copy.deepcopy(PLANT_CARE_FALLBACK)
@@ -138,6 +144,16 @@ class PlantDatabase:
 
         return merged
 
+    def _resolve(self, species: str | None, category: str | None) -> tuple[CareData | None, str | None]:
+        """The matched species entry and the normalised category; a miss is logged, never silent."""
+        species_data = self.lookup_species(species) if species else None
+        resolved_category = _category_key((species_data or {}).get("category") or category or "") or None
+        if species and species_data is None:
+            logger.debug("Plant DB: species %r not found", species)
+        if resolved_category and resolved_category not in self._data["categories"]:
+            logger.debug("Plant DB: category %r not found", resolved_category)
+        return species_data, resolved_category
+
     def get_water_needs_info(self, water_needs: str) -> CareData:
         """Get detailed info for a water_needs level."""
         mapping: dict[str, CareData] = self._data["water_needs_mapping"]
@@ -155,6 +171,11 @@ class PlantDatabase:
         """Get database metadata (version, sources, etc.)."""
         metadata: CareData = self._data["_metadata"]
         return metadata
+
+
+def _category_key(category: str) -> str:
+    """Normalise a category name to the database's lower-case keys."""
+    return category.strip().lower()
 
 
 # Convenience singleton: built on first use, dropped by ``reset_plant_database``.

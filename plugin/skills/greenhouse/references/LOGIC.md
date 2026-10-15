@@ -212,7 +212,7 @@ There is no per-evaluation anomaly scan: sensor drift / staleness are judged by 
 ### Cluster without irrigator
 
 1. Read the latest persisted sensor snapshot (`ensure_fresh_and_read`; SQLite, force-syncing only a stale sensor). The same path backs `GET clusters/{id}/monitor` (API/MCP/CLI) and the web monitor panel: both 404 on an unknown cluster and **store** the readings a force-sync fetched, so repeated calls do not re-hit the Cloud for a sensor that is now fresh.
-2. Clean each sensor's readings over `SNAPSHOT_LOOKBACK_HOURS` (24h, enough samples for the spike filter), take the newest soil value inside the last 2h (`MONITOR_LOOKBACK_HOURS`) and classify it against the linked plant's target band: `very_dry` (< min − 15), `dry` (< min), `wet` (> max + 10), `ok`, or `no_data`. A lone glitch is filtered out instead of reading `very_dry`.
+2. Clean each sensor's readings over `SNAPSHOT_LOOKBACK_HOURS` (24h, enough samples for the spike filter), take the newest soil value inside the last 2h (`MONITOR_LOOKBACK_HOURS`) and classify it against the linked plant's target band (resolved from its species, then its category): `very_dry` (< min − 15), `dry` (< min), `wet` (> max + 10), `ok`, or `no_data`. A lone glitch is filtered out instead of reading `very_dry`.
 3. List the `dry` / `very_dry` sensors in `needs_water` (the CLI's `monitor` exits 2 when it is non-empty; `check --all` folds it into `has_alerts`).
 
 ### Soil-moisture target parsing

@@ -111,3 +111,32 @@ class TestPlantDatabase:
         """Database metadata exists and has version."""
         meta = self.db.get_metadata()
         assert "version" in meta
+
+    @pytest.mark.parametrize("category", ["Tropical", " TROPICAL ", "tropical"])
+    def test_lookup_category_ignores_case_and_whitespace(self, category: str) -> None:
+        """A capitalised or padded category still resolves (issue #143)."""
+        assert self.db.lookup_category(category) == self.db.lookup_category("tropical")
+
+    def test_capitalised_category_does_not_fall_back_to_default_band(self) -> None:
+        """Unknown species + ``"Tropical"`` gets the tropical band, not the 45-65 default."""
+        data = self.db.get_care_data(species="Some-Unknown-Species", category="Tropical")
+        assert data["category"] == "tropical"
+        assert data["soil_moisture_target"] == self.db.get_care_data(category="tropical")["soil_moisture_target"]
+        assert data["soil_moisture_target"] != "45-65"
+        assert "preferred_water_hours_local" in data
+
+    @pytest.mark.parametrize("name", ["Ficus benjamina", "Ficus", "weeping fig", " Ficus benjamina "])
+    def test_ficus_resolves_by_name_and_alias(self, name: str) -> None:
+        """Ficus benjamina is in the DB with its own band and inherits the tropical timing."""
+        data = self.db.get_care_data(species=name)
+        assert data["common_name"] == "Weeping Fig"
+        assert data["soil_moisture_target"] == "25-40"
+        assert data["category"] == "tropical"
+        assert data["_category_defaults"]["preferred_water_hours_local"] == [7, 10]
+
+    def test_unresolved_species_and_category_are_logged(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A fallback to the built-in band is not silent: the misses are logged."""
+        with caplog.at_level("DEBUG", logger="greenhouse_core.plant_db"):
+            self.db.get_care_data(species="Figus", category="Tropicale")
+        assert "species 'Figus' not found" in caplog.text
+        assert "category 'tropicale' not found" in caplog.text
