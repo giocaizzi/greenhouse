@@ -17,18 +17,22 @@ def _parse_json_config(v: object) -> object:
     return None if v is None else parse_device_config(v)
 
 
-# What a stored device (irrigator or sensor) ``local_key`` reads as in every response — the same
-# dots the web edit form shows. The key is a root-level local-protocol
-# credential: it is accepted on writes but never echoed back. Sending this
-# value back in an update keeps the stored key (see services.inventory).
+# What a stored device (irrigator or sensor) ``local_key`` and ``device_ip`` read as in every
+# response — the same dots the web edit form shows. The key is a root-level local-protocol
+# credential and the IP locates the device on the LAN: both are accepted on writes but never
+# echoed back. Sending this value back in an update keeps the stored value (see services.inventory).
 LOCAL_KEY_MASK = "••••••••"
+MASKED_CONFIG_FIELDS = ("local_key", "device_ip")
 
 
-def mask_local_key(config: object) -> object:
-    """Return ``config`` with a non-empty ``local_key`` replaced by ``LOCAL_KEY_MASK`` (copy, never in place)."""
-    if isinstance(config, dict) and config.get("local_key"):
-        return {**config, "local_key": LOCAL_KEY_MASK}
-    return config
+def mask_device_secrets(config: object) -> object:
+    """Return ``config`` with each non-empty ``MASKED_CONFIG_FIELDS`` value replaced by ``LOCAL_KEY_MASK``.
+
+    Returns a copy, never edits in place.
+    """
+    if not isinstance(config, dict):
+        return config
+    return {k: LOCAL_KEY_MASK if k in MASKED_CONFIG_FIELDS and v else v for k, v in config.items()}
 
 
 # --- Cluster ---
@@ -184,8 +188,8 @@ class IrrigatorResponse(IrrigatorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: object) -> object:
-        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
-        return mask_local_key(_parse_json_config(v))
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key and IP."""
+        return mask_device_secrets(_parse_json_config(v))
 
 
 class IrrigatorListResponse(BaseModel):
@@ -261,8 +265,8 @@ class SensorResponse(SensorBase):
     @field_validator("config", mode="before")
     @classmethod
     def parse_config(cls, v: object) -> object:
-        """Decode the stored device config (JSON text or dict) leniently and mask its local key."""
-        return mask_local_key(_parse_json_config(v))
+        """Decode the stored device config (JSON text or dict) leniently and mask its local key and IP."""
+        return mask_device_secrets(_parse_json_config(v))
 
 
 class SensorListResponse(BaseModel):

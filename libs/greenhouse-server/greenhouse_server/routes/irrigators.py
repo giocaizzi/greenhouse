@@ -31,7 +31,7 @@ from greenhouse_server.services.inventory import (
     IrrigatorExistsError,
     UnknownDeviceTypeError,
     create_irrigator,
-    keep_masked_local_key,
+    keep_masked_device_secrets,
     require_known_device_type,
 )
 from greenhouse_server.services.manual_control import (
@@ -178,7 +178,7 @@ def update_irrigator(
             raise HTTPException(status_code=422, detail=str(exc)) from None
     fields = request.model_dump(exclude_unset=True)
     if fields.get("config"):
-        fields["config"] = keep_masked_local_key(fields["config"], irrigator.config)
+        fields["config"] = keep_masked_device_secrets(fields["config"], irrigator.config)
     updated = repo.update_irrigator(irrigator.id, **fields)
     repo.commit()
     return updated

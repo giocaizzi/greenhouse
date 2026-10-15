@@ -288,7 +288,7 @@ class TestListAllIrrigatorsTopLevel:
 
 
 class TestLocalKeyMasking:
-    """B-11: the API never returns ``local_key`` in plain text; writes still accept it."""
+    """B-11: the API never returns ``local_key`` or ``device_ip`` in plain text; writes still accept them."""
 
     SECRET = FAKE_LOCAL_KEY
     MASK = "••••••••"
@@ -317,10 +317,10 @@ class TestLocalKeyMasking:
         finally:
             session.close()
 
-    def test_every_irrigator_response_masks_the_local_key(self, client: TestClient) -> None:
-        """Every irrigator response masks the local key."""
+    def test_every_irrigator_response_masks_the_local_key_and_ip(self, client: TestClient) -> None:
+        """Every irrigator response masks the local key and the device IP."""
         created = self._seed(client)
-        expected = {"device_ip": "192.0.2.10", "local_key": self.MASK}
+        expected = {"device_ip": self.MASK, "local_key": self.MASK}
         assert created.json()["config"] == expected
         assert client.get("/api/v1/clusters/1/irrigator").json()["config"] == expected
         assert client.get("/api/v1/irrigators").json()["irrigators"][0]["config"] == expected
@@ -328,7 +328,17 @@ class TestLocalKeyMasking:
         updated = client.put("/api/v1/clusters/1/irrigator", json={"name": "Renamed"})
         assert updated.json()["config"] == expected
         assert self.SECRET not in client.get("/api/v1/clusters/1/irrigator").text
-        assert self._stored_config(client)["local_key"] == self.SECRET
+        assert "192.0.2.10" not in client.get("/api/v1/clusters/1/irrigator").text
+        assert self._stored_config(client) == {"device_ip": "192.0.2.10", "local_key": self.SECRET}
+
+    def test_sending_the_ip_mask_back_keeps_the_stored_ip(self, client: TestClient) -> None:
+        """Sending the IP mask back keeps the stored IP; a new IP replaces it."""
+        self._seed(client)
+        round_trip = client.get("/api/v1/clusters/1/irrigator").json()["config"]
+        assert client.put("/api/v1/clusters/1/irrigator", json={"config": round_trip}).status_code == HTTPStatus.OK
+        assert self._stored_config(client) == {"device_ip": "192.0.2.10", "local_key": self.SECRET}
+        client.put("/api/v1/clusters/1/irrigator", json={"config": {**round_trip, "device_ip": "192.0.2.12"}})
+        assert self._stored_config(client) == {"device_ip": "192.0.2.12", "local_key": self.SECRET}
 
     def test_sending_the_mask_back_keeps_the_stored_key(self, client: TestClient) -> None:
         """Sending the mask back keeps the stored key."""

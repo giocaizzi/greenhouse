@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from greenhouse_core.devices import IK10PW_PROFILE, TR301Z_PROFILE
 from greenhouse_core.models import parse_device_config
 from greenhouse_core.repository import DeviceIdExistsError, IrrigationRepository, IrrigatorExistsError
-from greenhouse_core.schemas import LOCAL_KEY_MASK
+from greenhouse_core.schemas import LOCAL_KEY_MASK, MASKED_CONFIG_FIELDS
 
 if TYPE_CHECKING:
     from greenhouse_core.devices import DeviceRegistry
@@ -38,7 +38,7 @@ __all__ = [
     "create_irrigator",
     "create_sensor",
     "ensure_plant_in_cluster",
-    "keep_masked_local_key",
+    "keep_masked_device_secrets",
     "known_device_types",
     "require_known_device_type",
 ]
@@ -88,22 +88,24 @@ def require_known_device_type(
         raise UnknownDeviceTypeError(kind, value, known)
 
 
-def keep_masked_local_key(config: dict[str, Any], stored_config: object) -> dict[str, Any]:
-    """Resolve a ``local_key`` that arrives as the response mask back to the stored key.
+def keep_masked_device_secrets(config: dict[str, Any], stored_config: object) -> dict[str, Any]:
+    """Resolve a ``local_key`` / ``device_ip`` that arrives as the response mask back to the stored value.
 
-    Responses show the key as ``LOCAL_KEY_MASK``, so a client that edits the
+    Responses show both as ``LOCAL_KEY_MASK``, so a client that edits the
     config it read (TUI JSON form, MCP agent, script) sends the mask back.
-    That means "unchanged": the stored key is kept (dropped when none is
-    stored). Any other value — a new key, or ``""`` — is taken as given.
+    That means "unchanged": the stored value is kept (dropped when none is
+    stored). Any other value — a new one, or ``""`` — is taken as given.
     """
-    if config.get("local_key") != LOCAL_KEY_MASK:
+    masked = [field for field in MASKED_CONFIG_FIELDS if config.get(field) == LOCAL_KEY_MASK]
+    if not masked:
         return config
     resolved = dict(config)
-    stored_key = parse_device_config(stored_config).get("local_key") if stored_config else None
-    if stored_key:
-        resolved["local_key"] = stored_key
-    else:
-        resolved.pop("local_key")
+    stored = parse_device_config(stored_config) if stored_config else {}
+    for field in masked:
+        if stored.get(field):
+            resolved[field] = stored[field]
+        else:
+            resolved.pop(field)
     return resolved
 
 
@@ -151,7 +153,7 @@ def create_irrigator(
                 tuya_device_id=device.tuya_device_id,
                 name=device.name,
                 irrigator_type=device.model,
-                config=keep_masked_local_key(device.config, None),
+                config=keep_masked_device_secrets(device.config, None),
             )
     except IrrigatorExistsError:
         repo.rollback()
@@ -201,6 +203,6 @@ def create_sensor(
             tuya_device_id=device.tuya_device_id,
             name=device.name,
             sensor_type=device.model,
-            config=keep_masked_local_key(device.config, None),
+            config=keep_masked_device_secrets(device.config, None),
             plant_id=plant_id,
         )

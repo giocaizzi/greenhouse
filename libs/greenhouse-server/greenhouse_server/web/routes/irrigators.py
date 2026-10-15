@@ -208,7 +208,7 @@ def update_irrigator(
     # masked and empty, so most saves arrive blank).
     config = _connection_config(parse_device_config(irrigator.config), form.device_ip, form.local_key)
     # The form shows the mask as its placeholder; a pasted mask means "keep", as on the API.
-    config = inventory.keep_masked_local_key(config, irrigator.config)
+    config = inventory.keep_masked_device_secrets(config, irrigator.config)
     repo.update_irrigator(
         irrigator.id,
         name=form.name,
