@@ -4,6 +4,7 @@ import time
 from collections.abc import Iterator
 
 import pytest
+import time_machine
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -198,3 +199,57 @@ class TestSensorDrift:
         assert len(drift_alerts) == 1
         scans = 2  # scan() ran twice on the same spike above
         assert drift_alerts[0].occurrence_count >= scans
+
+    def _seed_tail(self, repo: IrrigationRepository, sensor_id: int, values: tuple[float, ...]) -> None:
+        """Append ``values`` (oldest first) as the newest readings, one second apart, ending now."""
+        now = int(time.time())
+        for i, moisture in enumerate(values):
+            repo.add_sensor_reading(sensor_id, timestamp=now - len(values) + 1 + i, soil_moisture=moisture)
+        repo.session.commit()
+
+    def test_watering_step_that_holds_is_not_drift(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """#144: 1 % for days, then a hand watering to ~40 % that holds → no sensor_drift."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_baseline(repo, sensor_id, count=47, moisture=1.0)
+        self._seed_tail(repo, sensor_id, (40.0, 40.0, 39.0))
+
+        assert [a for a in SensorAnomalyService(repo).scan() if a.code == "sensor_drift"] == []
+
+    def test_open_drift_resolves_once_the_step_holds(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """The first post-watering reading is flagged; once the new level holds the alert resolves."""
+        cluster_id, sensor_id = cluster_and_sensor
+        self._seed_baseline(repo, sensor_id, count=49, moisture=1.0, interval_s=600)
+        self._seed_tail(repo, sensor_id, (40.0,))
+        svc = SensorAnomalyService(repo)
+        (alert,) = [a for a in svc.scan() if a.code == "sensor_drift"]
+        repo.session.commit()
+
+        with time_machine.travel(time.time() + 60, tick=False):
+            self._seed_tail(repo, sensor_id, (40.0, 39.0))
+            assert [a for a in svc.scan() if a.code == "sensor_drift"] == []
+        repo.session.commit()
+
+        (row,) = [a for a in repo.list_alerts(cluster_id=cluster_id) if a.code == "sensor_drift"]
+        assert (row.id, row.status) == (alert.id, "resolved")
+
+    def test_falling_step_is_still_drift(self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]) -> None:
+        """Only a rising step reads as a watering: a sudden drop that holds stays sensor_drift."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_baseline(repo, sensor_id, count=47, moisture=50.0)
+        self._seed_tail(repo, sensor_id, (5.0, 5.0, 5.0))
+
+        assert [a.code for a in SensorAnomalyService(repo).scan()] == ["sensor_drift"]
+
+    def test_two_high_readings_are_not_yet_a_step(
+        self, repo: IrrigationRepository, cluster_and_sensor: tuple[int, int]
+    ) -> None:
+        """Fewer than ANOMALY_STEP_HOLD_READINGS high values are still judged as a spike."""
+        _cluster_id, sensor_id = cluster_and_sensor
+        self._seed_baseline(repo, sensor_id, count=48, moisture=50.0)
+        self._seed_tail(repo, sensor_id, (95.0, 95.0))
+
+        assert [a.code for a in SensorAnomalyService(repo).scan()] == ["sensor_drift"]
