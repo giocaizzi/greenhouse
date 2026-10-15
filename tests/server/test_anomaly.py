@@ -303,8 +303,8 @@ class TestSensorFlatline:
 
         assert (alert.code, alert.severity, alert.cluster_id) == ("sensor_flatline", "warning", cluster_id)
         assert alert.message == (
-            f"Test Sensor: soil moisture flat at {level:.1f}% for 48 h while readings keep arriving "
-            "(probe out of the soil, in water, or faulty?)"
+            f"Anomaly Test Cluster · Test Sensor: soil moisture flat at {level:.1f}% for 48 h "
+            "while readings keep arriving (probe out of the soil, in water, or faulty?)"
         )
 
     def test_saturated_within_one_point_still_flat(

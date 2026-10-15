@@ -168,7 +168,7 @@
   {
    "detail": "confidence=90%",
    "duration_minutes": 3,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Golden Cluster",
    "kind": "irrigation",
    "triggered_by": "auto"
   }

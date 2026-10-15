@@ -25,6 +25,7 @@ from greenhouse_core.logic.timing import active_quiet_window
 from greenhouse_core.models import ENTITY_SENSOR, SOURCE_SENSOR
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_server.services.alerts import clear_alert, raise_alert
+from greenhouse_server.services.notify import sensor_label
 
 if TYPE_CHECKING:
     from greenhouse_server.services.notify import NtfyClient
@@ -77,16 +78,17 @@ def _dry_long_enough(repo: IrrigationRepository, row: MonitorSensorRow, now: int
 
 def _raise(repo: IrrigationRepository, cluster_id: int, row: MonitorSensorRow, notifier: "NtfyClient | None") -> None:
     """Open (or refresh) the sensor's ``needs_water`` alert."""
-    plant = row["plant_species"] or "no plant"
+    sensor = repo.get_sensor(row["sensor_id"])
+    label = sensor_label(sensor) if sensor else row["sensor_name"]
     raise_alert(
         repo,
         notifier=notifier,
         source=SOURCE_SENSOR,
         code=NEEDS_WATER_CODE,
         severity="critical" if row["status"] == "very_dry" else "warning",
-        title=f"Needs water · {row['sensor_name']}",
+        title=f"Needs water · {label}",
         message=(
-            f"{row['sensor_name']} ({plant}): soil {row['soil_moisture']:.0f}%, below its "
+            f"{label}: soil {row['soil_moisture']:.0f}%, below its "
             f"{row['target_min']:.0f}-{row['target_max']:.0f}% band for over {NEEDS_WATER_PERSIST_HOURS} h. "
             "This cluster has no irrigator: water by hand."
         ),

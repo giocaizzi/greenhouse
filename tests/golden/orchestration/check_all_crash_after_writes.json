@@ -116,21 +116,21 @@
   {
    "detail": "confidence=80%",
    "duration_minutes": 2,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Alpha",
    "kind": "irrigation",
    "triggered_by": "auto"
   },
   {
    "detail": "confidence=80%",
    "duration_minutes": 2,
-   "irrigator_name": "Irrigator 2",
+   "irrigator_name": "Irrigator 2 · Bravo",
    "kind": "irrigation",
    "triggered_by": "auto"
   },
   {
    "detail": "confidence=80%",
    "duration_minutes": 2,
-   "irrigator_name": "Irrigator 3",
+   "irrigator_name": "Irrigator 3 · Charlie",
    "kind": "irrigation",
    "triggered_by": "auto"
   }

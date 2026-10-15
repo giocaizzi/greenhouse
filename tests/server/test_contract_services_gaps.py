@@ -386,7 +386,7 @@ def test_anomaly_skips_drift_with_too_few_soil_values_but_still_checks_staleness
     repo.session.commit()
     alerts = SensorAnomalyService(repo).scan()
     assert [(a.code, a.message) for a in alerts] == [
-        ("sensor_stale", "Gap Sensor 0: no reading for 240 min (expected every 10 min)")
+        ("sensor_stale", "Gapus plantus (Gap Cluster) · Gap Sensor 0: no reading for 240 min (expected every 10 min)")
     ]
     assert repo.session.query(Alert).count() == 1
 

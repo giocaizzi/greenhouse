@@ -6,7 +6,7 @@
    "dedup_key": "health:irrigator:1:battery_critical",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' battery is critical (15%). Replace immediately.",
+   "message": "'Pump One · Health Cluster' battery is critical (15%). Replace immediately.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "battery_critical",
@@ -21,7 +21,7 @@
    "severity": "critical",
    "source": "health",
    "status": "open",
-   "title": "Battery Critical · Pump One"
+   "title": "Battery Critical · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -29,7 +29,7 @@
    "dedup_key": "health:irrigator:1:device_offline",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' is unreachable. Actuation is blocked until the device comes back online.",
+   "message": "'Pump One · Health Cluster' is unreachable. Actuation is blocked until the device comes back online.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "device_offline",
@@ -44,7 +44,7 @@
    "severity": "warning",
    "source": "health",
    "status": "open",
-   "title": "Device Offline · Pump One"
+   "title": "Device Offline · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -52,7 +52,7 @@
    "dedup_key": "health:irrigator:1:low_battery",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' battery is low (15%). Replace soon to keep readings flowing.",
+   "message": "'Pump One · Health Cluster' battery is low (15%). Replace soon to keep readings flowing.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "low_battery",
@@ -67,7 +67,7 @@
    "severity": "warning",
    "source": "health",
    "status": "open",
-   "title": "Low Battery · Pump One"
+   "title": "Low Battery · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -75,7 +75,7 @@
    "dedup_key": "health:irrigator:1:no_water",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' reported water shortage. Pump actuation will be blocked until refilled.",
+   "message": "'Pump One · Health Cluster' reported water shortage. Pump actuation will be blocked until refilled.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "no_water",
@@ -90,7 +90,7 @@
    "severity": "critical",
    "source": "health",
    "status": "open",
-   "title": "No Water · Pump One"
+   "title": "No Water · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -98,7 +98,7 @@
    "dedup_key": "health:irrigator:1:rain_detected",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' reports rain. Skipping scheduled irrigation.",
+   "message": "'Pump One · Health Cluster' reports rain. Skipping scheduled irrigation.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "rain_detected",
@@ -113,7 +113,7 @@
    "severity": "info",
    "source": "health",
    "status": "open",
-   "title": "Rain Detected · Pump One"
+   "title": "Rain Detected · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -121,7 +121,7 @@
    "dedup_key": "health:irrigator:1:sensor_fault",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' is reporting a sensor fault. Cross-check the probe placement.",
+   "message": "'Pump One · Health Cluster' is reporting a sensor fault. Cross-check the probe placement.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "sensor_fault",
@@ -136,7 +136,7 @@
    "severity": "warning",
    "source": "health",
    "status": "open",
-   "title": "Sensor Fault · Pump One"
+   "title": "Sensor Fault · Pump One · Health Cluster"
   },
   {
    "cluster_id": 1,
@@ -144,7 +144,7 @@
    "dedup_key": "health:irrigator:1:signal_loss",
    "entity_id": 1,
    "entity_type": "irrigator",
-   "message": "'Pump One' signal quality is degraded — readings may be intermittent.",
+   "message": "'Pump One · Health Cluster' signal quality is degraded — readings may be intermittent.",
    "occurrence_count": 1,
    "payload": {
     "alarm": "signal_loss",
@@ -159,39 +159,39 @@
    "severity": "warning",
    "source": "health",
    "status": "open",
-   "title": "Signal Loss · Pump One"
+   "title": "Signal Loss · Pump One · Health Cluster"
   }
  ],
  "notifications": [
   {
-   "message": "'Pump One' battery is critical (15%). Replace immediately.",
+   "message": "'Pump One · Health Cluster' battery is critical (15%). Replace immediately.",
    "severity": "critical",
-   "title": "Battery Critical · Pump One"
+   "title": "Battery Critical · Pump One · Health Cluster"
   },
   {
-   "message": "'Pump One' is unreachable. Actuation is blocked until the device comes back online.",
+   "message": "'Pump One · Health Cluster' is unreachable. Actuation is blocked until the device comes back online.",
    "severity": "warning",
-   "title": "Device Offline · Pump One"
+   "title": "Device Offline · Pump One · Health Cluster"
   },
   {
-   "message": "'Pump One' battery is low (15%). Replace soon to keep readings flowing.",
+   "message": "'Pump One · Health Cluster' battery is low (15%). Replace soon to keep readings flowing.",
    "severity": "warning",
-   "title": "Low Battery · Pump One"
+   "title": "Low Battery · Pump One · Health Cluster"
   },
   {
-   "message": "'Pump One' reported water shortage. Pump actuation will be blocked until refilled.",
+   "message": "'Pump One · Health Cluster' reported water shortage. Pump actuation will be blocked until refilled.",
    "severity": "critical",
-   "title": "No Water · Pump One"
+   "title": "No Water · Pump One · Health Cluster"
   },
   {
-   "message": "'Pump One' is reporting a sensor fault. Cross-check the probe placement.",
+   "message": "'Pump One · Health Cluster' is reporting a sensor fault. Cross-check the probe placement.",
    "severity": "warning",
-   "title": "Sensor Fault · Pump One"
+   "title": "Sensor Fault · Pump One · Health Cluster"
   },
   {
-   "message": "'Pump One' signal quality is degraded — readings may be intermittent.",
+   "message": "'Pump One · Health Cluster' signal quality is degraded — readings may be intermittent.",
    "severity": "warning",
-   "title": "Signal Loss · Pump One"
+   "title": "Signal Loss · Pump One · Health Cluster"
   }
  ]
 }

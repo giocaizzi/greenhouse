@@ -55,6 +55,7 @@ from greenhouse_server.services.health_alarms import (
     is_low_battery_state,
     unresolved_alarms_by_entity,
 )
+from greenhouse_server.services.notify import irrigator_label, sensor_label
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -154,7 +155,7 @@ class DeviceHealthMonitor:
         """Read the irrigator's health surface and reconcile alerts."""
         adapter = self._registry.get_irrigator(irrigator)
         state = adapter.read_health(irrigator)
-        self.record(ENTITY_IRRIGATOR, irrigator.id, state, label=irrigator.name)
+        self.record(ENTITY_IRRIGATOR, irrigator.id, state, label=irrigator_label(irrigator))
         return state
 
     def poll_sensor(self, sensor: Sensor) -> DeviceHealthState:
@@ -169,7 +170,7 @@ class DeviceHealthMonitor:
             return DeviceHealthState(observed_at=self._clock(), offline=False)
         latest = self._repo.get_latest_reading(sensor.id)
         state = adapter.read_health(sensor, latest)
-        self.record(ENTITY_SENSOR, sensor.id, state, label=sensor.name)
+        self.record(ENTITY_SENSOR, sensor.id, state, label=sensor_label(sensor))
         return state
 
     def poll_all(self) -> None:
@@ -337,7 +338,7 @@ class DeviceHealthMonitor:
         key = health_dedup_key(ENTITY_SENSOR, sensor.id, alarm)
         if not self._repo.get_open_alert_by_key(key):
             self._raise_health_alert(
-                _AlertSubject(ENTITY_SENSOR, sensor.id, sensor.name, cluster_id),
+                _AlertSubject(ENTITY_SENSOR, sensor.id, sensor_label(sensor), cluster_id),
                 alarm,
                 DeviceHealthState(observed_at=self._clock()),
             )
@@ -348,7 +349,6 @@ class DeviceHealthMonitor:
         """Upsert the alarm's alert and push it when this call opened it; False when the write failed."""
         entity_type, entity_id, label = subject.entity_type, subject.entity_id, subject.label
         key = health_dedup_key(entity_type, entity_id, alarm)
-        severity = alarm_severity(alarm)
         payload = {
             "entity_type": entity_type,
             "entity_id": entity_id,
@@ -367,7 +367,7 @@ class DeviceHealthMonitor:
                 code=alarm.value,
                 title=alarm_title(label, alarm),
                 message=alarm_message(alarm, label, state),
-                severity=severity,
+                severity=alarm_severity(alarm),
                 entity_type=entity_type,
                 entity_id=entity_id,
                 cluster_id=subject.cluster_id,

@@ -67,14 +67,16 @@ def stop_all_irrigators(
         A ``(stopped, errors)`` StopAllResult where errors contains one entry per
         irrigator that could not be confirmed stopped.
     """
-    stopped = 0
+    stopped_in: list[str] = []  # the cluster of each stopped irrigator, for the push
     errors: list[str] = []
     for irrigator in repo.list_all_irrigators():
         error = _stop_one(repo, registry, irrigator)
         if error is None:
-            stopped += 1
+            stopped_in.append(irrigator.cluster.name)
         else:
             errors.append(error)
+    stopped = len(stopped_in)
+    clusters = f" · {', '.join(stopped_in)}" if stopped_in else ""
 
     repo.commit()
     maybe_notify(
@@ -83,7 +85,7 @@ def stop_all_irrigators(
         "emergency",
         lambda n: n.notify_irrigation(
             triggered_by=TRIGGERED_BY_EMERGENCY,
-            irrigator_name=f"{stopped} irrigator(s)",
+            irrigator_name=f"{stopped} irrigator(s){clusters}",
             detail="kill switch" + (f", {len(errors)} error(s)" if errors else ""),
         ),
     )

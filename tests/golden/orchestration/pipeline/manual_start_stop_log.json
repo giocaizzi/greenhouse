@@ -236,27 +236,27 @@
   {
    "detail": "started",
    "duration_minutes": 3,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Golden Cluster",
    "kind": "irrigation",
    "triggered_by": "manual"
   },
   {
    "detail": "started",
    "duration_minutes": null,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Golden Cluster",
    "kind": "irrigation",
    "triggered_by": "manual"
   },
   {
    "detail": "stopped",
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Golden Cluster",
    "kind": "irrigation",
    "triggered_by": "manual"
   },
   {
    "detail": "logged (watered by hand)",
    "duration_minutes": 4,
-   "irrigator_name": "Irrigator 1",
+   "irrigator_name": "Irrigator 1 · Golden Cluster",
    "kind": "irrigation",
    "triggered_by": "manual"
   }

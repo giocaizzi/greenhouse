@@ -55,7 +55,7 @@
     "id": 1,
     "last_notified_at": 1776247200,
     "last_seen_at": 1776247200,
-    "message": "Irrigator 'Irrigator 1' failed to start: device timeout",
+    "message": "Irrigator 'Irrigator 1 · Golden Cluster' failed to start: device timeout",
     "occurrence_count": 1,
     "payload_json": null,
     "plant_id": null,
@@ -63,7 +63,7 @@
     "severity": "warning",
     "source": "irrigation",
     "status": "open",
-    "title": "Irrigation Actuation Failed"
+    "title": "Irrigation Actuation Failed · Golden Cluster"
    }
   ],
   "decision_logs": [
@@ -159,9 +159,9 @@
  "notifications": [
   {
    "kind": "alert",
-   "message": "Irrigator 'Irrigator 1' failed to start: device timeout",
+   "message": "Irrigator 'Irrigator 1 · Golden Cluster' failed to start: device timeout",
    "severity": "warning",
-   "title": "Irrigation Actuation Failed"
+   "title": "Irrigation Actuation Failed · Golden Cluster"
   }
  ],
  "sensor_adapter_calls": []

@@ -364,13 +364,10 @@ class PumpWatcherService:
         """Hand the NO_WATER state to the health monitor, which raises the alert."""
         # Route through the monitor so the inbox + cache + slow-path
         # observer all see the same NO_WATER transition. The monitor owns
-        # the unified ``health:irrigator:{id}:no_water`` dedup_key.
+        # the unified ``health:irrigator:{id}:no_water`` dedup_key. It infers the label
+        # ("<irrigator> · <cluster>") from the irrigator row.
         (self._monitor or self._lazy_monitor()).record(
-            ENTITY_IRRIGATOR,
-            trip.irrigator_id,
-            state,
-            label=trip.irrigator_name,
-            cluster_id=trip.cluster_id,
+            ENTITY_IRRIGATOR, trip.irrigator_id, state, cluster_id=trip.cluster_id
         )
 
     def _requeue_alert(self, trip: "_Trip") -> None:
