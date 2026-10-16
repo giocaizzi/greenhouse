@@ -38,12 +38,12 @@ if TYPE_CHECKING:
 
 
 COMMAND_GROUPS = 13
-LEAF_COMMANDS = 61
+LEAF_COMMANDS = 64
 STABLE_HELP_WIDTH = 100  # COLUMNS pinned by clean_env
 
 PROG = "greenhouse"
 HELP_GOLDEN_DIR = "cli/help"
-EXPECTED_HELP_PAGES = 74  # 13 groups + 61 leaf commands
+EXPECTED_HELP_PAGES = 77  # 13 groups + 64 leaf commands
 
 # Environment variables rich / typer / click read that would change rendered output.
 RENDER_ENV_VARS = (

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from greenhouse_core.constants import PLANT_CARE_FALLBACK
 
 if TYPE_CHECKING:  # annotation only: importing schemas at runtime would load Pydantic and SQLAlchemy
+    from greenhouse_core.models import Plant
     from greenhouse_core.schemas import SoilBandSource
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,28 @@ class PlantDatabase:
         """Get database metadata (version, sources, etc.)."""
         metadata: CareData = self._data["_metadata"]
         return metadata
+
+
+def plant_care_data(plant_db: PlantDatabase, plant: "Plant | None") -> CareData:
+    """The care data a plant is judged against: the plant database, under the plant's own soil target.
+
+    A plant's ``soil_moisture_target`` (issue #182) is the most specific layer,
+    ahead of species, category and the built-in fallback. ``None`` (a sensor with
+    no linked plant) gets the defaults.
+    """
+    if plant is None:
+        return plant_db.get_care_data()
+    care = plant_db.get_care_data(species=plant.species, category=plant.category)
+    if plant.soil_moisture_target:
+        care["soil_moisture_target"] = plant.soil_moisture_target
+    return care
+
+
+def plant_soil_band_source(plant_db: PlantDatabase, plant: "Plant") -> "SoilBandSource":
+    """Where :func:`plant_care_data`'s soil band comes from: ``plant`` for the plant's own target, else the DB layer."""
+    if plant.soil_moisture_target:
+        return "plant"
+    return plant_db.soil_band_source(species=plant.species, category=plant.category)
 
 
 def _category_key(category: str) -> str:

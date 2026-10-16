@@ -1,6 +1,5 @@
 """Sensor CRUD routes."""
 
-import time
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -32,8 +31,10 @@ from greenhouse_server.services.inventory import (
     create_sensor,
     ensure_plant_in_cluster,
     keep_masked_device_secrets,
+    remove_sensor,
     require_known_device_type,
 )
+from greenhouse_server.services.inventory import move_sensor as move_sensor_to_plant
 
 router = APIRouter(tags=["sensors"])
 
@@ -257,15 +258,9 @@ def move_sensor(
     """
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
     try:
-        ensure_plant_in_cluster(repo, cluster_id, request.plant_id)
+        move_sensor_to_plant(repo, cluster_id, sensor_id, request.plant_id, effective_at=request.effective_at)
     except PlantNotInClusterError as exc:
         raise HTTPException(status_code=404, detail=f"Plant {exc.plant_id} not found in cluster") from None
-    now = int(time.time())
-    when = request.effective_at if request.effective_at is not None else now
-    if when > now:
-        raise HTTPException(status_code=400, detail="effective_at: must not be in the future")
-    try:
-        repo.move_sensor(sensor_id, request.plant_id, when=when)
     except InvalidMoveTimeError as exc:
         raise HTTPException(status_code=400, detail=f"effective_at: {exc}") from None
     repo.commit()
@@ -318,13 +313,10 @@ def delete_sensor(
             different cluster; 409 on `purge=true` for a sensor that is not archived.
     """
     require_sensor_in_cluster(repo, cluster_id, sensor_id)
-    if purge:
-        try:
-            repo.purge_sensor(sensor_id)
-        except NotArchivedError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from None
-    else:
-        repo.archive_sensor(sensor_id)
+    try:
+        remove_sensor(repo, sensor_id, purge=purge)
+    except NotArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     repo.commit()
     return SuccessResponse(success=True)
 

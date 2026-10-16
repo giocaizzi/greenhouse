@@ -72,7 +72,7 @@ Advisory (non-blocking) device codes also exist: `device_battery_low`, `device_b
 
 `sensor_flatline` (WARNING) — appended last when a sensor with a current soil reading has an unresolved `sensor_flatline` anomaly alert (matched on the sensor, so it follows a moved probe). Advisory only: the reading still drives the soil rule and critical stress, so a 0 % flatline still waters; treat the call with suspicion and check the probe. Decisions that end before the soil rules (gates, `weather_skip`, `outside_window`) carry no `sensor_flatline` reason.
 
-The `sensor_dry` / `sensor_very_dry` messages name the driving sensor's band and where it came from: `species`, `category_defaults` or `category` (the plant-DB layer that set `soil_moisture_target`), `builtin_fallback` (neither the species nor the category is in the plant DB: the default 45–65 band, see `plant_care_defaulted`), or `cluster` (an unlinked sensor, judged against the cluster's widest band). Example: `soil moderately dry (driest=38% < 40.0%, species band)`.
+The `sensor_dry` / `sensor_very_dry` messages name the driving sensor's band and where it came from: `plant` (the plant's own `soil_moisture_target`), `species`, `category_defaults` or `category` (the plant-DB layer that set `soil_moisture_target`), `builtin_fallback` (neither the species nor the category is in the plant DB: the default 45–65 band, see `plant_care_defaulted`), or `cluster` (an unlinked sensor, judged against the cluster's widest band). Example: `soil moderately dry (driest=38% < 40.0%, species band)`.
 
 ### Decision persistence
 
@@ -217,7 +217,7 @@ There is no per-evaluation anomaly scan: sensor drift / staleness are judged by 
 ### Cluster without irrigator
 
 1. Read the latest persisted sensor snapshot (`ensure_fresh_and_read`; SQLite, force-syncing only a stale sensor). The same path backs `GET clusters/{id}/monitor` (API/MCP/CLI) and the web monitor panel: both 404 on an unknown cluster and **store** the readings a force-sync fetched, so repeated calls do not re-hit the Cloud for a sensor that is now fresh.
-2. Clean each sensor's readings over `SNAPSHOT_LOOKBACK_HOURS` (24h, enough samples for the spike filter), take the newest soil value inside the last 2h (`MONITOR_LOOKBACK_HOURS`) and classify it against the linked plant's target band (resolved from its species, then its category): `very_dry` (< min − 15), `dry` (< min), `wet` (> max + 10), `ok`, or `no_data`. A lone glitch is filtered out instead of reading `very_dry`.
+2. Clean each sensor's readings over `SNAPSHOT_LOOKBACK_HOURS` (24h, enough samples for the spike filter), take the newest soil value inside the last 2h (`MONITOR_LOOKBACK_HOURS`) and classify it against the linked plant's target band (its own `soil_moisture_target` when set, else resolved from its species, then its category): `very_dry` (< min − 15), `dry` (< min), `wet` (> max + 10), `ok`, or `no_data`. A lone glitch is filtered out instead of reading `very_dry`.
 3. List the `dry` / `very_dry` sensors in `needs_water` (the CLI's `monitor` exits 2 when it is non-empty; `check --all` folds it into `has_alerts`).
 4. On the scheduled / manual **check** (not on a plain `monitor` read), turn that call into the alert inbox: a sensor whose cleaned soil readings have all been `dry` / `very_dry` for `NEEDS_WATER_PERSIST_HOURS` (3h; the last reading before the window must be dry too) opens one `needs_water` alert per sensor — `warning`, `critical` when `very_dry` — pushed once through ntfy (alerts category, so `notify_alerts` off mutes it). It is not opened inside the cluster's quiet hours (the first check after them does it), and it resolves on the first check that reads the sensor `ok` / `wet` again (a hand watering lands with the next sensor sync). `no_data` leaves it as it is. A sensor that leaves the cluster, or a cluster that gets an irrigator, resolves it: irrigated clusters never get this reminder.
 
@@ -231,6 +231,12 @@ band is swapped (`"65-45"` → 45–65), and a bound outside the soil sensor's p
 makes the whole target fall back to the default band 45–65 — as does anything unparsable (a bare `"50"`, non-numeric
 text, a missing or non-string value). The plant chart's water-needs threshold band uses the same parser;
 only a target with no `-` at all (or none) shows the default band labelled `default`.
+
+A plant may carry its **own** `soil_moisture_target` (issue #182; `plants.soil_moisture_target`, null = none). It is
+the most specific layer, ahead of the species, the category and the built-in fallback, and applies everywhere the band
+is judged (`plant_db.plant_care_data`). It is validated on write by the same rules, but strictly
+(`normalize_moisture_target`): a target the parser would replace with 45–65 is refused with a 400 instead of stored,
+and an accepted one is stored ordered (`" 60 - 30 "` → `"30-60"`).
 
 ## Multi-Sensor Conflict Resolution
 
@@ -266,7 +272,7 @@ Raw Tuya readings are noisy — capacitive soil probes glitch to single-sample *
 The line is drawn by what the caller does with the data:
 
 - **Judgements read the cleaned view** — decision snapshot (`logic/sensors.py`), 48h trends (`logic/trends.py`), leak detection (`services/leak.py`), efficacy scoring (`services/efficacy.py`), plant health scores (`services/health.py`), next-irrigation forecast (`services/forecast.py`), learned profiles and issue heuristics (`learning/profiling.py`, `learning/issues.py`).
-- **Archive and display read raw** — charts, cluster history, data-quality reports, the maintenance battery/staleness checks, and the `sensor_drift` anomaly scan (which must see the drift cleaning would mask).
+- **Archive and display read raw** — charts (beyond `CHART_RAW_MAX_HOURS`, 14 days, as hourly means of the raw readings, `CHART_BUCKET_SECONDS`), cluster history, data-quality reports, the maintenance battery/staleness checks, and the `sensor_drift` anomaly scan (which must see the drift cleaning would mask).
 
 Two ordering helpers keep that switch cheap: `clean_readings_desc()` mirrors `get_recent_readings`' newest-first ordering, and `clean_readings_around()` cleans a before/after pair as one series before splitting it back, so a spike sitting at the event boundary is judged against neighbours on both sides.
 

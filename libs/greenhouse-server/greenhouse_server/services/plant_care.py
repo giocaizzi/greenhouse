@@ -4,14 +4,14 @@ A plant whose species and category both miss the plant database is judged agains
 the 45-65 % fallback band, a band its pot may never reach. That must not be silent:
 the plant responses carry the band and its source, and an info
 ``plant_care_defaulted`` alert stays open on the plant until a species or category
-resolves.
+resolves, or the plant gets its own ``soil_moisture_target`` (issue #182).
 """
 
 from typing import TypedDict
 
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.models import SOURCE_PLANT, Plant
-from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.plant_db import PlantDatabase, plant_care_data, plant_soil_band_source
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import SoilBandSource
 from greenhouse_server.services.alerts import clear_alert, raise_alert
@@ -29,9 +29,9 @@ class PlantCare(TypedDict):
 
 def plant_care(plant_db: PlantDatabase, plant: Plant) -> PlantCare:
     """Resolve the soil band the engine, monitor and health score judge ``plant`` against."""
-    care = plant_db.get_care_data(species=plant.species, category=plant.category)
+    care = plant_care_data(plant_db, plant)
     low, high = moisture_target_range(care)
-    source = plant_db.soil_band_source(species=plant.species, category=plant.category)
+    source = plant_soil_band_source(plant_db, plant)
     return {"soil_moisture_min": low, "soil_moisture_max": high, "soil_band_source": source}
 
 
@@ -49,7 +49,8 @@ def reconcile_care_alert(repo: IrrigationRepository, plant_db: PlantDatabase, pl
         message=(
             f"{plant.species}: neither the species nor the category ({plant.category or 'none'}) is in the "
             f"plant database, so it is judged against the default {care['soil_moisture_min']:.0f}-"
-            f"{care['soil_moisture_max']:.0f}% band. Fix the species or category, or add the species."
+            f"{care['soil_moisture_max']:.0f}% band. Fix the species or category, add the species, or set the "
+            "plant's own soil moisture target."
         ),
         cluster_id=plant.cluster_id,
         plant_id=plant.id,

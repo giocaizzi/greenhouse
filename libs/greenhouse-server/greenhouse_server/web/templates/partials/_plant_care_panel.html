@@ -20,6 +20,9 @@
           {{ plant.ideal_humidity_min or "?" }} – {{ plant.ideal_humidity_max or "?" }}%
         {% else %}—{% endif %}
       </dd>
+      {% if plant.soil_moisture_target %}
+        <dt>Soil target</dt><dd>{{ plant.soil_moisture_target }}% <small class="muted">(own, overrides the plant database)</small></dd>
+      {% endif %}
       {% if plant.notes %}
         <dt>Notes</dt><dd class="font-sans muted"><small>{{ plant.notes }}</small></dd>
       {% endif %}

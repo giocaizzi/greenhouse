@@ -13,7 +13,7 @@ import time
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
-from greenhouse_core.constants import SECONDS_PER_HOUR
+from greenhouse_core.constants import CHART_BUCKET_SECONDS, CHART_RAW_MAX_HOURS, SECONDS_PER_HOUR
 
 if TYPE_CHECKING:
     from greenhouse_core.models import Plant, Sensor, SensorAssignment
@@ -42,7 +42,7 @@ def plant_sensor_datasets(repo: IrrigationRepository, plant: Plant, hours: int, 
     for sensor_id, points in by_sensor.items():
         sensor_name = names.get(sensor_id, f"sensor#{sensor_id}")
         points.sort(key=lambda p: p[0])
-        datasets.append(_dataset(sensor_id, sensor_name, plant.id, plant.species, points))
+        datasets.append(_dataset(sensor_id, sensor_name, plant.id, plant.species, bucket_points(points, hours)))
     return datasets
 
 
@@ -61,8 +61,21 @@ def cluster_sensor_datasets(
         assignments = repo.list_sensor_assignments(sensor.id)
         for plant_id, segment in _segments(points, assignments):
             name = _plant_name(repo, plant_id, plant_names) if plant_id is not None else None
-            datasets.append(_dataset(sensor.id, sensor.name, plant_id, name, segment))
+            datasets.append(_dataset(sensor.id, sensor.name, plant_id, name, bucket_points(segment, hours)))
     return datasets
+
+
+def bucket_points(points: list[Point], hours: int) -> list[Point]:
+    """ASC ``points`` as-is up to ``CHART_RAW_MAX_HOURS``, else one mean per ``CHART_BUCKET_SECONDS`` bucket.
+
+    Display only: the means are of raw readings, like the raw points they replace.
+    """
+    if hours <= CHART_RAW_MAX_HOURS:
+        return points
+    buckets: dict[int, list[float]] = defaultdict(list)
+    for ts, value in points:
+        buckets[ts - ts % CHART_BUCKET_SECONDS].append(value)
+    return [(ts, round(sum(values) / len(values), 2)) for ts, values in buckets.items()]
 
 
 def _segments(points: list[Point], assignments: list[SensorAssignment]) -> list[tuple[int | None, list[Point]]]:

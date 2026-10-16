@@ -50,18 +50,33 @@ class DeviceEndpoints(Transport):
         """Add a sensor to a cluster; fields are sent as given (``POST /clusters/{id}/sensors``)."""
         return self._object("POST", f"/api/v1/clusters/{cluster_id}/sensors", json=kwargs)
 
-    def list_sensors(self, cluster_id: int) -> list[JSONObject]:
-        """List a cluster's sensors (``GET /clusters/{id}/sensors``)."""
-        return self._array("GET", f"/api/v1/clusters/{cluster_id}/sensors")
+    def list_sensors(self, cluster_id: int, *, include_archived: bool = False) -> list[JSONObject]:
+        """List a cluster's sensors, archived ones too on request (``GET /clusters/{id}/sensors``)."""
+        params = {"include_archived": "true"} if include_archived else {}
+        return self._array("GET", f"/api/v1/clusters/{cluster_id}/sensors", params=params)
 
     def update_sensor(self, cluster_id: int, sensor_id: int, **kwargs: object) -> JSONObject:
         """Patch a sensor; ``None`` fields are left unchanged (``PUT /clusters/{id}/sensors/{sensor_id}``)."""
         body = drop_none(kwargs)
         return self._object("PUT", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}", json=body)
 
-    def delete_sensor(self, cluster_id: int, sensor_id: int) -> JSONObject:
-        """Remove a sensor; its readings are kept (``DELETE /clusters/{id}/sensors/{sensor_id}``)."""
-        return self._object("DELETE", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}")
+    def delete_sensor(self, cluster_id: int, sensor_id: int, *, purge: bool = False) -> JSONObject:
+        """Archive a sensor, or purge an archived one (``DELETE /clusters/{id}/sensors/{sensor_id}``)."""
+        params = {"purge": "true"} if purge else {}
+        return self._object("DELETE", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}", params=params)
+
+    def restore_sensor(self, cluster_id: int, sensor_id: int) -> JSONObject:
+        """Bring an archived sensor back (``POST /clusters/{id}/sensors/{sensor_id}/restore``)."""
+        return self._object("POST", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/restore")
+
+    def move_sensor(
+        self, cluster_id: int, sensor_id: int, plant_id: int | None, effective_at: int | None = None
+    ) -> JSONObject:
+        """Move a sensor to a plant (``None`` detaches), dated ``effective_at`` (``POST .../sensors/{id}/move``)."""
+        body: dict[str, object] = {"plant_id": plant_id}
+        if effective_at is not None:
+            body["effective_at"] = effective_at
+        return self._object("POST", f"/api/v1/clusters/{cluster_id}/sensors/{sensor_id}/move", json=body)
 
     # ── Config ──
 

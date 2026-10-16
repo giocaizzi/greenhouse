@@ -1,0 +1,19 @@
+
+ Usage: greenhouse sensor move [OPTIONS] {id}
+
+ Record that a sensor was moved to another plant (or detached), and when.
+
+ Readings before --at stay with the old plant. Naming the plant the sensor is
+ already on re-dates its last move. Give exactly one of --plant-id / --detach.
+
+╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
+│ *    id      <int>  Sensor ID [required]                                                         │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
+│ *  --cluster                    <int>  Cluster the sensor belongs to [required]                  │
+│    --plant-id                   <int>  Plant the sensor now measures                             │
+│    --detach      --no-detach           Detach the sensor from its plant instead                  │
+│                                        [default: no-detach]                                      │
+│    --at                         <int>  When it was moved (Unix seconds, default now)             │
+│    --help                              Show this message and exit.                               │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

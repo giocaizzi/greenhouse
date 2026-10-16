@@ -128,3 +128,55 @@ def test_a_resolved_alert_stays_with_the_old_cluster(client: TestClient) -> None
     client.post(f"/api/v1/plants/{pid}/move", json={"target_cluster_id": target})
     (alert,) = _care_alerts(client, pid, status="resolved")
     assert alert["cluster_id"] == cid
+
+
+def test_an_own_soil_target_resolves_the_alert_and_wins(client: TestClient) -> None:
+    """A per-plant target (issue #182) is stored normalised, reported as ``plant`` and clears the alert."""
+    cid = _cluster(client)
+    pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": UNKNOWN_SPECIES}).json()["id"]
+    resp = client.put(f"/api/v1/clusters/{cid}/plants/{pid}", json={"soil_moisture_target": " 60 - 30 "})
+    assert resp.status_code == HTTPStatus.OK
+    assert resp.json()["soil_moisture_target"] == "30-60"
+    assert _band(resp.json()) == (30.0, 60.0, "plant")
+    assert _care_alerts(client, pid) == []
+    cleared = client.put(f"/api/v1/clusters/{cid}/plants/{pid}", json={"soil_moisture_target": None}).json()
+    assert _band(cleared) == (*DEFAULT_BAND, "builtin_fallback")
+    assert len(_care_alerts(client, pid)) == 1
+
+
+def test_an_own_soil_target_overrides_the_species(client: TestClient) -> None:
+    """The plant's own band beats a resolved species on create; no alert opens."""
+    cid = _cluster(client)
+    body = {"species": "Ficus benjamina", "soil_moisture_target": "35.5-55"}
+    resp = client.post(f"/api/v1/clusters/{cid}/plants", json=body)
+    assert resp.status_code == HTTPStatus.CREATED
+    assert _band(resp.json()) == (35.5, 55.0, "plant")
+    assert _care_alerts(client, resp.json()["id"]) == []
+
+
+def test_a_malformed_soil_target_is_refused(client: TestClient) -> None:
+    """A target the parser would replace with the default band is a 400, never stored."""
+    cid = _cluster(client)
+    body = {"species": UNKNOWN_SPECIES, "soil_moisture_target": "50"}
+    bad = client.post(f"/api/v1/clusters/{cid}/plants", json=body)
+    assert bad.status_code == HTTPStatus.BAD_REQUEST
+    assert "soil_moisture_target" in bad.json()["detail"]
+    pid = client.post(f"/api/v1/clusters/{cid}/plants", json={"species": UNKNOWN_SPECIES}).json()["id"]
+    for target in ("20-120", "high-low", ""):
+        resp = client.put(f"/api/v1/clusters/{cid}/plants/{pid}", json={"soil_moisture_target": target})
+        assert resp.status_code == HTTPStatus.BAD_REQUEST, target
+    assert client.get(f"/api/v1/plants/{pid}").json()["soil_moisture_target"] is None
+
+
+def test_web_form_sets_and_validates_the_soil_target(client: TestClient) -> None:
+    """The web form stores the normalised target (blank clears it) and refuses a malformed one with a 400."""
+    cid = _cluster(client)
+    client.post(f"/clusters/{cid}/plants", data={"species": UNKNOWN_SPECIES, "soil_moisture_target": "40-20"})
+    (plant,) = client.get(f"/api/v1/clusters/{cid}/plants").json()
+    assert plant["soil_moisture_target"] == "20-40"
+    assert _care_alerts(client, plant["id"]) == []
+    edit_url = f"/clusters/{cid}/plants/{plant['id']}/edit"
+    bad = client.post(edit_url, data={"species": UNKNOWN_SPECIES, "soil_moisture_target": "wet"})
+    assert bad.status_code == HTTPStatus.BAD_REQUEST
+    client.post(edit_url, data={"species": UNKNOWN_SPECIES}, follow_redirects=False)
+    assert client.get(f"/api/v1/plants/{plant['id']}").json()["soil_moisture_target"] is None

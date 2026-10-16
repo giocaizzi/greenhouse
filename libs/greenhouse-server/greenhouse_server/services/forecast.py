@@ -19,7 +19,7 @@ from greenhouse_core.learning import IrrigationLearner
 from greenhouse_core.logic.cleaning import clean_readings_desc
 from greenhouse_core.logic.plant_needs import moisture_target_range
 from greenhouse_core.logic.timing import environment_for
-from greenhouse_core.plant_db import PlantDatabase
+from greenhouse_core.plant_db import PlantDatabase, plant_care_data
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.schemas import ForecastResponse
 from greenhouse_server.services.weather import WeatherClient
@@ -140,10 +140,7 @@ class ForecastService:
             return None
 
         plant = plant_map.get(sensor.plant_id) if sensor.plant_id else None
-        care = self._plant_db.get_care_data(
-            species=plant.species if plant else None,
-            category=plant.category if plant else None,
-        )
+        care = plant_care_data(self._plant_db, plant)
         target_min, _ = moisture_target_range(care)
 
         profile = learner.get_plant_profile(sensor)

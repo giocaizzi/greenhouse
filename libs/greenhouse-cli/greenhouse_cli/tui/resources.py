@@ -40,6 +40,7 @@ def plant_fields(plant: dict[str, Any] | None = None) -> list[Field]:
         Field("ideal_temp_max", "Temp max °C", "float", p.get("ideal_temp_max")),
         Field("ideal_humidity_min", "Humidity min %", "float", p.get("ideal_humidity_min")),
         Field("ideal_humidity_max", "Humidity max %", "float", p.get("ideal_humidity_max")),
+        Field("soil_moisture_target", "Soil target %", value=p.get("soil_moisture_target"), placeholder="30-50"),
         Field("notes", "Notes", value=p.get("notes")),
     ]
 

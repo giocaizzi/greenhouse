@@ -16,7 +16,7 @@
      "id": 4,
      "last_notified_at": null,
      "last_seen_at": 1776247200,
-     "message": "Unknown fern: neither the species nor the category (none) is in the plant database, so it is judged against the default 45-65% band. Fix the species or category, or add the species.",
+     "message": "Unknown fern: neither the species nor the category (none) is in the plant database, so it is judged against the default 45-65% band. Fix the species or category, add the species, or set the plant's own soil moisture target.",
      "occurrence_count": 1,
      "payload_json": null,
      "plant_id": 4,
@@ -41,6 +41,7 @@
      "ideal_temp_min": null,
      "light_needs": null,
      "notes": null,
+     "soil_moisture_target": null,
      "species": "Unknown fern",
      "water_needs": null
     }

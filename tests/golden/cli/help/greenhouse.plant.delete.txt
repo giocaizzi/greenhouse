@@ -1,13 +1,16 @@
 
  Usage: greenhouse plant delete [OPTIONS] {plant_id}
 
- Delete a plant and its health / learning history.
+ Archive a plant (restore undoes it); --purge deletes an archived one and its health history for
+ good.
 
 ╭─ Arguments ──────────────────────────────────────────────────────────────────────────────────────╮
 │ *    plant_id      <int>  Plant ID [required]                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ *  --cluster          <int>  Cluster the plant belongs to [required]                             │
-│    --yes      -y             Skip confirmation prompt                                            │
-│    --help                    Show this message and exit.                                         │
+│ *  --cluster                    <int>  Cluster the plant belongs to [required]                   │
+│    --purge        --no-purge           Hard-delete an already archived row (irreversible)        │
+│                                        [default: no-purge]                                       │
+│    --yes      -y                       Skip confirmation prompt                                  │
+│    --help                              Show this message and exit.                               │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯

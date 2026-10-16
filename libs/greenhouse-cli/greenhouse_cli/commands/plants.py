@@ -5,7 +5,16 @@ from typing import Annotated
 
 import typer
 
-from greenhouse_cli.commands._helpers import ClusterFilterOpt, ClusterOpt, HelpOnBareGroup, YesOpt, call, output
+from greenhouse_cli.commands._helpers import (
+    ArchivedOpt,
+    ClusterFilterOpt,
+    ClusterOpt,
+    HelpOnBareGroup,
+    PurgeOpt,
+    YesOpt,
+    call,
+    output,
+)
 
 plant_app = typer.Typer(help="Manage plants", no_args_is_help=True, cls=HelpOnBareGroup)
 
@@ -13,6 +22,9 @@ plant_app = typer.Typer(help="Manage plants", no_args_is_help=True, cls=HelpOnBa
 LevelOpt = Annotated[str | None, typer.Option(help="low/medium/high")]
 TextOpt = Annotated[str | None, typer.Option()]
 NumberOpt = Annotated[float | None, typer.Option()]
+SoilTargetOpt = Annotated[
+    str | None, typer.Option(help='The plant\'s own soil band "min-max" %, e.g. 30-50 (overrides the plant DB)')
+]
 
 
 @plant_app.command("add")
@@ -28,6 +40,7 @@ def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer
     temp_max: NumberOpt = None,
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
+    soil_target: SoilTargetOpt = None,
     notes: TextOpt = None,
 ) -> None:
     """Add a plant to a cluster."""
@@ -43,6 +56,7 @@ def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer
             ideal_temp_max=temp_max,
             ideal_humidity_min=humidity_min,
             ideal_humidity_max=humidity_max,
+            soil_moisture_target=soil_target,
             notes=notes,
         ),
     )
@@ -53,14 +67,16 @@ def plant_add(  # noqa: PLR0913 — one parameter per CLI option/argument: Typer
 def plant_list(
     ctx: typer.Context,
     cluster: ClusterFilterOpt = None,
+    *,
+    archived: ArchivedOpt = False,
 ) -> None:
     """List plants."""
     if cluster is not None:
-        output(call(ctx, lambda c: c.list_plants(cluster)))
+        output(call(ctx, lambda c: c.list_plants(cluster, include_archived=archived)))
     else:
         clusters = call(ctx, lambda c: c.list_clusters())
         for cl in clusters:
-            plants = call(ctx, methodcaller("list_plants", cl["id"]))
+            plants = call(ctx, methodcaller("list_plants", cl["id"], include_archived=archived))
             if plants:
                 output({"cluster": cl["name"], "plants": plants})
 
@@ -103,6 +119,7 @@ def plant_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Ty
     temp_max: NumberOpt = None,
     humidity_min: NumberOpt = None,
     humidity_max: NumberOpt = None,
+    soil_target: SoilTargetOpt = None,
     notes: TextOpt = None,
 ) -> None:
     """Patch plant metadata. Only the supplied fields are sent."""
@@ -120,10 +137,22 @@ def plant_update(  # noqa: PLR0913 — one parameter per CLI option/argument: Ty
                 ideal_temp_max=temp_max,
                 ideal_humidity_min=humidity_min,
                 ideal_humidity_max=humidity_max,
+                soil_moisture_target=soil_target,
                 notes=notes,
             ),
         )
     )
+
+
+@plant_app.command("restore")
+def plant_restore(
+    ctx: typer.Context,
+    plant_id: Annotated[int, typer.Argument(help="Plant ID")],
+    *,
+    cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
+) -> None:
+    """Bring an archived plant back with its history; move its former sensors back with `sensor move`."""
+    output(call(ctx, lambda c: c.restore_plant(cluster, plant_id)))
 
 
 @plant_app.command("delete")
@@ -132,9 +161,11 @@ def plant_delete(
     *,
     plant_id: Annotated[int, typer.Argument(help="Plant ID")],
     cluster: Annotated[int, typer.Option(help="Cluster the plant belongs to")],
+    purge: PurgeOpt = False,
     yes: YesOpt = False,
 ) -> None:
-    """Delete a plant and its health / learning history."""
+    """Archive a plant (restore undoes it); --purge deletes an archived one and its health history for good."""
     if not yes:
-        typer.confirm(f"Delete plant {plant_id} from cluster {cluster}?", abort=True)
-    output(call(ctx, lambda c: c.delete_plant(cluster, plant_id)))
+        verb = "Permanently delete" if purge else "Archive"
+        typer.confirm(f"{verb} plant {plant_id} in cluster {cluster}?", abort=True)
+    output(call(ctx, lambda c: c.delete_plant(cluster, plant_id, purge=purge)))

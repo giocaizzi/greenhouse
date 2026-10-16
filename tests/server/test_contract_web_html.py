@@ -84,7 +84,7 @@ ALERT_OPEN, ALERT_ACKED, ALERT_RESOLVED = 1, 2, 3
 WINDOW = 1
 VACATION_UPCOMING, VACATION_PAST = 1, 2
 MONSTERA_SPIKE_INDEX = 5  # the reading index seeded as a Hampel spike
-WEB_ROUTE_COUNT = 85
+WEB_ROUTE_COUNT = 88
 
 
 # ── Seed ──────────────────────────────────────────────────────────────────────────────────────

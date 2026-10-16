@@ -45,12 +45,12 @@ if typing.TYPE_CHECKING:
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_OPENAPI_SHA256 = (
-    "696bb2f5c80fe29b18e669338f6d6354f9dbd5bcabc333c69c050e4f250baead"  # gitleaks:allow — content hash, not a secret
+    "5a99abbddf80137bf0564d4a0872f8c26aa37c0c0a2c6c9ae057d99be1d8c67e"  # gitleaks:allow — content hash, not a secret
 )
 # Headline counts of the pinned route table.
 API_OPERATION_COUNT = 87
 API_PATH_COUNT = 69
-WEB_ROUTE_COUNT = 85
+WEB_ROUTE_COUNT = 88
 
 
 def _package_version() -> str:
@@ -193,7 +193,7 @@ def test_route_table_matches_golden(contract_app: FastAPI) -> None:
 
 
 def test_route_table_counts(contract_app: FastAPI) -> None:
-    """Headline counts: 87 schema operations, 85 web routes."""
+    """Headline counts: 87 schema operations, 88 web routes."""
     rows = _route_rows(contract_app)
     api = [r for r in rows if r["kind"] == "APIRoute" and r["include_in_schema"]]
     hidden = [r for r in rows if r["kind"] == "APIRoute" and not r["include_in_schema"]]

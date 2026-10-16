@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
+from greenhouse_core.logic.plant_needs import normalize_moisture_target
 from greenhouse_core.models import Plant
 from greenhouse_core.repository import NotArchivedError, SameClusterMoveError
 from greenhouse_core.schemas import (
@@ -29,7 +30,8 @@ from greenhouse_server.deps import (
     require_plant_in_cluster,
 )
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
-from greenhouse_server.services.plant_care import clear_care_alert, reconcile_care_alert
+from greenhouse_server.services.inventory import remove_plant
+from greenhouse_server.services.plant_care import reconcile_care_alert
 
 router = APIRouter(tags=["plants"])
 
@@ -76,6 +78,16 @@ def list_all_plants(  # noqa: PLR0913 — one parameter per query filter: FastAP
     )
 
 
+def _soil_target(target: str | None) -> str | None:
+    """Validate a per-plant soil target (null clears it); a malformed one is a 400 naming the rule."""
+    if target is None:
+        return None
+    try:
+        return normalize_moisture_target(target)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
 def _reconciled_detail(repo: RepoDep, plant_db: PlantDbDep, plant: Plant) -> PlantDetailResponse:
     """Reconcile the plant's default-band alert (the caller commits) and build its detail response."""
     care = reconcile_care_alert(repo, plant_db, plant)
@@ -91,19 +103,24 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep, plant
     looks them up in the evidence-based plant database. The response names the
     soil band the plant is judged against and its source; when neither species
     nor category is in the plant database (``soil_band_source`` =
-    ``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened.
+    ``builtin_fallback``) an info ``plant_care_defaulted`` alert is opened. A
+    ``soil_moisture_target`` such as ``"30-50"`` gives the plant its own band,
+    ahead of the plant database (``soil_band_source`` = ``plant``); it is stored
+    as ``"low-high"``.
 
     Args:
         cluster_id: ID of the cluster the plant belongs to.
         request: Species and optional plant-care fields.
 
     Raises:
-        HTTPException: 404 if the cluster does not exist.
+        HTTPException: 404 if the cluster does not exist; 400 if
+            ``soil_moisture_target`` is not two bounds inside 0-100.
 
     Returns:
         The created plant including its ID, parent cluster and effective soil band.
     """
     require_cluster(repo, cluster_id)
+    soil_target = _soil_target(request.soil_moisture_target)
     plant_id = repo.add_plant(
         cluster_id=cluster_id,
         species=request.species,
@@ -114,6 +131,7 @@ def add_plant(cluster_id: int, request: CreatePlantRequest, repo: RepoDep, plant
         ideal_temp_max=request.ideal_temp_max,
         ideal_humidity_min=request.ideal_humidity_min,
         ideal_humidity_max=request.ideal_humidity_max,
+        soil_moisture_target=soil_target,
         notes=request.notes,
     )
     plants = repo.get_plants_in_cluster(cluster_id)
@@ -150,8 +168,11 @@ def update_plant(
     Only fields present in the request body are modified; omitted fields are
     left unchanged. An explicit `null` clears an optional field and is
     ignored for a required one. The plant must belong to the specified cluster.
-    A species or category that now resolves in the plant database resolves the
-    plant's ``plant_care_defaulted`` alert; one that no longer does opens it.
+    A species or category that now resolves in the plant database, or a
+    ``soil_moisture_target`` of the plant's own, resolves the plant's
+    ``plant_care_defaulted`` alert; a change that leaves the plant on the
+    built-in band opens it. ``soil_moisture_target: null`` returns the plant to
+    the plant database's band.
 
     Args:
         cluster_id: Cluster the plant belongs to.
@@ -163,10 +184,14 @@ def update_plant(
 
     Raises:
         HTTPException: 404 if the plant does not exist or belongs to a
-            different cluster.
+            different cluster; 400 if ``soil_moisture_target`` is not two
+            bounds inside 0-100.
     """
     plant = require_plant_in_cluster(repo, cluster_id, plant_id)
-    repo.update_plant(plant_id, **request.model_dump(exclude_unset=True))
+    fields = request.model_dump(exclude_unset=True)
+    if "soil_moisture_target" in fields:
+        fields["soil_moisture_target"] = _soil_target(fields["soil_moisture_target"])
+    repo.update_plant(plant_id, **fields)
     detail = _reconciled_detail(repo, plant_db, plant)
     repo.commit()
     return detail
@@ -205,14 +230,10 @@ def delete_plant(
             different cluster; 409 on `purge=true` for a plant that is not archived.
     """
     require_plant_in_cluster(repo, cluster_id, plant_id)
-    if purge:
-        try:
-            repo.purge_plant(plant_id)
-        except NotArchivedError as exc:
-            raise HTTPException(status_code=409, detail=str(exc)) from None
-    else:
-        repo.archive_plant(plant_id)
-    clear_care_alert(repo, plant_id)
+    try:
+        remove_plant(repo, plant_id, purge=purge)
+    except NotArchivedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     repo.commit()
     return SuccessResponse(success=True)
 

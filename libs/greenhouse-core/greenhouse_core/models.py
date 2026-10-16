@@ -154,6 +154,8 @@ class Plant(Base):
     # Soft delete (issue #149): set when archived; archived plants drop out of listings,
     # snapshots and decisions but keep their id, health history and attributed readings.
     archived_at: Mapped[int | None] = mapped_column(Integer)
+    # Per-plant "min-max" soil band (issue #182); used ahead of the plant database when set.
+    soil_moisture_target: Mapped[str | None] = mapped_column(String)
 
     cluster: Mapped["Cluster"] = relationship(back_populates="plants")
     sensors: Mapped[list["Sensor"]] = relationship(back_populates="plant")

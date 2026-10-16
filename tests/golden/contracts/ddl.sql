@@ -217,6 +217,7 @@ CREATE TABLE plants (
 	ideal_humidity_max DOUBLE,
 	notes VARCHAR,
 	archived_at INTEGER,
+	soil_moisture_target VARCHAR,
 	PRIMARY KEY (id),
 	FOREIGN KEY(cluster_id) REFERENCES clusters (id)
 )
