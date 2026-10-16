@@ -89,7 +89,7 @@ class SystemScreen(DataScreen):
         """Pause or resume the scheduler after confirmation: either way automatic irrigation changes."""
         if self.paused:
             self.confirm_then(
-                "Resume automatic irrigation? Clusters with auto-run enabled may water at the next check.",
+                "Resume automatic irrigation? Clusters that irrigate automatically may water at the next check.",
                 lambda c: c.scheduler_resume(),
                 "Scheduler resumed",
                 "Resume",

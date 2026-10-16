@@ -27,6 +27,8 @@ def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
     return [(k, str(v)) for k, v in sorted(prefs.items())] or [("preferences", "unavailable")]
 
 
+# Rows labelled for the user rather than by API field name.
+_ROW_LABELS = {"auto_run": "irrigate automatically"}
 _CAP_FIELDS = frozenset({"daily_cap_minutes", "max_events_per_day"})
 
 
@@ -47,7 +49,9 @@ def _builtin_default(key: str) -> Text:
 def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
     """Global-default rows in repository field order (bookkeeping hidden, unset = built-in default) or "unavailable"."""
     return [
-        (k, _builtin_default(k) if v is None else str(v)) for k, v in config.items() if k not in {"id", "last_updated"}
+        (_ROW_LABELS.get(k, k), _builtin_default(k) if v is None else str(v))
+        for k, v in config.items()
+        if k not in {"id", "last_updated"}
     ] or [("config", "unavailable")]
 
 

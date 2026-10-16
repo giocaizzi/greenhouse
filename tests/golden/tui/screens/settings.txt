@@ -2,14 +2,14 @@
  Signed in as test-admin on http://testserver   O: log out
 ╭──────────────────────────────────────────────────────────╮╭──────────────────────────────────────────────────────────╮
 │ Preferences  (p to edit)                                 ││ Global irrigation defaults  (g to edit)                  │
-│ default_cluster_id        None                           ││ mode                smart (default)                      │
-│ dry_run_global            False                          ││ duration_minutes    2 (default)                          │
-│ notify_alerts             True                           ││ interval_hours      12 (default)                         │
-│ notify_auto               True                           ││ auto_run            on (default)                         │
-│ notify_emergency          True                           ││ daily_cap_minutes   no cap (default)                     │
-│ notify_manual             True                           ││ max_events_per_day  no cap (default)                     │
-│ refresh_interval_seconds  30                             ││ quiet_start_hour    0                                    │
-│ scheduler_paused          False                          ││ quiet_end_hour      5                                    │
+│ default_cluster_id        None                           ││ mode                    smart (default)                  │
+│ dry_run_global            False                          ││ duration_minutes        2 (default)                      │
+│ notify_alerts             True                           ││ interval_hours          12 (default)                     │
+│ notify_auto               True                           ││ irrigate automatically  on (default)                     │
+│ notify_emergency          True                           ││ daily_cap_minutes       no cap (default)                 │
+│ notify_manual             True                           ││ max_events_per_day      no cap (default)                 │
+│ refresh_interval_seconds  30                             ││ quiet_start_hour        0                                │
+│ scheduler_paused          False                          ││ quiet_end_hour          5                                │
 │ theme                     auto                           │╰──────────────────────────────────────────────────────────╯
 │ timezone                  UTC                            │
 │ units                     metric                         │

@@ -97,13 +97,13 @@ def test_cluster_cards_show_inherited_effective_config(client: TestClient) -> No
         assert "<kbd>smart</kbd>" in html
         assert "every 12h" in html
         assert "7 min/run" in html
-        assert "auto&nbsp;off" in html
+        assert "auto-irrigate&nbsp;off" in html
         assert "None" not in html
         # duration and auto-run come from the global row, mode and interval from the built-ins
         assert [html.count("&nbsp;global</small>"), html.count("&nbsp;default</small>")] == [2, 2]
 
     detail = client.get("/clusters/1").text
-    assert '<span class="badge-muted">auto off</span>' in detail
+    assert '<span class="badge-muted">auto-irrigate off</span>' in detail
 
 
 def test_cluster_override_has_no_source_tag(client: TestClient) -> None:

@@ -94,6 +94,6 @@
     <span><kbd>{{ eff.mode.value }}</kbd>{{ source_tag(eff.mode) }}</span>
     <span>every {{ eff.interval_hours.value }}h{{ source_tag(eff.interval_hours) }}</span>
     <span>{{ eff.duration_minutes.value | format_minutes }}/run{{ source_tag(eff.duration_minutes) }}</span>
-    <span class="muted">auto&nbsp;{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</span>
+    <span class="muted">auto-irrigate&nbsp;{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</span>
   </div>
 </div>

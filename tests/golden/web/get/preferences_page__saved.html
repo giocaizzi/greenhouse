@@ -258,12 +258,13 @@
              value=""
              placeholder="built-in default: 12">
     </label>
-    <label for="g_auto_run">Auto-run
+    <label for="g_auto_run">Irrigate automatically
       <select id="g_auto_run" name="auto_run">
         <option value="">— built-in default (on) —</option>
         <option value="true">On</option>
         <option value="false">Off</option>
       </select>
+      <small class="muted">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
     </label>
     <label for="g_daily_cap_minutes">Daily cap (minutes)
       <input type="number" id="g_daily_cap_minutes" name="daily_cap_minutes" min="0" max="1440"

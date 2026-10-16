@@ -151,12 +151,13 @@
              value="{{ global_config.interval_hours if global_config.interval_hours is not none else '' }}"
              placeholder="built-in default: {{ builtin_config.interval_hours }}">
     </label>
-    <label for="g_auto_run">Auto-run
+    <label for="g_auto_run">Irrigate automatically
       <select id="g_auto_run" name="auto_run">
         <option value="">— built-in default ({{ builtin_config.auto_run | yesno("on", "off") }}) —</option>
         <option value="true"{% if global_config.auto_run is true %} selected{% endif %}>On</option>
         <option value="false"{% if global_config.auto_run is false %} selected{% endif %}>Off</option>
       </select>
+      <small class="muted">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
     </label>
     <label for="g_daily_cap_minutes">Daily cap (minutes)
       <input type="number" id="g_daily_cap_minutes" name="daily_cap_minutes" min="0" max="1440"

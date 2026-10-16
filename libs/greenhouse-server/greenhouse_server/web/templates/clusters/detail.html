@@ -47,7 +47,7 @@
         <span class="badge-muted">empty</span>
       {% endif %}
       <span class="dot"></span>
-      <span class="badge-{{ 'ok' if eff.auto_run.value else 'muted' }}">auto {{ eff.auto_run.value | yesno("on", "off") }}</span>{{ source_tag(eff.auto_run) }}
+      <span class="badge-{{ 'ok' if eff.auto_run.value else 'muted' }}">auto-irrigate {{ eff.auto_run.value | yesno("on", "off") }}</span>{{ source_tag(eff.auto_run) }}
     </div>
   </div>
   <div class="page-head__actions">
@@ -92,7 +92,7 @@
       <dt>Mode</dt><dd><kbd>{{ eff.mode.value }}</kbd>{{ source_tag(eff.mode) }}</dd>
       <dt>Duration</dt><dd>{{ eff.duration_minutes.value | format_minutes }}{{ source_tag(eff.duration_minutes) }}</dd>
       <dt>Interval</dt><dd>every {{ eff.interval_hours.value }}h{{ source_tag(eff.interval_hours) }}</dd>
-      <dt>Auto-run</dt><dd>{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</dd>
+      <dt>Irrigate automatically</dt><dd>{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</dd>
       <dt>Sensors</dt><dd>{{ sensor_count }}</dd>
       <dt>Irrigators</dt><dd>{{ irrigator_count }}</dd>
     </dl>
@@ -622,7 +622,7 @@
   {% endif %}
 </article>
 
-{# Config section — hierarchical view of mode/duration/interval/auto-run +
+{# Config section — hierarchical view of mode/duration/interval/auto_run +
    quiet-hours editor + watering windows. Inline so the user never leaves
    the cluster context to tune behaviour. #}
 {% if caps.can_actuate %}
@@ -635,10 +635,11 @@
     <form method="post" action="/clusters/{{ cluster.id }}/config" class="config-form">
       {% set fields = [
         {"name": "mode", "label": "Mode", "kind": "select",
-         "options": [("smart", "smart (sensor-driven)"), ("schedule", "schedule (time-based)"), ("manual", "manual (no auto-run)")]},
+         "options": [("smart", "smart (sensor-driven)"), ("schedule", "schedule (time-based)"), ("manual", "manual (never irrigates automatically)")]},
         {"name": "duration_minutes", "label": "Duration (min)", "kind": "number", "min": 1},
         {"name": "interval_hours", "label": "Interval (hours)", "kind": "number", "min": 1},
-        {"name": "auto_run", "label": "Auto-run", "kind": "tri_bool"},
+        {"name": "auto_run", "label": "Irrigate automatically", "kind": "tri_bool",
+         "hint": "Off: the hourly check still decides, but never starts the irrigator. Manual starts always work."},
         {"name": "quiet_start_hour", "label": "Quiet start (hour 0–23)", "kind": "number", "min": 0, "max": 23, "none_label": "off"},
         {"name": "quiet_end_hour", "label": "Quiet end (hour 0–23)", "kind": "number", "min": 0, "max": 23, "none_label": "off"},
       ] %}

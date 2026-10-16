@@ -1591,6 +1591,8 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
   font-weight: 500;
 }
 .config-field__name { color: var(--text); }
+/* One-line explanation under the control (e.g. what "Irrigate automatically" off means). */
+.config-field__hint { grid-column: 2; margin-top: calc(-1 * var(--sp-2)); }
 .config-field__source {
   font-size: var(--fs-xs);
   font-weight: 400;

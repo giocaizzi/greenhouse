@@ -171,7 +171,7 @@
       <span>3 sensors</span>
       
       <span class="dot"></span>
-      <span class="badge-ok">auto on</span>
+      <span class="badge-ok">auto-irrigate on</span>
     </div>
   </div>
   <div class="page-head__actions">
@@ -226,7 +226,7 @@
       <dt>Mode</dt><dd><kbd>smart</kbd></dd>
       <dt>Duration</dt><dd>3 min</dd>
       <dt>Interval</dt><dd>every 12h</dd>
-      <dt>Auto-run</dt><dd>on</dd>
+      <dt>Irrigate automatically</dt><dd>on</dd>
       <dt>Sensors</dt><dd>3</dd>
       <dt>Irrigators</dt><dd>1</dd>
     </dl>
@@ -1060,10 +1060,11 @@
       
         <option value="schedule">schedule (time-based)</option>
       
-        <option value="manual">manual (no auto-run)</option>
+        <option value="manual">manual (never irrigates automatically)</option>
       
     </select>
   
+
 </div>
       
         
@@ -1091,6 +1092,7 @@
            placeholder="inherit (3)"
            value="3">
   
+
 </div>
       
         
@@ -1118,6 +1120,7 @@
            placeholder="inherit (12)"
            value="12">
   
+
 </div>
       
         
@@ -1129,7 +1132,7 @@
 
 <div class="config-field" data-source="cluster" id="config-field-auto_run">
   <label for="cfg-auto_run" class="config-field__label">
-    <span class="config-field__name">Auto-run</span>
+    <span class="config-field__name">Irrigate automatically</span>
     
       <span class="badge-ok config-field__source" title="Overridden at the cluster level">override</span>
     
@@ -1145,6 +1148,7 @@
       <option value="false">Off</option>
     </select>
   
+<small class="muted config-field__hint">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
 </div>
       
         
@@ -1175,6 +1179,7 @@
            placeholder="inherit (0)"
            value="">
   
+
 </div>
       
         
@@ -1205,6 +1210,7 @@
            placeholder="inherit (5)"
            value="">
   
+
 </div>
       
       <p class="muted fs-sm" style="margin: var(--sp-2) 0 var(--sp-3);">

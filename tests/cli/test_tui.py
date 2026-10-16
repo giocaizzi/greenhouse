@@ -1870,7 +1870,7 @@ def test_global_config_rows_name_builtin_defaults() -> None:
     assert {k: str(v) for k, v in rows.items()} == {
         "mode": "smart (default)",
         "duration_minutes": "2 (default)",
-        "auto_run": "on (default)",
+        "irrigate automatically": "on (default)",
         "daily_cap_minutes": "no cap (default)",
         "quiet_start_hour": "off (default)",
         "interval_hours": "6",
