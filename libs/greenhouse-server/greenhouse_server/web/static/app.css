@@ -624,8 +624,6 @@ progress::-moz-progress-bar { background: var(--accent); animation: prog 1.2s li
 }
 .chart-container canvas { display: block; }
 .chart-container--compact { height: 220px; margin-bottom: var(--sp-2); }
-.health-multiples { display: grid; gap: var(--sp-5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
-.health-multiples__item h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); }
 
 /* =========================================================================
    New component classes (used by Phase 2+ migrated templates)
@@ -1272,6 +1270,47 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
   font-family: var(--font-mono);
   white-space: nowrap;
 }
+
+/* Per-plant snapshot tiles (partials/_cluster_status.html): health, soil against the
+   plant's own band (a 0-100 % bar with the band shaded), latest climate and age. */
+.status-panel__conditions {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--sp-3);
+  margin: 0; font-size: var(--fs-sm);
+}
+.plant-tiles {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+}
+.plant-tile {
+  margin: 0; padding: var(--sp-3);
+  border: 1px solid var(--border); border-radius: 8px;
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+.plant-tile--low { border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.plant-tile--high { border-color: color-mix(in srgb, var(--warn) 45%, var(--border)); }
+.plant-tile__head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--sp-2); font-size: var(--fs-sm); }
+.plant-tile__soil { display: flex; align-items: baseline; gap: var(--sp-2); }
+.plant-tile__value { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+.plant-tile__bar {
+  position: relative; height: 12px;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) center / 100% 4px no-repeat;
+}
+.plant-tile__band {
+  position: absolute; top: 50%; height: 8px; transform: translateY(-50%);
+  background: color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 2px;
+}
+.plant-tile__mark {
+  position: absolute; top: 50%; width: 4px; height: 12px; transform: translate(-50%, -50%);
+  background: var(--text); border-radius: 2px; box-shadow: 0 0 0 2px var(--surface);
+}
+.plant-tile__meta {
+  display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between;
+  gap: var(--sp-2); margin: 0; font-size: var(--fs-xs);
+}
+.plant-tile__meta div { display: flex; flex-direction: column; }
+.plant-tile__meta dt { color: var(--text-dim); font-weight: 400; margin: 0; }
+.plant-tile__meta dd { color: var(--text); margin: 0; }
 
 /* Stat grid for cluster detail readings (4-col responsive) */
 .stat-grid {

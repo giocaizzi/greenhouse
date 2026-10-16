@@ -18,30 +18,87 @@
   
 
   
+  <p class="status-panel__conditions">
+    <span class="status-panel__label">Now</span>
+      <span class="mono">22.0°C</span>
+      <span class="mono">55% RH</span>
+      <span class="mono">1000 lx</span>
+  </p>
+
+  
+    <ul class="plant-tiles">
+      
+        
+        
+        <li class="plant-tile plant-tile--low">
+          <header class="plant-tile__head">
+            <a href="/clusters/1/plants/2"><i class="species">Alocasia amazonica</i></a>
+            
+            
+              <span class="badge-danger">health 25</span>
+            
+          </header>
+          
+            <div class="plant-tile__soil">
+              
+                <span class="plant-tile__value mono">8%</span>
+                <span class="badge-low">dry</span>
+              
+            </div>
+            <div class="plant-tile__bar" role="img"
+                 aria-label="soil 8%, band 50–65%">
+              <span class="plant-tile__band" style="left: 50.0%; width: 15.0%"></span>
+              <span class="plant-tile__mark" style="left: 8.0%"></span>
+            </div>
+            <dl class="plant-tile__meta">
+              <div><dt>band</dt><dd class="mono">50–65%</dd></div>
+              <div><dt>temp</dt><dd class="mono">23.0°C</dd></div>
+              <div><dt>RH</dt><dd class="mono">55%</dd></div>
+              <div><dt>age</dt><dd class="mono">30m ago</dd></div>
+            </dl>
+          
+        </li>
+      
+        
+        
+        <li class="plant-tile plant-tile--ok">
+          <header class="plant-tile__head">
+            <a href="/clusters/1/plants/1"><i class="species">Monstera deliciosa</i></a>
+            
+            
+              <span class="badge-ok">health 71</span>
+            
+          </header>
+          
+            <div class="plant-tile__soil">
+              
+                <span class="plant-tile__value mono">50%</span>
+                <span class="badge-ok">in band</span>
+              
+            </div>
+            <div class="plant-tile__bar" role="img"
+                 aria-label="soil 50%, band 45–60%">
+              <span class="plant-tile__band" style="left: 45.0%; width: 15.0%"></span>
+              <span class="plant-tile__mark" style="left: 50.0%"></span>
+            </div>
+            <dl class="plant-tile__meta">
+              <div><dt>band</dt><dd class="mono">45–60%</dd></div>
+              <div><dt>temp</dt><dd class="mono">22.0°C</dd></div>
+              <div><dt>RH</dt><dd class="mono">60%</dd></div>
+              <div><dt>age</dt><dd class="mono">30m ago</dd></div>
+            </dl>
+          
+        </li>
+      
+    </ul>
+  
+
+  
+  
     <ul class="sensor-list">
       
         <li class="sensor-list__row">
-          <span class="sensor-list__name">Alocasia Probe</span>
-          <span class="sensor-list__reading mono">
-            8%
-          </span>
-          <span class="sensor-list__age">
-            30m ago
-          </span>
-        </li>
-      
-        <li class="sensor-list__row">
-          <span class="sensor-list__name">Monstera Probe</span>
-          <span class="sensor-list__reading mono">
-            50%
-          </span>
-          <span class="sensor-list__age">
-            30m ago
-          </span>
-        </li>
-      
-        <li class="sensor-list__row">
-          <span class="sensor-list__name">Room Climate</span>
+          <span class="sensor-list__name">Room Climate <small class="muted">no plant</small></span>
           <span class="sensor-list__reading mono">
             21.0°C
           </span>

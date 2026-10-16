@@ -498,28 +498,25 @@
     <header class="chart-head">
       <div class="chart-title">
         <h3>Plant health</h3>
-        <small class="muted">daily score and the components it averages · last 7d + today</small>
+        <small class="muted">daily score per plant · last 7d + today · components on each plant's page</small>
       </div>
     </header>
-    <div class="chart-body health-multiples">
+    <div class="chart-body">
       
-        <section class="health-multiples__item">
-          <h4><a href="/clusters/2/plants/3"><i class="species">Eriobotrya japonica</i></a></h4>
-          
 
-  <div class="chart-container chart-container--compact">
-    <canvas id="chart-plant-health-3" role="img"
-            aria-label="Eriobotrya japonica: health score and its components, last 7 days"></canvas>
-    <script type="application/json" id="chart-data-plant-health-3">{"days": 7, "plant_id": 3, "series": [{"key": "score", "label": "Health score", "points": [[1776247200, 50.0]]}, {"key": "soil_in_band_pct", "label": "Soil in band", "points": [[1776247200, 0.0]]}, {"key": "temp_in_band_pct", "label": "Temperature in band", "points": [[1776247200, 100.0]]}, {"key": "humidity_in_band_pct", "label": "Humidity in band", "points": [[1776247200, 100.0]]}, {"key": "efficiency", "label": "Watering efficiency", "points": [[1776247200, 0.0]]}], "species": "Eriobotrya japonica"}</script>
+  <div class="chart-container">
+    <canvas id="chart-cluster-health" role="img"
+            aria-label="Daily health score of each plant, last 7 days"></canvas>
+    <script type="application/json" id="chart-data-cluster-health">{"days": 7, "plants": [{"label": "Eriobotrya japonica", "plant_id": 3, "points": [[1776247200, 50.0]]}]}</script>
     <script>
       (function () {
-        var el = document.getElementById('chart-plant-health-3');
-        var raw = document.getElementById('chart-data-plant-health-3');
+        var el = document.getElementById('chart-cluster-health');
+        var raw = document.getElementById('chart-data-cluster-health');
         if (!el || !raw) return;
         var data = JSON.parse(raw.textContent);
         function draw() {
-          if (typeof window.renderHealthBreakdown === 'function') {
-            window.renderHealthBreakdown(el, data);
+          if (typeof window.renderClusterHealth === 'function') {
+            window.renderClusterHealth(el, data);
           }
         }
         if (window.Chart) { draw(); }
@@ -527,11 +524,9 @@
       })();
     </script>
   </div>
-  <p class="muted"><small>latest: health score 50 · soil in band 0 · temperature in band 100 · humidity in band 100 · watering efficiency 0
-  </small></p>
 
-        </section>
-      
+<p class="muted"><small>latest: <a href="/clusters/2/plants/3"><i class="species">Eriobotrya japonica</i></a> 50
+</small></p>
     </div>
   </article>
   

@@ -409,7 +409,7 @@
     "declared_config",
     "dry_run_global",
     "effective_config",
-    "health_charts",
+    "health_chart",
     "hours",
     "is_hx",
     "metrics",
@@ -520,7 +520,7 @@
     "declared_config",
     "dry_run_global",
     "effective_config",
-    "health_charts",
+    "health_chart",
     "hours",
     "is_hx",
     "metrics",
@@ -555,7 +555,7 @@
     "declared_config",
     "dry_run_global",
     "effective_config",
-    "health_charts",
+    "health_chart",
     "hours",
     "is_hx",
     "metrics",
@@ -590,7 +590,7 @@
     "declared_config",
     "dry_run_global",
     "effective_config",
-    "health_charts",
+    "health_chart",
     "hours",
     "is_hx",
     "metrics",
@@ -1003,6 +1003,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "snapshots",
     "status",
     "theme"
    ]
@@ -1041,6 +1042,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "snapshots",
     "status",
     "theme"
    ]

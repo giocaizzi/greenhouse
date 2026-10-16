@@ -528,28 +528,25 @@
     <header class="chart-head">
       <div class="chart-title">
         <h3>Plant health</h3>
-        <small class="muted">daily score and the components it averages · last 7d + today</small>
+        <small class="muted">daily score per plant · last 7d + today · components on each plant's page</small>
       </div>
     </header>
-    <div class="chart-body health-multiples">
+    <div class="chart-body">
       
-        <section class="health-multiples__item">
-          <h4><a href="/clusters/1/plants/2"><i class="species">Alocasia amazonica</i></a></h4>
-          
 
-  <div class="chart-container chart-container--compact">
-    <canvas id="chart-plant-health-2" role="img"
-            aria-label="Alocasia amazonica: health score and its components, last 7 days"></canvas>
-    <script type="application/json" id="chart-data-plant-health-2">{"days": 7, "plant_id": 2, "series": [{"key": "score", "label": "Health score", "points": [[1776247200, 25.0]]}, {"key": "soil_in_band_pct", "label": "Soil in band", "points": [[1776247200, 0.0]]}, {"key": "temp_in_band_pct", "label": "Temperature in band", "points": [[1776247200, 100.0]]}, {"key": "humidity_in_band_pct", "label": "Humidity in band", "points": [[1776247200, 0.0]]}, {"key": "efficiency", "label": "Watering efficiency", "points": [[1776247200, 0.0]]}], "species": "Alocasia amazonica"}</script>
+  <div class="chart-container">
+    <canvas id="chart-cluster-health" role="img"
+            aria-label="Daily health score of each plant, last 7 days"></canvas>
+    <script type="application/json" id="chart-data-cluster-health">{"days": 7, "plants": [{"label": "Monstera deliciosa", "plant_id": 1, "points": [[1775988000, 72.5], [1776074400, 80.0], [1776160800, 77.2], [1776247200, 71.0]]}, {"label": "Alocasia amazonica", "plant_id": 2, "points": [[1776247200, 25.0]]}]}</script>
     <script>
       (function () {
-        var el = document.getElementById('chart-plant-health-2');
-        var raw = document.getElementById('chart-data-plant-health-2');
+        var el = document.getElementById('chart-cluster-health');
+        var raw = document.getElementById('chart-data-cluster-health');
         if (!el || !raw) return;
         var data = JSON.parse(raw.textContent);
         function draw() {
-          if (typeof window.renderHealthBreakdown === 'function') {
-            window.renderHealthBreakdown(el, data);
+          if (typeof window.renderClusterHealth === 'function') {
+            window.renderClusterHealth(el, data);
           }
         }
         if (window.Chart) { draw(); }
@@ -557,40 +554,9 @@
       })();
     </script>
   </div>
-  <p class="muted"><small>latest: health score 25 · soil in band 0 · temperature in band 100 · humidity in band 0 · watering efficiency 0
-  </small></p>
 
-        </section>
-      
-        <section class="health-multiples__item">
-          <h4><a href="/clusters/1/plants/1"><i class="species">Monstera deliciosa</i></a></h4>
-          
-
-  <div class="chart-container chart-container--compact">
-    <canvas id="chart-plant-health-1" role="img"
-            aria-label="Monstera deliciosa: health score and its components, last 7 days"></canvas>
-    <script type="application/json" id="chart-data-plant-health-1">{"days": 7, "plant_id": 1, "series": [{"key": "score", "label": "Health score", "points": [[1775988000, 72.5], [1776074400, 80.0], [1776160800, 77.2], [1776247200, 71.0]]}, {"key": "soil_in_band_pct", "label": "Soil in band", "points": [[1775988000, 80.0], [1776074400, 80.0], [1776160800, 80.0], [1776247200, 83.3]]}, {"key": "temp_in_band_pct", "label": "Temperature in band", "points": [[1775988000, 90.0], [1776074400, 90.0], [1776160800, 90.0], [1776247200, 100.0]]}, {"key": "humidity_in_band_pct", "label": "Humidity in band", "points": [[1775988000, 70.0], [1776074400, 70.0], [1776160800, 70.0], [1776247200, 100.0]]}, {"key": "efficiency", "label": "Watering efficiency", "points": [[1775988000, 60.0], [1776074400, 60.0], [1776160800, 60.0], [1776247200, 0.0]]}], "species": "Monstera deliciosa"}</script>
-    <script>
-      (function () {
-        var el = document.getElementById('chart-plant-health-1');
-        var raw = document.getElementById('chart-data-plant-health-1');
-        if (!el || !raw) return;
-        var data = JSON.parse(raw.textContent);
-        function draw() {
-          if (typeof window.renderHealthBreakdown === 'function') {
-            window.renderHealthBreakdown(el, data);
-          }
-        }
-        if (window.Chart) { draw(); }
-        else { window.addEventListener('load', draw); }
-      })();
-    </script>
-  </div>
-  <p class="muted"><small>latest: health score 71 · soil in band 83 · temperature in band 100 · humidity in band 100 · watering efficiency 0
-  </small></p>
-
-        </section>
-      
+<p class="muted"><small>latest: <a href="/clusters/1/plants/1"><i class="species">Monstera deliciosa</i></a> 71 · <a href="/clusters/1/plants/2"><i class="species">Alocasia amazonica</i></a> 25
+</small></p>
     </div>
   </article>
   

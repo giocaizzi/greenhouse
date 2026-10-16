@@ -62,6 +62,7 @@
   "web/templates/partials/_chart_panel.html",
   "web/templates/partials/_check_result.html",
   "web/templates/partials/_cluster_card.html",
+  "web/templates/partials/_cluster_health_chart.html",
   "web/templates/partials/_cluster_status.html",
   "web/templates/partials/_cluster_tabs.html",
   "web/templates/partials/_config_field.html",

@@ -422,21 +422,16 @@
       {% endfor %}
     </nav>
   </header>
-  {% if health_charts %}
+  {% if health_chart.plants %}
   <article class="card chart-card" id="plant-health">
     <header class="chart-head">
       <div class="chart-title">
         <h3>Plant health</h3>
-        <small class="muted">daily score and the components it averages · last {{ health_charts[0].days }}d + today</small>
+        <small class="muted">daily score per plant · last {{ health_chart.days }}d + today · components on each plant's page</small>
       </div>
     </header>
-    <div class="chart-body health-multiples">
-      {% for chart in health_charts %}
-        <section class="health-multiples__item">
-          <h4><a href="/clusters/{{ cluster_id }}/plants/{{ chart.plant_id }}"><i class="species">{{ chart.species }}</i></a></h4>
-          {% include "partials/_plant_health_breakdown.html" %}
-        </section>
-      {% endfor %}
+    <div class="chart-body">
+      {% include "partials/_cluster_health_chart.html" %}
     </div>
   </article>
   {% endif %}
