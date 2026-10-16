@@ -1,0 +1,28 @@
+{# Every plant's daily health score, one line per plant. Needs `health_chart` (ClusterHealthChart) and `cluster_id`. #}
+{% if health_chart.plants | selectattr("points") | list %}
+  <div class="chart-container">
+    <canvas id="chart-cluster-health" role="img"
+            aria-label="Daily health score of each plant, last {{ health_chart.days }} days"></canvas>
+    <script type="application/json" id="chart-data-cluster-health">{{ health_chart | tojson }}</script>
+    <script>
+      (function () {
+        var el = document.getElementById('chart-cluster-health');
+        var raw = document.getElementById('chart-data-cluster-health');
+        if (!el || !raw) return;
+        var data = JSON.parse(raw.textContent);
+        function draw() {
+          if (typeof window.renderClusterHealth === 'function') {
+            window.renderClusterHealth(el, data);
+          }
+        }
+        if (window.Chart) { draw(); }
+        else { window.addEventListener('load', draw); }
+      })();
+    </script>
+  </div>
+{% else %}
+  <p class="muted"><small>No health data yet: the score needs sensor readings attributed to a plant.</small></p>
+{% endif %}
+<p class="muted"><small>latest:
+  {%- for line in health_chart.plants %} <a href="/clusters/{{ cluster_id }}/plants/{{ line.plant_id }}"><i class="species">{{ line.label }}</i></a> {{ line.points[-1][1] | round | int if line.points else "—" }}{% if not loop.last %} ·{% endif %}{% endfor %}
+</small></p>

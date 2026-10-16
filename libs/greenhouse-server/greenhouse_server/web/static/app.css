@@ -624,8 +624,6 @@ progress::-moz-progress-bar { background: var(--accent); animation: prog 1.2s li
 }
 .chart-container canvas { display: block; }
 .chart-container--compact { height: 220px; margin-bottom: var(--sp-2); }
-.health-multiples { display: grid; gap: var(--sp-5); grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); }
-.health-multiples__item h4 { margin: 0 0 var(--sp-2); font-size: var(--fs-sm); }
 
 /* =========================================================================
    New component classes (used by Phase 2+ migrated templates)

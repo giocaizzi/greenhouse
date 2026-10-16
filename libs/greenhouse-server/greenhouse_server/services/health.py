@@ -1,6 +1,7 @@
 """Per-plant health score computation and daily snapshot service."""
 
 import time
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -61,6 +62,21 @@ class PlantHealthChart(TypedDict):
     species: str
     days: int
     series: list[HealthChartSeries]
+
+
+class PlantScoreLine(TypedDict):
+    """One plant's line on the cluster health chart: its daily score (0-100), ending on today's live score."""
+
+    plant_id: int
+    label: str
+    points: list[tuple[int, float]]
+
+
+class ClusterHealthChart(TypedDict):
+    """Every plant's daily health score on one chart, so the plants of a cluster compare at a glance."""
+
+    days: int
+    plants: list[PlantScoreLine]
 
 
 # (key, label) of every chart series in legend order: the score first, then the components it averages.
@@ -187,6 +203,21 @@ class PlantHealthService:
             for key, label in _CHART_SERIES
         ]
         return {"plant_id": plant.id, "species": plant.species, "days": window, "series": series}
+
+    def cluster_health_chart(self, plants: "Sequence[Plant]", days: int) -> ClusterHealthChart:
+        """One score line per plant, with the same points as each plant's own chart.
+
+        Lines are ordered by plant id, so the chart's colour slots stay with their plants when
+        one is added. A line is labelled by species; when two plants share one, the plant id
+        tells them apart.
+        """
+        species_count = Counter(p.species for p in plants)
+        lines: list[PlantScoreLine] = []
+        for plant in sorted(plants, key=lambda p: p.id):
+            score = next(s for s in self.health_chart(plant, days)["series"] if s["key"] == "score")
+            label = plant.species if species_count[plant.species] == 1 else f"{plant.species} #{plant.id}"
+            lines.append({"plant_id": plant.id, "label": label, "points": score["points"]})
+        return {"days": max(days, HEALTH_CHART_MIN_DAYS), "plants": lines}
 
     def _score_with_sources(self, plant_id: int, days: int) -> tuple[HealthScore, list[int]]:
         """The plant's score and the ids of the sensors whose readings fed it (snapshot provenance)."""

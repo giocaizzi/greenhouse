@@ -226,10 +226,10 @@ def cluster_detail(
             cluster_id=cluster_id,
             hours=hours,
             quiet_active_now=quiet_window is not None,
-            # One health chart per plant (small multiples), first in the chart section.
-            health_charts=[
-                health_svc.health_chart(p, hours // HOURS_PER_DAY) for p in repo.get_plants_in_cluster(cluster_id)
-            ],
+            # Every plant's daily score on one chart, first in the chart section.
+            health_chart=health_svc.cluster_health_chart(
+                repo.get_plants_in_cluster(cluster_id), hours // HOURS_PER_DAY
+            ),
             **data,
         ),
     )

@@ -190,17 +190,18 @@ def test_plant_chart_soil_band_uses_the_shared_target_parser() -> None:
 
 
 def test_cluster_detail_health_chart_is_the_first_chart(seeded_client: TestClient) -> None:
-    """The cluster page opens its chart section with one health chart per plant, titled by species."""
+    """The cluster page opens its chart section with one health chart, one line per plant."""
     with app_of(seeded_client).state.session_factory() as session:
         IrrigationRepository(session).upsert_plant_health(plant_id=1, date_key="2020-01-01", score=64.0)
         session.commit()
     html = seeded_client.get("/clusters/1?hours=72").text
     health = html.index('id="plant-health"')
     assert health < html.index('id="chart-data-soil_moisture"')
-    assert '<i class="species">Monstera deliciosa</i>' in html[health:]
-    assert 'id="chart-data-plant-health-1"' in html
+    assert html.count('id="chart-cluster-health"') == 1
+    assert "chart-plant-health-" not in html  # the per-component breakdown stays on the plant page
+    assert '"label": "Monstera deliciosa"' in html[health:]
     assert "last 7d + today" in html  # a 3-day range still shows a week of daily points
-    assert "latest: health score 64" in html
+    assert '<i class="species">Monstera deliciosa</i></a> 64' in html
 
 
 def test_plant_dashboard_health_chart_replaces_the_soil_timeline(seeded_client: TestClient) -> None:

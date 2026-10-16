@@ -1,4 +1,4 @@
-"""``PlantHealthService.health_chart``: daily snapshots per component, the look-back floor, the live point."""
+"""Plant and cluster health charts: daily snapshots per component, the look-back floor, the live point."""
 
 from __future__ import annotations
 
@@ -114,3 +114,22 @@ def test_live_score_replaces_todays_snapshot(repo: IrrigationRepository) -> None
     chart = svc.health_chart(plant, 3)
 
     assert chart["series"][0]["points"] == [(FROZEN_TS - SECONDS_PER_DAY, 30.0), (FROZEN_TS, live)]
+
+
+def test_cluster_chart_has_one_score_line_per_plant(repo: IrrigationRepository) -> None:
+    """Each plant's line carries the score points of its own chart; a shared species gets the plant id."""
+    plant = _plant(repo)
+    twin_id = repo.add_plant(cluster_id=plant.cluster_id, species="Dracaena", category="tropical")
+    fern_id = repo.add_plant(cluster_id=plant.cluster_id, species="Nephrolepis", category="tropical")
+    _snapshot(repo, plant.id, 2, 70.0)
+    _snapshot(repo, fern_id, 1, 55.0)
+    plants = repo.get_plants_in_cluster(plant.cluster_id)
+
+    chart = PlantHealthService(repo, PlantDatabase()).cluster_health_chart(plants, 3)
+
+    assert chart["days"] == HEALTH_CHART_MIN_DAYS
+    assert chart["plants"] == [
+        {"plant_id": plant.id, "label": f"Dracaena #{plant.id}", "points": [(FROZEN_TS - 2 * SECONDS_PER_DAY, 70.0)]},
+        {"plant_id": twin_id, "label": f"Dracaena #{twin_id}", "points": []},
+        {"plant_id": fern_id, "label": "Nephrolepis", "points": [(FROZEN_TS - SECONDS_PER_DAY, 55.0)]},
+    ]
