@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from rich.text import Text
 
+from greenhouse_cli.constants import GLOBAL_CONFIG_DEFAULTS
 from greenhouse_cli.tui import formatting as fmt
 
 if TYPE_CHECKING:
@@ -26,12 +27,27 @@ def preference_rows(prefs: dict[str, Any]) -> list[tuple[str, str]]:
     return [(k, str(v)) for k, v in sorted(prefs.items())] or [("preferences", "unavailable")]
 
 
+_CAP_FIELDS = frozenset({"daily_cap_minutes", "max_events_per_day"})
+
+
+def _builtin_default(key: str) -> Text:
+    """Dim label naming the built-in value an unset global field falls through to (``2 (default)``)."""
+    if key not in GLOBAL_CONFIG_DEFAULTS:
+        return Text("built-in default", style="dim")
+    value = GLOBAL_CONFIG_DEFAULTS[key]
+    if value is None:
+        label = "no cap" if key in _CAP_FIELDS else "off"
+    elif isinstance(value, bool):
+        label = "on" if value else "off"
+    else:
+        label = str(value)
+    return Text(f"{label} (default)", style="dim")
+
+
 def global_config_rows(config: dict[str, Any]) -> list[tuple[str, str | Text]]:
     """Global-default rows in repository field order (bookkeeping hidden, unset = built-in default) or "unavailable"."""
     return [
-        (k, Text("built-in default", style="dim") if v is None else str(v))
-        for k, v in config.items()
-        if k not in {"id", "last_updated"}
+        (k, _builtin_default(k) if v is None else str(v)) for k, v in config.items() if k not in {"id", "last_updated"}
     ] or [("config", "unavailable")]
 
 

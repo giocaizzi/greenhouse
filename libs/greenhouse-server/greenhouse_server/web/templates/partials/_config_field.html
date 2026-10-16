@@ -2,7 +2,9 @@
 
    Required context:
      field            dict with keys: name, label, kind (select|number|tri_bool),
-                       and kind-specific extras (options, min, max).
+                       and kind-specific extras (options, min, max). Optional
+                       none_label names what an inherited null means
+                       ("off", "no cap") so the placeholder never says bare "inherit".
      declared_config  the raw IrrigationConfig row for this cluster (may be None).
      effective_config dict[field_name] -> {value, source}; "source" is one of
                        "cluster" | "global" | "default".
@@ -59,7 +61,7 @@
            {% if field.min is defined %}min="{{ field.min }}"{% endif %}
            {% if field.max is defined %}max="{{ field.max }}"{% endif %}
            step="1"
-           placeholder="{% if effective_value is not none %}inherit ({{ effective_value }}){% else %}inherit{% endif %}"
+           placeholder="{% if effective_value is not none %}inherit ({{ effective_value }}){% elif field.none_label is defined %}inherit ({{ field.none_label }}){% else %}inherit{% endif %}"
            value="{{ declared_value if declared_value is not none else '' }}">
   {% endif %}
 </div>

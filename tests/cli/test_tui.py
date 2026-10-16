@@ -1849,3 +1849,29 @@ def test_failed_shielded_card_rebuild_is_logged_with_traceback(monkeypatch: pyte
         dashboard.logger.removeHandler(handler)
     assert [r.getMessage() for r in records] == ["dashboard card rebuild failed"]
     assert records[0].exc_info is not None
+
+
+def test_global_config_rows_name_builtin_defaults() -> None:
+    """An unset global field shows the built-in value it falls through to, not a raw null (#200)."""
+    rows = dict(
+        render.global_config_rows(
+            {
+                "id": 1,
+                "mode": None,
+                "duration_minutes": None,
+                "auto_run": None,
+                "daily_cap_minutes": None,
+                "quiet_start_hour": None,
+                "interval_hours": 6,
+                "last_updated": 0,
+            }
+        )
+    )
+    assert {k: str(v) for k, v in rows.items()} == {
+        "mode": "smart (default)",
+        "duration_minutes": "2 (default)",
+        "auto_run": "on (default)",
+        "daily_cap_minutes": "no cap (default)",
+        "quiet_start_hour": "off (default)",
+        "interval_hours": "6",
+    }
