@@ -18,7 +18,7 @@ HOUR = 3600
 
 @pytest.mark.usefixtures("frozen_clock")
 def test_moved_sensor_splits_into_one_series_per_plant() -> None:
-    """Plant A, then unassigned, then plant B: three series, each labelled by what it measured."""
+    """Plant A, then a gap, then plant B: two series; the gap is not drawn as its own series."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     repo = IrrigationRepository(Session(engine))
@@ -44,7 +44,29 @@ def test_moved_sensor_splits_into_one_series_per_plant() -> None:
 
     assert [(d["label"], d["plant_id"], len(d["points"])) for d in datasets] == [
         ("Ficus benjamina · Sensor 1", plant_a, 2),
-        ("Sensor 1 (unassigned)", None, 1),
         ("Dracaena marginata · Sensor 1", plant_b, 2),
     ]
     assert {d["sensor_name"] for d in datasets} == {"Sensor 1"}
+
+
+@pytest.mark.usefixtures("frozen_clock")
+def test_never_assigned_sensor_keeps_its_unassigned_series() -> None:
+    """The engine still judges an unlinked sensor, so its readings stay visible."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    repo = IrrigationRepository(Session(engine))
+    now = int(time.time())
+    cluster_id = repo.add_cluster("Living Room")
+    sensor_id = repo.add_sensor(
+        cluster_id=cluster_id,
+        tuya_device_id="fake_tuya_device_aabbccdd",
+        name="Sensor 1",
+        sensor_type="soil",
+        config={},
+    )
+    for hours_ago in (3, 2):
+        repo.add_sensor_reading(sensor_id=sensor_id, timestamp=now - hours_ago * HOUR, soil_moisture=40.0)
+
+    datasets = build_cluster_chart_payload(repo, cluster_id, 24, "soil_moisture")["datasets"]
+
+    assert [(d["label"], d["plant_id"], len(d["points"])) for d in datasets] == [("Sensor 1 (unassigned)", None, 2)]

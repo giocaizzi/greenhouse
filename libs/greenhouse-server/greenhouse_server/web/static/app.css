@@ -659,7 +659,7 @@ progress::-moz-progress-bar { background: var(--accent); animation: prog 1.2s li
 :root[data-theme="dark"] .brand__mark .icon,
 :root:not([data-theme]) .brand__mark .icon { color: #0A0B0D; }
 
-.topnav { display: flex; gap: var(--sp-5); margin-left: var(--sp-3); }
+.topnav { display: flex; align-items: center; gap: var(--sp-5); margin-left: var(--sp-3); }
 .topnav a {
   color: var(--text-muted); font-size: var(--fs-sm); font-weight: 500;
   padding: 4px 0;
@@ -1482,16 +1482,19 @@ body > footer small, .footer small { color: inherit; font-size: inherit; }
 }
 
 /* "More" overflow menu in the primary topnav */
-.topnav__more { position: relative; }
+.topnav__more { position: relative; margin: 0; padding: 0; border: 0; background: none; }
 .topnav__more > summary {
   list-style: none;
   cursor: pointer;
   color: var(--text-muted); font-size: var(--fs-sm); font-weight: 500;
-  padding: 4px 0;
-  border-bottom: 2px solid transparent;
+  padding: 4px 0; margin: 0;
+  background: none; box-shadow: none; line-height: inherit;
+  border: 0; border-bottom: 2px solid transparent;
 }
+.topnav__more > summary::after { display: none; }
 .topnav__more > summary::-webkit-details-marker { display: none; }
-.topnav__more[open] > summary { color: var(--text); }
+.topnav__more[open] { padding: 0; }
+.topnav__more[open] > summary { color: var(--text); margin-bottom: 0; }
 .topnav__menu {
   position: absolute;
   top: calc(100% + 6px);

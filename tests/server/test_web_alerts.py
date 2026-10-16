@@ -82,6 +82,29 @@ class TestAlertListPage:
             # The open-only view should NOT show resolved alerts
             assert "No alerts" in resp.text
 
+    def test_default_view_is_open(self, app: FastAPI) -> None:
+        """A bare /alerts opens on the Open chip and hides resolved alerts."""
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _seed_alert(app, dedup_key="web::default::1", status="resolved")
+            resp = client.get("/alerts")
+            assert "No alerts" in resp.text
+            assert 'href="/alerts?status=open"\n    aria-current="page"' in resp.text
+
+    def test_all_chip_shows_every_status(self, app: FastAPI) -> None:
+        """The All chip lists resolved alerts too."""
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _seed_alert(app, dedup_key="web::all::1", status="resolved")
+            resp = client.get("/alerts?status=all")
+            assert "Test Alert Title" in resp.text
+            assert 'href="/alerts?status=all"\n    aria-current="page"' in resp.text
+
+    def test_sync_keeps_the_status_chip(self, app: FastAPI) -> None:
+        """The post-sync refresh lists the same status the page was showing."""
+        with TestClient(app, raise_server_exceptions=False) as client:
+            _seed_alert(app, dedup_key="web::sync::1", status="resolved")
+            assert "Test Alert Title" not in client.post("/alerts/sync", data={"status": "open"}).text
+            assert "Test Alert Title" in client.post("/alerts/sync", data={"status": "all"}).text
+
 
 class TestAlertBadge:
     """Tests for alert badge."""
