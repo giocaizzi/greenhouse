@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "greenhouse": {
+      "type": "remote",
+      "url": "https://mcp-connector-greenhouse.{env:MCP_CONNECTOR_ACCOUNT}.workers.dev/mcp",
+      "enabled": true
+    },
+    "portainer": {
+      "type": "remote",
+      "url": "https://mcp-connector-portainer.{env:MCP_CONNECTOR_ACCOUNT}.workers.dev/mcp",
+      "enabled": true
+    }
+  }
+}
