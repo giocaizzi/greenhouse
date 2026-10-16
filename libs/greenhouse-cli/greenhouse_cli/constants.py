@@ -20,3 +20,16 @@ HOURS_PER_DAY = 24
 # CHART_RANGE_HOURS / DEFAULT_CHART_RANGE_HOURS.
 CHART_RANGE_HOURS = (72, 336, 720, 1440, 2160)
 DEFAULT_CHART_RANGE_HOURS = 72
+
+# Built-in irrigation defaults under the global config row (``None``: no cap / quiet hours off), shown
+# by the TUI for an unset global field; mirror core repository GLOBAL_CONFIG_DEFAULTS.
+GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
+    "mode": "smart",
+    "duration_minutes": 2,
+    "interval_hours": 12,
+    "auto_run": True,
+    "daily_cap_minutes": None,
+    "max_events_per_day": None,
+    "quiet_start_hour": None,
+    "quiet_end_hour": None,
+}

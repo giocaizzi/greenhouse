@@ -203,7 +203,7 @@ Press `?` in the TUI for the live key list.
 | `w`, `x`, `c`, `L` | cluster | Water now (own dialog, manual start), stop (confirm), check (confirm), log a manual watering (form) |
 | `n` / `u` / `del` | cluster → Plants, Sensors, Windows | Add / edit / delete the selected row |
 | `n` / `u` / `del` | cluster → Overview | Attach / edit / detach the irrigator |
-| `u` | cluster → Config | Edit the cluster's irrigation config (mode, duration, interval, auto-run, caps, quiet hours) |
+| `u` | cluster → Config | Edit the cluster's irrigation config (mode, duration, interval, irrigate automatically (`auto_run`), caps, quiet hours) |
 | `M`, `P` | cluster → Plants | Move plant to another cluster (form), refresh care data from the plant DB (confirm) |
 | `m`, `[` / `]` | cluster → Charts | Cycle soil / temp / humidity / light / overlay, shorter / longer range (3, 14, 30, 60, 90 days; default 3 days) |
 | `m` | cluster → Plants | Toggle the plant chart: 90-day health score ↔ 3-day soil moisture |

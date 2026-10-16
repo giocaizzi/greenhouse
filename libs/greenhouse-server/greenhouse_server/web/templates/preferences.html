@@ -135,7 +135,7 @@
   <form method="post" action="/config/global">
     <label for="g_mode">Mode
       <select id="g_mode" name="mode">
-        <option value="">— built-in default —</option>
+        <option value="">— built-in default ({{ builtin_config.mode }}) —</option>
         <option value="smart"{% if global_config.mode == "smart" %} selected{% endif %}>Smart</option>
         <option value="schedule"{% if global_config.mode == "schedule" %} selected{% endif %}>Schedule</option>
         <option value="manual"{% if global_config.mode == "manual" %} selected{% endif %}>Manual</option>
@@ -144,19 +144,20 @@
     <label for="g_duration_minutes">Duration (minutes)
       <input type="number" id="g_duration_minutes" name="duration_minutes" min="1" max="60"
              value="{{ global_config.duration_minutes if global_config.duration_minutes is not none else '' }}"
-             placeholder="— built-in default —">
+             placeholder="built-in default: {{ builtin_config.duration_minutes }}">
     </label>
     <label for="g_interval_hours">Interval (hours)
       <input type="number" id="g_interval_hours" name="interval_hours" min="1" max="168"
              value="{{ global_config.interval_hours if global_config.interval_hours is not none else '' }}"
-             placeholder="— built-in default —">
+             placeholder="built-in default: {{ builtin_config.interval_hours }}">
     </label>
-    <label for="g_auto_run">Auto-run
+    <label for="g_auto_run">Irrigate automatically
       <select id="g_auto_run" name="auto_run">
-        <option value="">— built-in default —</option>
+        <option value="">— built-in default ({{ builtin_config.auto_run | yesno("on", "off") }}) —</option>
         <option value="true"{% if global_config.auto_run is true %} selected{% endif %}>On</option>
         <option value="false"{% if global_config.auto_run is false %} selected{% endif %}>Off</option>
       </select>
+      <small class="muted">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
     </label>
     <label for="g_daily_cap_minutes">Daily cap (minutes)
       <input type="number" id="g_daily_cap_minutes" name="daily_cap_minutes" min="0" max="1440"
@@ -173,13 +174,13 @@
     <label for="g_quiet_start_hour">Quiet hours start (0–23)
       <input type="number" id="g_quiet_start_hour" name="quiet_start_hour" min="0" max="23"
              value="{{ global_config.quiet_start_hour if global_config.quiet_start_hour is not none else '' }}"
-             placeholder="— built-in default —">
+             placeholder="built-in default: {{ builtin_config.quiet_start_hour if builtin_config.quiet_start_hour is not none else 'off' }}">
       <small class="muted">Leave blank to fall through to the built-in default. Equal start/end disables quiet hours globally.</small>
     </label>
     <label for="g_quiet_end_hour">Quiet hours end (0–23, exclusive)
       <input type="number" id="g_quiet_end_hour" name="quiet_end_hour" min="0" max="23"
              value="{{ global_config.quiet_end_hour if global_config.quiet_end_hour is not none else '' }}"
-             placeholder="off">
+             placeholder="built-in default: {{ builtin_config.quiet_end_hour if builtin_config.quiet_end_hour is not none else 'off' }}">
     </label>
     <div class="form-actions">
       <a href="/" class="btn secondary">Cancel</a>

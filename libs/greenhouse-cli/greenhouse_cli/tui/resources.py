@@ -16,6 +16,11 @@ ENVIRONMENTS = [("indoor", "indoor"), ("outdoor", "outdoor")]
 CATEGORIES = [(c, c) for c in ("tropical", "fern", "succulent", "cacti", "fruit_tree")]
 NEEDS = [(n, n) for n in ("low", "medium", "high")]
 MODES = [("smart", "smart"), ("schedule", "schedule"), ("manual", "manual")]
+# One-line explanation of the auto_run switch ("Irrigate automatically"), shown in the config forms' notes.
+AUTO_RUN_HINT = (
+    "Irrigate automatically off: the hourly check still decides, but never starts the irrigator. "
+    "Manual starts always work."
+)
 
 
 def cluster_fields(cluster: dict[str, Any] | None = None) -> list[Field]:
@@ -83,7 +88,7 @@ def config_fields(config: dict[str, Any] | None = None) -> list[Field]:
         Field("mode", "Mode", "select", c.get("mode"), MODES),
         Field("duration_minutes", "Duration (min)", "int", c.get("duration_minutes")),
         Field("interval_hours", "Interval (h)", "int", c.get("interval_hours")),
-        Field("auto_run", "Auto-run", "bool", c.get("auto_run")),
+        Field("auto_run", "Irrigate automatically", "bool", c.get("auto_run")),
         Field("daily_cap_minutes", "Daily cap (min)", "int", c.get("daily_cap_minutes")),
         Field("max_events_per_day", "Max events / day", "int", c.get("max_events_per_day")),
         Field("quiet_start_hour", "Quiet from (0-23)", "int", c.get("quiet_start_hour")),
