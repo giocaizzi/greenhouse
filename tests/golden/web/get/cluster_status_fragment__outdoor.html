@@ -17,19 +17,51 @@
   
 
   
-    <ul class="sensor-list">
+  <p class="status-panel__conditions">
+    <span class="status-panel__label">Now</span>
+      <span class="mono">16.0°C</span>
+      <span class="mono">70% RH</span>
+      <span class="mono">20000 lx</span>
+  </p>
+
+  
+    <ul class="plant-tiles">
       
-        <li class="sensor-list__row">
-          <span class="sensor-list__name">Loquat Probe</span>
-          <span class="sensor-list__reading mono">
-            35%
-          </span>
-          <span class="sensor-list__age">
-            30m ago
-          </span>
+        
+        
+        <li class="plant-tile plant-tile--low">
+          <header class="plant-tile__head">
+            <a href="/clusters/2/plants/3"><i class="species">Eriobotrya japonica</i></a>
+            
+            
+              <span class="badge-warning">health 50</span>
+            
+          </header>
+          
+            <div class="plant-tile__soil">
+              
+                <span class="plant-tile__value mono">35%</span>
+                <span class="badge-low">dry</span>
+              
+            </div>
+            <div class="plant-tile__bar" role="img"
+                 aria-label="soil 35%, band 45–60%">
+              <span class="plant-tile__band" style="left: 45.0%; width: 15.0%"></span>
+              <span class="plant-tile__mark" style="left: 35.0%"></span>
+            </div>
+            <dl class="plant-tile__meta">
+              <div><dt>band</dt><dd class="mono">45–60%</dd></div>
+              <div><dt>temp</dt><dd class="mono">16.0°C</dd></div>
+              <div><dt>RH</dt><dd class="mono">70%</dd></div>
+              <div><dt>age</dt><dd class="mono">30m ago</dd></div>
+            </dl>
+          
         </li>
       
     </ul>
+  
+
+  
   
 
   

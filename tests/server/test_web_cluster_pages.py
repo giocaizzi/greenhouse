@@ -45,6 +45,17 @@ def test_cluster_status_fragment(seeded_client: TestClient) -> None:
     assert "Decision" in resp.text or "decision" in resp.text.lower()
 
 
+def test_cluster_status_fragment_shows_a_tile_per_plant(seeded_client: TestClient) -> None:
+    """The plant gets a tile even before its sensor reports; no sensor is left over for the compact list."""
+    html = seeded_client.get("/clusters/1/status-fragment").text
+    assert html.count('<li class="plant-tile ') == 1
+    assert '<a href="/clusters/1/plants/1"><i class="species">Monstera deliciosa</i></a>' in html
+    assert "no current soil reading" in html
+    assert "health —" in html
+    assert 'class="sensor-list"' not in html  # its only sensor is linked to the plant
+    assert "no current readings" in html
+
+
 def test_cluster_status_fragment_404(client: TestClient) -> None:
     """Cluster status fragment 404."""
     resp = client.get("/clusters/9999/status-fragment")

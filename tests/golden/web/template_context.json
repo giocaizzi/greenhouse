@@ -1000,6 +1000,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "snapshots",
     "status",
     "theme"
    ]
@@ -1038,6 +1039,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "snapshots",
     "status",
     "theme"
    ]

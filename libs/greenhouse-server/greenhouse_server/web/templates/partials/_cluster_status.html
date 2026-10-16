@@ -15,21 +15,78 @@
     </div>
   {% endif %}
 
-  {% if status.sensors %}
+  {% set conditions = snapshots.conditions %}
+  <p class="status-panel__conditions">
+    <span class="status-panel__label">Now</span>
+    {%- if conditions.temperature is none and conditions.humidity is none and conditions.light is none %}
+      <span class="muted">no current readings</span>
+    {%- else %}
+      {% if conditions.temperature is not none %}<span class="mono">{{ "%.1f°C" | format(conditions.temperature) }}</span>{% endif %}
+      {% if conditions.humidity is not none %}<span class="mono">{{ "%.0f%% RH" | format(conditions.humidity) }}</span>{% endif %}
+      {% if conditions.light is not none %}<span class="mono">{{ "%.0f lx" | format(conditions.light) }}</span>{% endif %}
+    {%- endif %}
+  </p>
+
+  {% if snapshots.plants %}
+    <ul class="plant-tiles">
+      {% for tile in snapshots.plants %}
+        {% set lo, hi = tile.band %}
+        {% set soil_class = tile.soil | moisture_badge(lo, hi) %}
+        <li class="plant-tile plant-tile--{{ soil_class }}">
+          <header class="plant-tile__head">
+            <a href="/clusters/{{ cluster_id }}/plants/{{ tile.plant_id }}"><i class="species">{{ tile.species }}</i></a>
+            {# Same tiers as the plant page's health badge. #}
+            {% if tile.score is not none %}
+              <span class="badge-{% if tile.score >= 70 %}ok{% elif tile.score >= 40 %}warning{% else %}danger{% endif %}">health {{ tile.score | round | int }}</span>
+            {% else %}
+              <span class="badge-muted">health —</span>
+            {% endif %}
+          </header>
+          {% if tile.sensor_count == 0 %}
+            <p class="muted"><small>No sensor linked.</small></p>
+          {% else %}
+            <div class="plant-tile__soil">
+              {% if tile.soil is not none %}
+                <span class="plant-tile__value mono">{{ "%.0f%%" | format(tile.soil) }}</span>
+                <span class="badge-{{ soil_class }}">{{ {"low": "dry", "high": "wet"}.get(soil_class, "in band") }}</span>
+              {% else %}
+                <span class="plant-tile__value muted">—</span>
+                <span class="muted"><small>no current soil reading</small></span>
+              {% endif %}
+            </div>
+            <div class="plant-tile__bar" role="img"
+                 aria-label="soil {{ '%.0f%%' | format(tile.soil) if tile.soil is not none else 'unknown' }}, band {{ '%.0f' | format(lo) }}–{{ '%.0f' | format(hi) }}%">
+              <span class="plant-tile__band" style="left: {{ lo }}%; width: {{ hi - lo }}%"></span>
+              {% if tile.soil is not none %}<span class="plant-tile__mark" style="left: {{ [[tile.soil, 0] | max, 100] | min }}%"></span>{% endif %}
+            </div>
+            <dl class="plant-tile__meta">
+              <div><dt>band</dt><dd class="mono">{{ "%.0f" | format(lo) }}–{{ "%.0f%%" | format(hi) }}</dd></div>
+              <div><dt>temp</dt><dd class="mono">{{ "%.1f°C" | format(tile.temperature) if tile.temperature is not none else "—" }}</dd></div>
+              <div><dt>RH</dt><dd class="mono">{{ "%.0f%%" | format(tile.humidity) if tile.humidity is not none else "—" }}</dd></div>
+              <div><dt>age</dt><dd class="mono">{{ tile.reading_age_seconds | age_seconds if tile.reading_age_seconds is not none else "—" }}</dd></div>
+            </dl>
+          {% endif %}
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  {% set unlinked = status.sensors | selectattr("plant_id", "none") | list %}
+  {% if unlinked %}
     <ul class="sensor-list">
-      {% for sensor in status.sensors %}
+      {% for sensor in unlinked %}
         <li class="sensor-list__row">
-          <span class="sensor-list__name">{{ sensor.name }}</span>
+          <span class="sensor-list__name">{{ sensor.name }} <small class="muted">no plant</small></span>
           <span class="sensor-list__reading mono">
             {% if sensor.last_reading %}
               {%- if sensor.last_reading.soil_moisture is not none -%}
                 {{ "%.0f%%" | format(sensor.last_reading.soil_moisture) }}
               {%- elif sensor.last_reading.temperature is not none -%}
                 {{ "%.1f°C" | format(sensor.last_reading.temperature) }}
-              {%- elif sensor.last_reading.humidity is not none -%}
-                {{ "%.0f%% RH" | format(sensor.last_reading.humidity) }}
-              {%- elif sensor.last_reading.illuminance is not none -%}
-                {{ "%.0f lx" | format(sensor.last_reading.illuminance) }}
+              {%- elif sensor.last_reading.env_humidity is not none -%}
+                {{ "%.0f%% RH" | format(sensor.last_reading.env_humidity) }}
+              {%- elif sensor.last_reading.light is not none -%}
+                {{ "%.0f lx" | format(sensor.last_reading.light) }}
               {%- else -%}
                 <span class="muted">—</span>
               {%- endif -%}
@@ -41,7 +98,7 @@
         </li>
       {% endfor %}
     </ul>
-  {% else %}
+  {% elif not status.sensors %}
     <p class="muted"><small>No sensors linked.</small></p>
   {% endif %}
 

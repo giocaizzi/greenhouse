@@ -16,6 +16,7 @@ from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
+    PlantDbDep,
     PlantHealthServiceDep,
     RepoDep,
     not_found_as_404,
@@ -27,6 +28,7 @@ from greenhouse_server.services.charts import (
     build_heatmap_payload,
     build_overlay_payload,
 )
+from greenhouse_server.services.plant_snapshot import plant_snapshots
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
@@ -236,16 +238,20 @@ def cluster_detail(
 
 
 @router.get("/clusters/{cluster_id}/status-fragment")
-def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep) -> Response:
+def cluster_status_fragment(
+    request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep, plant_db: PlantDbDep
+) -> Response:
     """Live status fragment used by the cluster detail page's "Live status" panel.
 
-    Retained alongside the richer ``card-fragment`` endpoint so existing
-    bookmarks and the cluster detail page keep working unchanged.
+    The decision, a snapshot tile per plant and the cluster's current conditions.
     """
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
+    snapshots = plant_snapshots(repo, plant_db, cluster_id, status["plants"], status["sensors"])
     return templates.TemplateResponse(
-        request, "partials/_cluster_status.html", base_context(request, status=status, cluster_id=cluster_id)
+        request,
+        "partials/_cluster_status.html",
+        base_context(request, status=status, cluster_id=cluster_id, snapshots=snapshots),
     )
 
 
