@@ -1,4 +1,4 @@
-"""CLAUDE.md "Key invariants" pinned at the decision-engine level (characterization).
+"""AGENTS.md "Key invariants" pinned at the decision-engine level (characterization).
 
 One clearly named test (or small group) per invariant; each docstring cites the
 invariant number. Invariants already pinned *exactly* elsewhere are only cited
