@@ -16,6 +16,7 @@ from greenhouse_core.repository import EffectiveConfig
 from greenhouse_server.deps import (
     MAX_LOOKBACK_HOURS,
     ClusterServiceDep,
+    PlantDbDep,
     PlantHealthServiceDep,
     RepoDep,
     not_found_as_404,
@@ -27,6 +28,7 @@ from greenhouse_server.services.charts import (
     build_heatmap_payload,
     build_overlay_payload,
 )
+from greenhouse_server.services.soil_strip import soil_strip
 from greenhouse_server.web.context import base_context
 from greenhouse_server.web.templating import templates
 from greenhouse_server.web.weekdays import WEEKDAY_BITS, WEEKDAY_LABELS, format_weekday_mask
@@ -250,19 +252,22 @@ def cluster_status_fragment(request: Request, cluster_id: int, svc: ClusterServi
 
 
 @router.get("/clusters/{cluster_id}/card-fragment")
-def cluster_card_fragment(request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep) -> Response:
+def cluster_card_fragment(
+    request: Request, cluster_id: int, svc: ClusterServiceDep, repo: RepoDep, plant_db: PlantDbDep
+) -> Response:
     """Rich cluster card body used by the cluster-centric home view.
 
     Returns ``partials/_cluster_card.html`` with plants/sensors/irrigators
     rolled up inline so the relationship between them is visible without
-    drilling into the cluster detail page.
+    drilling into the cluster detail page, and the soil range strip (#201).
     """
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
+    strip = soil_strip(plant_db, status["plants"], status["sensors"])
     return templates.TemplateResponse(
         request,
         "partials/_cluster_card.html",
-        base_context(request, status=status, plants_by_id=_plants_by_id(repo, cluster_id)),
+        base_context(request, status=status, plants_by_id=_plants_by_id(repo, cluster_id), soil_strip=strip),
     )
 
 
