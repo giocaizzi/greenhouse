@@ -606,9 +606,10 @@
   }
 
   // Cluster health: one daily-score line per plant on a shared 0-100 axis. Colour follows the
-  // plant's position in the cluster (--ch-1..4) and each colour has its own marker shape, so
-  // identity never rests on hue alone (the dark yellow/green pair is close under protanopia);
-  // past four plants the hues repeat with a new dash. Daily data, so points are always marked.
+  // plant's position in the cluster (--ch-1..4) and carries a marker shape, so identity never
+  // rests on hue alone (the dark yellow/green pair is close under protanopia). Past four plants
+  // the hues repeat with a new dash and a shifted shape, so no two lines (or legend entries)
+  // look alike. Daily data, so points are always marked.
   function renderClusterHealth(canvasEl, payload) {
     if (!window.Chart || !canvasEl) return;
     if (canvasEl._chart) {
@@ -640,7 +641,7 @@
         borderWidth: 2,
         borderDash: dashes[Math.floor(i / ramp.length) % dashes.length],
         tension: 0.25,
-        pointStyle: shapes[i % shapes.length],
+        pointStyle: shapes[(i + Math.floor(i / ramp.length)) % shapes.length],
         pointRadius: 4,
         pointHoverRadius: 6,
         pointBorderColor: surf,
