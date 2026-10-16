@@ -4,6 +4,22 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.5.0](https://github.com/giocaizzi/greenhouse/compare/v6.4.0...v6.5.0) (2026-10-16)
+
+
+### Added
+
+* **charts:** hide unassigned gaps of sensors that served a plant ([#212](https://github.com/giocaizzi/greenhouse/issues/212)) ([dba6f83](https://github.com/giocaizzi/greenhouse/commit/dba6f83155def668163d82bd53201e0895c2ed77))
+* **web:** cluster page health trajectories and per-plant snapshots ([#208](https://github.com/giocaizzi/greenhouse/issues/208)) ([d3d4d0b](https://github.com/giocaizzi/greenhouse/commit/d3d4d0b2b6d9c1d8ca24064000b57f9b1363babd))
+* **web:** drop Today from the topbar, name the brand Greenhouse, align the nav ([#205](https://github.com/giocaizzi/greenhouse/issues/205)) ([437ef2e](https://github.com/giocaizzi/greenhouse/commit/437ef2eb4889c1ba443b183a8079664adf48ef3c))
+* **web:** open the alert inbox on open alerts ([#203](https://github.com/giocaizzi/greenhouse/issues/203)) ([385ed9b](https://github.com/giocaizzi/greenhouse/commit/385ed9be344043db223236bbd26f2e4674498b2f))
+* **web:** soil range strip on the home cluster cards ([#207](https://github.com/giocaizzi/greenhouse/issues/207)) ([67f2343](https://github.com/giocaizzi/greenhouse/commit/67f234389f1e4216345ceebf9ac901452a7155a0))
+
+
+### Fixed
+
+* **web:** show the inherited config value wherever a field is unset ([#204](https://github.com/giocaizzi/greenhouse/issues/204)) ([ca0593e](https://github.com/giocaizzi/greenhouse/commit/ca0593ed4d1a4afd01c16c5d407074dc28338eea))
+
 ## [6.4.0](https://github.com/giocaizzi/greenhouse/compare/v6.3.0...v6.4.0) (2026-10-15)
 
 
