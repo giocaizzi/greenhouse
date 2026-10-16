@@ -42,6 +42,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     IRRIGATION_HOST=0.0.0.0 \
     IRRIGATION_PORT=8000
 
+# Pick up Debian security fixes newer than the base image, and drop pip: the
+# app runs from the uv-built venv, and pip's vendored packages (urllib3,
+# setuptools, msgpack) are what the image scan keeps flagging.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip uninstall -y pip
+
 # Non-root user
 RUN groupadd --system --gid 1000 app \
     && useradd --system --uid 1000 --gid app --home /app --shell /usr/sbin/nologin app
