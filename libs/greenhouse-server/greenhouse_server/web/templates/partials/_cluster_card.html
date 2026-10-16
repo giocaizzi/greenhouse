@@ -3,6 +3,7 @@
    Required context:
      status      cluster_status dict (cluster + plants + sensors + irrigators + decision + effective config).
      plants_by_id dict[plant_id -> Plant] so the inline plant↔sensor rollup can name plants.
+     soil_strip  services.soil_strip.SoilStrip for the soil range strip, or none.
 
    Polls /clusters/{id}/card-fragment every 30s for live state — replaces the
    thinner /status-fragment that only carried decision + sensor list.
@@ -28,6 +29,8 @@
       {% endif %}
     </div>
   {% endif %}
+
+  {% include "partials/_soil_strip.html" %}
 
   {# Plants ↔ sensors rollup. Each plant lines up with the sensor that drives
      its decisions via the ``↳`` glyph; sensors without a plant are surfaced
