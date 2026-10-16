@@ -938,6 +938,9 @@ progress::-moz-progress-bar { background: var(--accent); animation: prog 1.2s li
 /* -- Chart card ------------------------------------------------------- */
 .chart-card { padding: 0; }
 .chart-card .chart-head {
+  /* The card has no padding, so drop the bleed margins of `article > header`
+     (they pulled the title outside the card and widened it past the viewport). */
+  margin: 0;
   display: flex; align-items: baseline; justify-content: space-between;
   gap: var(--sp-4); padding: var(--sp-4) var(--sp-5);
   border-bottom: 1px solid var(--border);
