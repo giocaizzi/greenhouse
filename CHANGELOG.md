@@ -4,6 +4,18 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.6.0](https://github.com/giocaizzi/greenhouse/compare/v6.5.0...v6.6.0) (2026-10-16)
+
+
+### Added
+
+* add the repo's mcp servers ([#214](https://github.com/giocaizzi/greenhouse/issues/214)) ([2fedf07](https://github.com/giocaizzi/greenhouse/commit/2fedf078f12a1c437f81667c13acc8d888442868))
+
+
+### Fixed
+
+* **web:** keep chart card headings inside the card ([#218](https://github.com/giocaizzi/greenhouse/issues/218)) ([dffeccb](https://github.com/giocaizzi/greenhouse/commit/dffeccbab9cc3f0defb13c8ed677040b3379a985))
+
 ## [6.5.0](https://github.com/giocaizzi/greenhouse/compare/v6.4.0...v6.5.0) (2026-10-16)
 
 
