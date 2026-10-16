@@ -124,6 +124,7 @@
       hx-post="/alerts/sync"
       hx-target="#alert-list-body"
       hx-swap="innerHTML">
+      <input type="hidden" name="status" value="open">
       <button type="submit" class="btn-sm secondary">
         <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrows-clockwise"></use></svg>
         Refresh alerts
@@ -134,10 +135,10 @@
 
 
 <div class="seg mb-5" role="group" aria-label="Filter by status">
-  <a href="/alerts"
-    aria-current="page">All</a>
+  <a href="/alerts?status=all"
+    >All</a>
   <a href="/alerts?status=open"
-    >Open</a>
+    aria-current="page">Open</a>
   <a href="/alerts?status=acknowledged"
     >Acknowledged</a>
   <a href="/alerts?status=resolved"

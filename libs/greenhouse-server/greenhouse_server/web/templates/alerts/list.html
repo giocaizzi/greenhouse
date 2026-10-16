@@ -19,6 +19,7 @@
       hx-post="/alerts/sync"
       hx-target="#alert-list-body"
       hx-swap="innerHTML">
+      <input type="hidden" name="status" value="{{ current_status }}">
       <button type="submit" class="btn-sm secondary">
         <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrows-clockwise"></use></svg>
         Refresh alerts
@@ -29,8 +30,8 @@
 
 {# Filter chips #}
 <div class="seg mb-5" role="group" aria-label="Filter by status">
-  <a href="/alerts"
-    {% if not current_status %}aria-current="page"{% endif %}>All</a>
+  <a href="/alerts?status=all"
+    {% if current_status == "all" %}aria-current="page"{% endif %}>All</a>
   <a href="/alerts?status=open"
     {% if current_status == "open" %}aria-current="page"{% endif %}>Open</a>
   <a href="/alerts?status=acknowledged"

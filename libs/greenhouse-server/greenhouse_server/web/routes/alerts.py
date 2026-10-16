@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, Response
 
 from greenhouse_server.deps import PlantDbDep, RepoDep, require_alert
@@ -16,18 +16,27 @@ from greenhouse_server.web.templating import templates
 router = APIRouter(include_in_schema=False)
 
 _ALERT_LIST_LIMIT = 200  # rows the inbox page (and its post-sync refresh) renders
+_DEFAULT_STATUS = "open"  # the inbox opens on what still needs attention
+_ALL_STATUSES = "all"  # the "All" chip: no status filter
+
+
+def _status_filter(status: str) -> str | None:
+    """The repository filter for a status chip (``all`` means no filter)."""
+    return None if status == _ALL_STATUSES else status
 
 
 @router.get("/alerts")
 def alert_list(
     request: Request,
     repo: RepoDep,
-    status: Annotated[str | None, Query()] = None,
+    status: Annotated[str, Query()] = _DEFAULT_STATUS,
     cluster_id: Annotated[int | None, Query()] = None,
     plant_id: Annotated[int | None, Query()] = None,
 ) -> Response:
     """Render the alert inbox page with optional status / cluster / plant filters."""
-    alerts = repo.list_alerts(status=status, cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT)
+    alerts = repo.list_alerts(
+        status=_status_filter(status), cluster_id=cluster_id, plant_id=plant_id, limit=_ALERT_LIST_LIMIT
+    )
     open_count = repo.count_open_alerts()
     return templates.TemplateResponse(
         request,
@@ -74,11 +83,13 @@ def resolve_alert(request: Request, alert_id: int, repo: RepoDep) -> Response:
 
 
 @router.post("/alerts/sync")
-def sync_alerts(request: Request, repo: RepoDep, plant_db: PlantDbDep) -> Response:
-    """Recompute alerts for every cluster and return the refreshed inbox body with a toast."""
+def sync_alerts(
+    request: Request, repo: RepoDep, plant_db: PlantDbDep, status: Annotated[str, Form()] = _DEFAULT_STATUS
+) -> Response:
+    """Recompute alerts for every cluster and return the refreshed inbox body (same status chip) with a toast."""
     open_count = sync_all_alerts(repo, plant_db)
     repo.commit()
-    alerts = repo.list_alerts(limit=_ALERT_LIST_LIMIT)
+    alerts = repo.list_alerts(status=_status_filter(status), limit=_ALERT_LIST_LIMIT)
     toast = json.dumps({"severity": "info", "title": "Synced", "message": f"{open_count} open alert(s) after sync."})
     return templates.TemplateResponse(
         request,
