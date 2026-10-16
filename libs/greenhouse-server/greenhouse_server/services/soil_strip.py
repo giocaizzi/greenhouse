@@ -1,30 +1,35 @@
-"""Soil range strip read model: the cluster's band, each plant's current reading, and their average.
+"""Soil range strip read model: the cluster's band, each plant's current soil value, and their average.
 
 Display only (issue #201). The engine decides on the driest plant (invariant 2),
 so the average here is labelled ``avg`` wherever it is drawn and never feeds a
-decision. Bands come from the same resolution the engine uses: each plant's own
-target via :func:`plant_care_data`, and the cluster's widest band as the shaded
-range (what an unlinked sensor is judged against).
+decision. Whether a plant is dry is a judgement, so each plant's value is judged
+the engine's way (invariant 10): the driest current *cleaned* reading among its
+sensors, from the decision snapshot via :func:`current_soil`, against the plant's
+own band (:func:`plant_care_data`). The shaded range is the cluster's widest band,
+what an unlinked sensor is judged against.
 """
 
 import statistics
+import time
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
-from greenhouse_core.logic.plant_needs import cluster_band, plant_bands
+from greenhouse_core.constants import SNAPSHOT_LOOKBACK_HOURS
+from greenhouse_core.logic.decision import SensorSnapshot
+from greenhouse_core.logic.plant_needs import cluster_band, current_soil, plant_bands
+from greenhouse_core.logic.sensors import get_recent_sensor_data
 from greenhouse_core.plant_db import PlantDatabase, plant_care_data
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from greenhouse_core.models import Plant
-    from greenhouse_server.services.cluster import SensorStatusRow
+    from greenhouse_core.repository import IrrigationRepository
 
 SoilPosition = Literal["dry", "in band", "wet"]
 
 
 class SoilStripMark(TypedDict):
-    """One plant's current soil reading and where it sits against the plant's own band."""
+    """One plant's current soil value and where it sits against the plant's own band."""
 
     plant: str
     value: float
@@ -48,32 +53,24 @@ def _position(value: float, band: tuple[float, float]) -> SoilPosition:
     return "in band"
 
 
-def _current_soil(plant_id: int, sensors: "Sequence[SensorStatusRow]") -> float | None:
-    """The plant's first linked sensor's newest soil reading, or None when absent or stale.
-
-    The first linked sensor is the one the card's plant row shows, so the mark
-    and the number beside the plant agree.
-    """
-    sensor = next((s for s in sensors if s["plant_id"] == plant_id), None)
-    if sensor is None or sensor["last_reading"] is None:
-        return None
-    age = sensor["reading_age_seconds"]
-    if age is not None and age > SENSOR_READING_STALE_SECONDS:
-        return None
-    return sensor["last_reading"].soil_moisture
+def _plant_soil(snapshot: SensorSnapshot, plant_id: int, bands: dict[int, tuple[float, float]]) -> float | None:
+    """The driest current cleaned soil value among the plant's sensors, or None when none is current."""
+    own = SensorSnapshot(per_sensor=[s for s in snapshot.per_sensor if s.plant_id == plant_id])
+    return min((s.value for s in current_soil(own, bands, bands[plant_id])), default=None)
 
 
 def soil_strip(
-    plant_db: PlantDatabase, plants: "Sequence[Plant]", sensors: "Sequence[SensorStatusRow]"
+    repo: "IrrigationRepository", plant_db: PlantDatabase, cluster_id: int, plants: "Sequence[Plant]"
 ) -> SoilStrip | None:
-    """Build the strip for a cluster's plants and sensor status rows, or None when it has no plants."""
+    """Build the strip for a cluster's plants, or None when it has no plants."""
     if not plants:
         return None
     care = [plant_care_data(plant_db, p) for p in plants]
     bands = plant_bands(plants, care)
+    snapshot = get_recent_sensor_data(repo, cluster_id, hours=SNAPSHOT_LOOKBACK_HOURS, now=int(time.time()))
     marks: list[SoilStripMark] = []
     for plant in plants:
-        value = _current_soil(plant.id, sensors)
+        value = _plant_soil(snapshot, plant.id, bands)
         if value is not None:
             band = bands[plant.id]
             marks.append({"plant": plant.species, "value": value, "band": band, "position": _position(value, band)})

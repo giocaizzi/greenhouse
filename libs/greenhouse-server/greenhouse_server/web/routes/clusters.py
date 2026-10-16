@@ -263,7 +263,7 @@ def cluster_card_fragment(
     """
     with not_found_as_404("Cluster not found"):
         status = svc.get_cluster_status(cluster_id)
-    strip = soil_strip(plant_db, status["plants"], status["sensors"])
+    strip = soil_strip(repo, plant_db, cluster_id, status["plants"])
     return templates.TemplateResponse(
         request,
         "partials/_cluster_card.html",

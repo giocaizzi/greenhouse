@@ -1,66 +1,84 @@
 """Soil range strip on the home cluster card (issue #201)."""
 
+import time
+from collections.abc import Iterator
 from http import HTTPStatus
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 from greenhouse_core.constants import SENSOR_READING_STALE_SECONDS
-from greenhouse_core.models import Plant, SensorReading
+from greenhouse_core.models import Base
 from greenhouse_core.plant_db import get_plant_database
 from greenhouse_core.repository import IrrigationRepository
-from greenhouse_server.services.cluster import SensorStatusRow
 from greenhouse_server.services.soil_strip import soil_strip
 from server.conftest import app_of
 
 MIDPOINT = 40.0
 
 
-def _plant(plant_id: int, species: str, target: str | None) -> Plant:
-    return Plant(id=plant_id, cluster_id=1, species=species, category="tropical", soil_moisture_target=target)
+@pytest.fixture
+def repo() -> Iterator[IrrigationRepository]:
+    """A repository on a fresh in-memory database."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    with Session(engine) as session:
+        yield IrrigationRepository(session)
+    engine.dispose()
 
 
-def _row(sensor_id: int, plant_id: int | None, soil: float | None, age: int = 60) -> SensorStatusRow:
-    reading = SensorReading(sensor_id=sensor_id, timestamp=0, soil_moisture=soil)
-    return {
-        "id": sensor_id,
-        "name": f"S{sensor_id}",
-        "type": "tuya.tr301z",
-        "plant_id": plant_id,
-        "last_reading": reading,
-        "reading_age_seconds": age,
-    }
+def _plant(repo: IrrigationRepository, cluster_id: int, species: str, target: str) -> int:
+    plant_id = repo.add_plant(cluster_id, species, category="tropical")
+    repo.update_plant(plant_id, soil_moisture_target=target)
+    return plant_id
 
 
-def test_strip_judges_each_plant_against_its_own_band() -> None:
+def _sensor(repo: IrrigationRepository, cluster_id: int, plant_id: int | None, *readings: tuple[int, float]) -> None:
+    n = len(repo.get_sensors_in_cluster(cluster_id))
+    sid = repo.add_sensor(
+        cluster_id, f"fake_tuya_device_{n:08x}", f"S{n}", "tuya.tr301z", {}, plant_id=plant_id, assignment_started_at=0
+    )
+    for age, soil in readings:
+        repo.add_sensor_reading(sid, timestamp=int(time.time()) - age, soil_moisture=soil)
+
+
+def test_strip_judges_each_plant_against_its_own_band(repo: IrrigationRepository) -> None:
     """A plant's mark is dry/wet against its own target; the shaded band is the cluster's widest."""
-    plants = [_plant(1, "Cactus", "10-30"), _plant(2, "Fern", "50-70")]
-    strip = soil_strip(get_plant_database(), plants, [_row(1, 1, 40.0), _row(2, 2, 40.0)])
+    cid = repo.add_cluster("C")
+    cactus, fern = _plant(repo, cid, "Cactus", "10-30"), _plant(repo, cid, "Fern", "50-70")
+    _sensor(repo, cid, cactus, (60, 40.0))
+    _sensor(repo, cid, fern, (60, 40.0))
+    strip = soil_strip(repo, get_plant_database(), cid, repo.get_plants_in_cluster(cid))
     assert strip is not None
     assert strip["band"] == (10.0, 70.0)
     assert [(m["plant"], m["position"]) for m in strip["marks"]] == [("Cactus", "wet"), ("Fern", "dry")]
     assert strip["average"] == MIDPOINT
 
 
-def test_strip_average_is_the_mean_of_current_readings() -> None:
-    """Average is the mean (display only); stale, missing and unlinked readings are left out."""
-    plants = [_plant(1, "A", "40-60"), _plant(2, "B", "40-60"), _plant(3, "C", "40-60"), _plant(4, "D", "40-60")]
-    rows = [
-        _row(1, 1, 30.0),
-        _row(2, 2, 50.0),
-        _row(3, 3, 90.0, age=SENSOR_READING_STALE_SECONDS + 1),
-        _row(4, 4, None),
-        _row(5, None, 10.0),
-    ]
-    strip = soil_strip(get_plant_database(), plants, rows)
+def test_strip_takes_the_driest_current_sensor_per_plant(repo: IrrigationRepository) -> None:
+    """Like the engine: a plant with two sensors shows the drier; stale and unlinked readings are left out."""
+    cid = repo.add_cluster("C")
+    a, b = _plant(repo, cid, "A", "40-60"), _plant(repo, cid, "B", "40-60")
+    _sensor(repo, cid, a, (60, 30.0))
+    _sensor(repo, cid, a, (60, 55.0))
+    _sensor(repo, cid, b, (60, 50.0))
+    _sensor(repo, cid, b, (SENSOR_READING_STALE_SECONDS + 60, 5.0))
+    _sensor(repo, cid, None, (60, 10.0))
+    strip = soil_strip(repo, get_plant_database(), cid, repo.get_plants_in_cluster(cid))
     assert strip is not None
-    assert [m["plant"] for m in strip["marks"]] == ["A", "B"]
+    assert [(m["plant"], m["value"]) for m in strip["marks"]] == [("A", 30.0), ("B", 50.0)]
     assert strip["average"] == MIDPOINT
 
 
-def test_strip_without_plants_is_none_and_without_readings_has_no_average() -> None:
+def test_strip_without_plants_is_none_and_without_readings_has_no_average(repo: IrrigationRepository) -> None:
     """No plants → no strip; plants without readings → band only."""
-    assert soil_strip(get_plant_database(), [], []) is None
-    strip = soil_strip(get_plant_database(), [_plant(1, "A", "40-60")], [])
+    cid = repo.add_cluster("C")
+    assert soil_strip(repo, get_plant_database(), cid, []) is None
+    _plant(repo, cid, "A", "40-60")
+    strip = soil_strip(repo, get_plant_database(), cid, repo.get_plants_in_cluster(cid))
     assert strip == {"band": (40.0, 60.0), "marks": [], "average": None}
 
 
@@ -77,7 +95,7 @@ def test_card_fragment_renders_the_strip(seeded_client: TestClient) -> None:
     assert 'class="soil-strip"' in html
     assert "soil-strip__plant--off" in html
     assert ">avg</span>" in html
-    assert "avg 30%, target 40–60%. Monstera deliciosa 30% (dry, band 40–60%)." in html
+    assert "avg 30%, target 40–60%. Monstera deliciosa 30% (dry, band 40–60%). Values are cleaned" in html
     assert "1 of 1 out of band" in html
 
 

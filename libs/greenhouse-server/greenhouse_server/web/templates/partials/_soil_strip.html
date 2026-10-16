@@ -1,6 +1,8 @@
 {# Soil range strip (issue #201): a 0-100 % track with the cluster's widest
-   band shaded, one thin mark per plant (its first linked sensor's current
-   reading, coloured by the plant's own band) and a bold "avg" mark.
+   band shaded, one thin mark per plant (the driest current cleaned reading
+   of its sensors, as the engine judges it, coloured by the plant's own band)
+   and a bold "avg" mark. Cleaned values can differ from the raw latest
+   numbers listed on the card; the text alternative says so.
 
    The average is display only; the engine decides on the driest plant.
 
@@ -14,7 +16,7 @@
   {% set summary -%}
     Soil moisture{% if avg is not none %}: avg {{ "%.0f" | format(avg) }}%{% endif %}, target {{ "%.0f" | format(band[0]) }}–{{ "%.0f" | format(band[1]) }}%.
     {%- for m in soil_strip.marks %} {{ m.plant }} {{ "%.0f" | format(m.value) }}% ({{ m.position }}, band {{ "%.0f" | format(m.band[0]) }}–{{ "%.0f" | format(m.band[1]) }}%){{ ";" if not loop.last else "." }}{% endfor %}
-    {%- if not soil_strip.marks %} No current readings.{% endif %}
+    {%- if not soil_strip.marks %} No current readings.{% else %} Values are cleaned, as the engine judges them, and can differ from the raw latest readings.{% endif %}
   {%- endset %}
   <figure class="soil-strip" role="img" aria-label="{{ summary }}" title="{{ summary }}">
     <div class="soil-strip__track">
@@ -27,7 +29,7 @@
       {% for m in soil_strip.marks %}
         <span class="soil-strip__plant soil-strip__plant--{{ 'ok' if m.position == 'in band' else 'off' }}"
               style="left: {{ [[m.value, 0] | max, 100] | min }}%"
-              title="{{ m.plant }} {{ '%.0f' | format(m.value) }}% · {{ m.position }}"></span>
+              title="{{ m.plant }} {{ '%.0f' | format(m.value) }}% (cleaned) · {{ m.position }}"></span>
       {% endfor %}
     </div>
     <figcaption class="soil-strip__caption" aria-hidden="true">
