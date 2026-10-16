@@ -36,8 +36,8 @@ from greenhouse_core.logic.decision import Action, Severity, TriggerCode
 
 MIN_CONSTANTS = 100
 TRIGGER_CODE_COUNT = 50  # + DRY_RUN_GLOBAL (S1), NO_ACTION_NEEDED, SENSOR_SETTLING (#145), SENSOR_FLATLINE (#180)
-PINNED_MIN_COOLDOWN_HOURS = 6  # CLAUDE.md invariant 3
-PINNED_LEAK_HOLD_HOURS = 24  # CLAUDE.md invariant 11
+PINNED_MIN_COOLDOWN_HOURS = 6  # AGENTS.md invariant 3
+PINNED_LEAK_HOLD_HOURS = 24  # AGENTS.md invariant 11
 
 
 def _constants() -> dict[str, str]:
@@ -127,7 +127,7 @@ def test_trigger_code_count_and_extremes() -> None:
 
 
 def test_notable_thresholds_named_in_claude_md() -> None:
-    """Values CLAUDE.md's key invariants refer to by name."""
+    """Values AGENTS.md's key invariants refer to by name."""
     assert constants.MIN_COOLDOWN_HOURS == PINNED_MIN_COOLDOWN_HOURS
     assert constants.SENSOR_READING_STALE_SECONDS == 4 * 3600
     assert constants.LEAK_HOLD_HOURS == PINNED_LEAK_HOLD_HOURS

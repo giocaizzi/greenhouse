@@ -414,7 +414,7 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
     def action_check(self) -> None:
         """Run the scheduled check for this cluster now (auto-run may water)."""
         self.confirm_then(
-            "Run the scheduled check for this cluster now?\nIf auto-run is enabled it may irrigate.",
+            "Run the scheduled check for this cluster now?\nIf it irrigates automatically it may water.",
             lambda c: c.check(self.cluster_id),
             lambda r: f"Check: {r.get('action')}" + (f" — {r['notes']}" if r.get("notes") else ""),
             "Check",
@@ -574,7 +574,10 @@ class ClusterScreen(DataScreen):  # noqa: PLR0904 — its 18 action_*/on_* handl
             resources.config_fields(self.detail.get("config")),
             lambda v: lambda c: c.set_config(cid, **v),
             "Config saved",
-            note="Blank = keep the current value. Global defaults live on the Settings screen (o).",
+            note=(
+                "Blank = keep the current value. Global defaults live on the Settings screen (o).\n"
+                + resources.AUTO_RUN_HINT
+            ),
         )
 
     def action_delete(self) -> None:

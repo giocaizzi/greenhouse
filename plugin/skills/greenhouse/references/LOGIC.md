@@ -107,7 +107,7 @@ Quiet hours have **no built-in default** in the resolver: production deployments
 
 Each `IrrigationConfig` field resolves **cluster → global → built-in constant**. A `null` at a level means "inherit from the next level down." `Repository.get_effective_config(cluster_id)` returns, per field, `{value, source}` where `source ∈ {"cluster", "global", "default"}` so the UI/CLI can render inheritance state. The engine reads quiet-hours bounds through this same resolver.
 
-Surfaces: `GET/PUT /api/v1/config/global` (the singleton global defaults), `GET /api/v1/clusters/{id}/config/effective` (merged view), `PUT /api/v1/clusters/{id}/config` (per-cluster partial override). In the web UI the global defaults live on `/preferences`; per-cluster overrides render inline on `/clusters/{id}#config` with source badges.
+Surfaces: `GET/PUT /api/v1/config/global` (the singleton global defaults), `GET /api/v1/clusters/{id}/config/effective` (merged view), `PUT /api/v1/clusters/{id}/config` (per-cluster partial override). In the web UI the global defaults live on `/preferences`; per-cluster overrides render inline on `/clusters/{id}#config` with source badges. Every surface shows the effective value and its source: the cluster cards, the detail header and the Schedule aside tag inherited values `↳ global` / `↳ default`; the global form and the TUI settings screen name the built-in value an unset global field falls through to (`smart`, 2 min, 12 h, auto on, no cap, quiet hours off).
 
 ### Weather-skip rule
 

@@ -1,16 +1,17 @@
 {# Rich cluster card rendered on the home dashboard.
 
    Required context:
-     status      cluster_status dict (cluster + plants + sensors + irrigators + decision + config).
+     status      cluster_status dict (cluster + plants + sensors + irrigators + decision + effective config).
      plants_by_id dict[plant_id -> Plant] so the inline plant↔sensor rollup can name plants.
      soil_strip  services.soil_strip.SoilStrip for the soil range strip, or none.
 
    Polls /clusters/{id}/card-fragment every 30s for live state — replaces the
    thinner /status-fragment that only carried decision + sensor list.
 #}
+{% from "partials/_config_source.html" import source_tag %}
 {% set cluster = status.cluster %}
 {% set decision = status.decision %}
-{% set config = status.config %}
+{% set eff = status.effective_config %}
 {% set plant_count = status.plants | length %}
 {% set sensor_count = status.sensors | length %}
 {% set irrigator_count = 1 if status.irrigator else 0 %}
@@ -92,12 +93,10 @@
     {% endif %}
   </div>
 
-  {% if config %}
-    <div class="cluster-card__config">
-      <span><kbd>{{ config.mode or "inherit" }}</kbd></span>
-      {% if config.interval_hours %}<span>every {{ config.interval_hours }}h</span>{% endif %}
-      {% if config.duration_minutes %}<span>{{ config.duration_minutes | format_minutes }}/run</span>{% endif %}
-      <span class="muted">auto&nbsp;{% if config.auto_run is none %}inherit{% else %}{{ config.auto_run | yesno("on", "off") }}{% endif %}</span>
-    </div>
-  {% endif %}
+  <div class="cluster-card__config">
+    <span><kbd>{{ eff.mode.value }}</kbd>{{ source_tag(eff.mode) }}</span>
+    <span>every {{ eff.interval_hours.value }}h{{ source_tag(eff.interval_hours) }}</span>
+    <span>{{ eff.duration_minutes.value | format_minutes }}/run{{ source_tag(eff.duration_minutes) }}</span>
+    <span class="muted">auto-irrigate&nbsp;{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</span>
+  </div>
 </div>

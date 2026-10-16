@@ -49,6 +49,7 @@ from greenhouse_core.repository._assignments import AssignmentWindow
 from greenhouse_core.repository._irrigation import IrrigatorMixin
 from greenhouse_core.repository._settings import SettingsMixin
 from greenhouse_core.repository._types import (
+    GLOBAL_CONFIG_DEFAULTS,
     ActivityEventOptions,
     ActivityFilters,
     AlertOptions,
@@ -84,6 +85,7 @@ __all__ = [
     "DEFAULT_IRRIGATION_MODE",
     "ENTITY_PLANT",
     "ENTITY_SENSOR",
+    "GLOBAL_CONFIG_DEFAULTS",
     "ActivityEvent",
     "ActivityEventOptions",
     "ActivityFilters",

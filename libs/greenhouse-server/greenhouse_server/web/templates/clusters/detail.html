@@ -3,7 +3,8 @@
 {% block content %}
 {% set cluster = status.cluster %}
 {% set decision = status.decision %}
-{% set config = status.config %}
+{% from "partials/_config_source.html" import source_tag %}
+{% set eff = status.effective_config %}
 {% set current_tab = "overview" %}
 {% set caps = status | cluster_caps %}
 {% set plant_count = status.plants|length %}
@@ -45,10 +46,8 @@
         <span class="dot"></span>
         <span class="badge-muted">empty</span>
       {% endif %}
-      {% if config %}
-        <span class="dot"></span>
-        <span class="badge-{{ 'ok' if config.auto_run else 'muted' }}">auto {{ config.auto_run | yesno("on", "off") }}</span>
-      {% endif %}
+      <span class="dot"></span>
+      <span class="badge-{{ 'ok' if eff.auto_run.value else 'muted' }}">auto-irrigate {{ eff.auto_run.value | yesno("on", "off") }}</span>{{ source_tag(eff.auto_run) }}
     </div>
   </div>
   <div class="page-head__actions">
@@ -87,20 +86,18 @@
       {% if decision.get("temperature") is not none %}<span class="badge-muted">{{ "%.1f°C" | format(decision.temperature) }}</span>{% endif %}
     </div>
   </div>
-  {% if config %}
   <aside class="decision__side">
     <h3>Schedule</h3>
     <dl>
-      <dt>Mode</dt><dd><kbd>{{ config.mode }}</kbd></dd>
-      {% if config.duration_minutes %}<dt>Duration</dt><dd>{{ config.duration_minutes | format_minutes }}</dd>{% endif %}
-      {% if config.interval_hours %}<dt>Interval</dt><dd>every {{ config.interval_hours }}h</dd>{% endif %}
-      <dt>Auto-run</dt><dd>{{ config.auto_run | yesno("on", "off") }}</dd>
+      <dt>Mode</dt><dd><kbd>{{ eff.mode.value }}</kbd>{{ source_tag(eff.mode) }}</dd>
+      <dt>Duration</dt><dd>{{ eff.duration_minutes.value | format_minutes }}{{ source_tag(eff.duration_minutes) }}</dd>
+      <dt>Interval</dt><dd>every {{ eff.interval_hours.value }}h{{ source_tag(eff.interval_hours) }}</dd>
+      <dt>Irrigate automatically</dt><dd>{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</dd>
       <dt>Sensors</dt><dd>{{ sensor_count }}</dd>
       <dt>Irrigators</dt><dd>{{ irrigator_count }}</dd>
     </dl>
     <a href="/clusters/{{ cluster.id }}/config" class="btn secondary mt-2">Edit config</a>
   </aside>
-  {% endif %}
 </section>
 {% endif %}
 
@@ -625,7 +622,7 @@
   {% endif %}
 </article>
 
-{# Config section — hierarchical view of mode/duration/interval/auto-run +
+{# Config section — hierarchical view of mode/duration/interval/auto_run +
    quiet-hours editor + watering windows. Inline so the user never leaves
    the cluster context to tune behaviour. #}
 {% if caps.can_actuate %}
@@ -638,12 +635,13 @@
     <form method="post" action="/clusters/{{ cluster.id }}/config" class="config-form">
       {% set fields = [
         {"name": "mode", "label": "Mode", "kind": "select",
-         "options": [("smart", "smart (sensor-driven)"), ("schedule", "schedule (time-based)"), ("manual", "manual (no auto-run)")]},
+         "options": [("smart", "smart (sensor-driven)"), ("schedule", "schedule (time-based)"), ("manual", "manual (never irrigates automatically)")]},
         {"name": "duration_minutes", "label": "Duration (min)", "kind": "number", "min": 1},
         {"name": "interval_hours", "label": "Interval (hours)", "kind": "number", "min": 1},
-        {"name": "auto_run", "label": "Auto-run", "kind": "tri_bool"},
-        {"name": "quiet_start_hour", "label": "Quiet start (hour 0–23)", "kind": "number", "min": 0, "max": 23},
-        {"name": "quiet_end_hour", "label": "Quiet end (hour 0–23)", "kind": "number", "min": 0, "max": 23},
+        {"name": "auto_run", "label": "Irrigate automatically", "kind": "tri_bool",
+         "hint": "Off: the hourly check still decides, but never starts the irrigator. Manual starts always work."},
+        {"name": "quiet_start_hour", "label": "Quiet start (hour 0–23)", "kind": "number", "min": 0, "max": 23, "none_label": "off"},
+        {"name": "quiet_end_hour", "label": "Quiet end (hour 0–23)", "kind": "number", "min": 0, "max": 23, "none_label": "off"},
       ] %}
       {% for field in fields %}
         {% include "partials/_config_field.html" %}

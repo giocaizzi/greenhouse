@@ -148,7 +148,7 @@ class DashboardScreen(DataScreen):
     def action_check_all(self) -> None:
         """Run the scheduled check on every cluster after confirmation (auto-run clusters may water)."""
         self.confirm_then(
-            "Run the check on [b]every[/b] cluster?\nClusters with auto-run enabled may irrigate.",
+            "Run the check on [b]every[/b] cluster?\nClusters that irrigate automatically may water.",
             lambda c: c.check(),
             lambda r: "Check complete" + (" — alerts raised" if r.get("has_alerts") else ""),
             "Check all",

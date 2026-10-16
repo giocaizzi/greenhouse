@@ -65,6 +65,7 @@
   "web/templates/partials/_cluster_status.html",
   "web/templates/partials/_cluster_tabs.html",
   "web/templates/partials/_config_field.html",
+  "web/templates/partials/_config_source.html",
   "web/templates/partials/_dashboard_hero.html",
   "web/templates/partials/_decision_panel.html",
   "web/templates/partials/_health_badge.html",

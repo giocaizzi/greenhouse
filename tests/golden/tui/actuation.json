@@ -4,7 +4,7 @@
   "dialog_detail": {
    "confirm_label": "Check all",
    "danger": true,
-   "message": "Run the check on [b]every[/b] cluster?\nClusters with auto-run enabled may irrigate."
+   "message": "Run the check on [b]every[/b] cluster?\nClusters that irrigate automatically may water."
   },
   "key": "c",
   "screen": "dashboard",
@@ -193,7 +193,7 @@
   "dialog_detail": {
    "confirm_label": "Check",
    "danger": true,
-   "message": "Run the scheduled check for this cluster now?\nIf auto-run is enabled it may irrigate."
+   "message": "Run the scheduled check for this cluster now?\nIf it irrigates automatically it may water."
   },
   "key": "c",
   "screen": "cluster",
@@ -1006,7 +1006,7 @@
     "quiet_start_hour",
     "quiet_end_hour"
    ],
-   "note": "Blank = keep the current value. Global defaults live on the Settings screen (o).",
+   "note": "Blank = keep the current value. Global defaults live on the Settings screen (o).\nIrrigate automatically off: the hourly check still decides, but never starts the irrigator. Manual starts always work.",
    "prefilled": {
     "duration_minutes": 3,
     "interval_hours": 12,
@@ -1256,7 +1256,7 @@
   "dialog_detail": {
    "confirm_label": "Resume",
    "danger": true,
-   "message": "Resume automatic irrigation? Clusters with auto-run enabled may water at the next check."
+   "message": "Resume automatic irrigation? Clusters that irrigate automatically may water at the next check."
   },
   "key": "p",
   "note": "resume (scheduler paused)",
@@ -1449,7 +1449,7 @@
     "quiet_start_hour",
     "quiet_end_hour"
    ],
-   "note": "Clusters inherit these unless they override a field. Blank = keep current.",
+   "note": "Clusters inherit these unless they override a field. Blank = keep current.\nIrrigate automatically off: the hourly check still decides, but never starts the irrigator. Manual starts always work.",
    "prefilled": {
     "quiet_end_hour": 5,
     "quiet_start_hour": 0
