@@ -225,8 +225,9 @@ There is no per-evaluation anomaly scan: sensor drift / staleness are judged by 
 
 A plant's `soil_moisture_target` (e.g. `"45-65"`) is read through one parser, `parse_moisture_target`
 (`logic/plant_needs.py`, via `moisture_target_range`), everywhere it is judged: the engine, plant health, the forecast,
-the monitor / check of sensor-only clusters, and the learning issue heuristics (chronic underwatering, unresolvable
-conflict). It takes the first two `-`-separated numbers (`"40-50-60"` → 40–50) and validates them: an inverted
+the monitor / check of sensor-only clusters, the cluster page's per-plant snapshot tiles (the driest current cleaned
+reading of the plant's sensors, through `current_soil`), and the learning issue heuristics (chronic underwatering,
+unresolvable conflict). It takes the first two `-`-separated numbers (`"40-50-60"` → 40–50) and validates them: an inverted
 band is swapped (`"65-45"` → 45–65), and a bound outside the soil sensor's physical range (0–100 %), NaN or infinite
 makes the whole target fall back to the default band 45–65 — as does anything unparsable (a bare `"50"`, non-numeric
 text, a missing or non-string value). The plant chart's water-needs threshold band uses the same parser;
