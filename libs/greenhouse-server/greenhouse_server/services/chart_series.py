@@ -3,8 +3,9 @@
 A sensor that moves between plants measures a different plant after the move, so a chart
 labelled only by sensor name hides what the series means. Every series here carries the
 plant the sensor was measuring (``SensorAssignment``), the sensor name as secondary
-information (``"<species> · <sensor>"``), and ``"<sensor> (unassigned)"`` for a period with
-no assignment. Display only: nothing that judges readings goes through this module.
+information (``"<species> · <sensor>"``), and ``"<sensor> (unassigned)"`` for a sensor that never
+had an assignment (a gap between two assignments is not drawn). Display only: nothing that judges
+readings goes through this module.
 """
 
 from __future__ import annotations
@@ -49,7 +50,11 @@ def plant_sensor_datasets(repo: IrrigationRepository, plant: Plant, hours: int, 
 def cluster_sensor_datasets(
     repo: IrrigationRepository, sensors: list[Sensor], hours: int, metric: Metric
 ) -> list[ChartDataset]:
-    """Every sensor's series, split into one dataset per run of readings under the same plant."""
+    """Every sensor's series, split into one dataset per run of readings under the same plant.
+
+    A sensor that served a plant hides its unassigned gaps (a two-step move would otherwise
+    draw an extra series); a never-assigned sensor keeps its ``(unassigned)`` series.
+    """
     plant_names: dict[int, str] = {}
     datasets: list[ChartDataset] = []
     for sensor in sensors:
@@ -60,6 +65,8 @@ def cluster_sensor_datasets(
         )
         assignments = repo.list_sensor_assignments(sensor.id)
         for plant_id, segment in _segments(points, assignments):
+            if plant_id is None and assignments:
+                continue
             name = _plant_name(repo, plant_id, plant_names) if plant_id is not None else None
             datasets.append(_dataset(sensor.id, sensor.name, plant_id, name, bucket_points(segment, hours)))
     return datasets
