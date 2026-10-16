@@ -45,12 +45,11 @@
 
 <header class="topbar">
   <div class="container topbar__inner">
-    <a href="/" class="brand" aria-label="Irrigation home">
+    <a href="/" class="brand" aria-label="Greenhouse home">
       <span class="brand__mark"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
-      Irrigation
+      Greenhouse
     </a>
     <nav class="topnav" aria-label="Primary">
-      <a href="/">Today</a>
       <a href="/clusters">Spaces</a>
       <a href="/activity">Activity</a>
       <a href="/scheduler">Scheduler</a>
@@ -124,6 +123,7 @@
       hx-post="/alerts/sync"
       hx-target="#alert-list-body"
       hx-swap="innerHTML">
+      <input type="hidden" name="status" value="open">
       <button type="submit" class="btn-sm secondary">
         <svg class="icon" aria-hidden="true"><use href="/static/icons/sprite.svg#i-arrows-clockwise"></use></svg>
         Refresh alerts
@@ -134,7 +134,7 @@
 
 
 <div class="seg mb-5" role="group" aria-label="Filter by status">
-  <a href="/alerts"
+  <a href="/alerts?status=all"
     >All</a>
   <a href="/alerts?status=open"
     aria-current="page">Open</a>

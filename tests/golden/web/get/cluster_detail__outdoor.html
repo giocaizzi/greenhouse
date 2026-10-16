@@ -45,12 +45,11 @@
 
 <header class="topbar">
   <div class="container topbar__inner">
-    <a href="/" class="brand" aria-label="Irrigation home">
+    <a href="/" class="brand" aria-label="Greenhouse home">
       <span class="brand__mark"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
-      Irrigation
+      Greenhouse
     </a>
     <nav class="topnav" aria-label="Primary">
-      <a href="/">Today</a>
       <a href="/clusters">Spaces</a>
       <a href="/activity">Activity</a>
       <a href="/scheduler">Scheduler</a>
@@ -121,6 +120,7 @@
 
 
 
+
   
   
   
@@ -144,10 +144,8 @@
       <span class="dot"></span>
       <span>1 sensor</span>
       
-      
-        <span class="dot"></span>
-        <span class="badge-muted">auto off</span>
-      
+      <span class="dot"></span>
+      <span class="badge-muted">auto-irrigate off</span>
     </div>
   </div>
   <div class="page-head__actions">
@@ -196,20 +194,18 @@
       
     </div>
   </div>
-  
   <aside class="decision__side">
     <h3>Schedule</h3>
     <dl>
-      <dt>Mode</dt><dd><kbd>None</kbd></dd>
+      <dt>Mode</dt><dd><kbd>smart</kbd> <small class="muted config-source" title="Inherited from default"><span class="rel-arrow" aria-hidden="true">↳</span>&nbsp;default</small></dd>
       <dt>Duration</dt><dd>5 min</dd>
-      
-      <dt>Auto-run</dt><dd>off</dd>
+      <dt>Interval</dt><dd>every 12h <small class="muted config-source" title="Inherited from default"><span class="rel-arrow" aria-hidden="true">↳</span>&nbsp;default</small></dd>
+      <dt>Irrigate automatically</dt><dd>off</dd>
       <dt>Sensors</dt><dd>1</dd>
       <dt>Irrigators</dt><dd>1</dd>
     </dl>
     <a href="/clusters/2/config" class="btn secondary mt-2">Edit config</a>
   </aside>
-  
 </section>
 
 
@@ -898,10 +894,11 @@
       
         <option value="schedule">schedule (time-based)</option>
       
-        <option value="manual">manual (no auto-run)</option>
+        <option value="manual">manual (never irrigates automatically)</option>
       
     </select>
   
+
 </div>
       
         
@@ -929,6 +926,7 @@
            placeholder="inherit (5)"
            value="5">
   
+
 </div>
       
         
@@ -959,6 +957,7 @@
            placeholder="inherit (12)"
            value="">
   
+
 </div>
       
         
@@ -970,7 +969,7 @@
 
 <div class="config-field" data-source="cluster" id="config-field-auto_run">
   <label for="cfg-auto_run" class="config-field__label">
-    <span class="config-field__name">Auto-run</span>
+    <span class="config-field__name">Irrigate automatically</span>
     
       <span class="badge-ok config-field__source" title="Overridden at the cluster level">override</span>
     
@@ -986,6 +985,7 @@
       <option value="false" selected>Off</option>
     </select>
   
+<small class="muted config-field__hint">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
 </div>
       
         
@@ -1016,6 +1016,7 @@
            placeholder="inherit (0)"
            value="">
   
+
 </div>
       
         
@@ -1046,6 +1047,7 @@
            placeholder="inherit (5)"
            value="">
   
+
 </div>
       
       <p class="muted fs-sm" style="margin: var(--sp-2) 0 var(--sp-3);">

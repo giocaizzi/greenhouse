@@ -1,0 +1,6 @@
+{# Muted "↳ global" / "↳ default" tag after an effective config value that the
+   cluster inherits (one ``get_effective_config`` field: {value, source}).
+   A cluster override renders nothing: the value speaks for itself. #}
+{% macro source_tag(field) -%}
+  {%- if field.source != "cluster" %} <small class="muted config-source" title="Inherited from {{ field.source }}"><span class="rel-arrow" aria-hidden="true">↳</span>&nbsp;{{ field.source }}</small>{% endif -%}
+{%- endmacro %}

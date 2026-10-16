@@ -770,6 +770,7 @@
    }
   },
   "greenhouse_cli.tui.resources": {
+   "AUTO_RUN_HINT": "Irrigate automatically off: the hourly check still decides, but never starts the irrigator. Manual starts always work.",
    "CATEGORIES": [
     [
      "tropical",
@@ -1085,7 +1086,7 @@
    },
    {
     "kind": "bool",
-    "label": "Auto-run",
+    "label": "Irrigate automatically",
     "name": "auto_run",
     "options": [],
     "placeholder": "",

@@ -45,12 +45,11 @@
 
 <header class="topbar">
   <div class="container topbar__inner">
-    <a href="/" class="brand" aria-label="Irrigation home">
+    <a href="/" class="brand" aria-label="Greenhouse home">
       <span class="brand__mark"><svg class="icon"><use href="/static/icons/sprite.svg#i-leaf"></use></svg></span>
-      Irrigation
+      Greenhouse
     </a>
     <nav class="topnav" aria-label="Primary">
-      <a href="/">Today</a>
       <a href="/clusters">Spaces</a>
       <a href="/activity">Activity</a>
       <a href="/scheduler">Scheduler</a>
@@ -237,7 +236,7 @@
   <form method="post" action="/config/global">
     <label for="g_mode">Mode
       <select id="g_mode" name="mode">
-        <option value="">— built-in default —</option>
+        <option value="">— built-in default (smart) —</option>
         <option value="smart">Smart</option>
         <option value="schedule">Schedule</option>
         <option value="manual">Manual</option>
@@ -246,19 +245,20 @@
     <label for="g_duration_minutes">Duration (minutes)
       <input type="number" id="g_duration_minutes" name="duration_minutes" min="1" max="60"
              value=""
-             placeholder="— built-in default —">
+             placeholder="built-in default: 2">
     </label>
     <label for="g_interval_hours">Interval (hours)
       <input type="number" id="g_interval_hours" name="interval_hours" min="1" max="168"
              value=""
-             placeholder="— built-in default —">
+             placeholder="built-in default: 12">
     </label>
-    <label for="g_auto_run">Auto-run
+    <label for="g_auto_run">Irrigate automatically
       <select id="g_auto_run" name="auto_run">
-        <option value="">— built-in default —</option>
+        <option value="">— built-in default (on) —</option>
         <option value="true">On</option>
         <option value="false">Off</option>
       </select>
+      <small class="muted">Off: the hourly check still decides, but never starts the irrigator. Manual starts always work.</small>
     </label>
     <label for="g_daily_cap_minutes">Daily cap (minutes)
       <input type="number" id="g_daily_cap_minutes" name="daily_cap_minutes" min="0" max="1440"
@@ -275,13 +275,13 @@
     <label for="g_quiet_start_hour">Quiet hours start (0–23)
       <input type="number" id="g_quiet_start_hour" name="quiet_start_hour" min="0" max="23"
              value="0"
-             placeholder="— built-in default —">
+             placeholder="built-in default: off">
       <small class="muted">Leave blank to fall through to the built-in default. Equal start/end disables quiet hours globally.</small>
     </label>
     <label for="g_quiet_end_hour">Quiet hours end (0–23, exclusive)
       <input type="number" id="g_quiet_end_hour" name="quiet_end_hour" min="0" max="23"
              value="5"
-             placeholder="off">
+             placeholder="built-in default: off">
     </label>
     <div class="form-actions">
       <a href="/" class="btn secondary">Cancel</a>

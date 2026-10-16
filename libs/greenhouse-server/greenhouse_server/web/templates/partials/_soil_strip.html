@@ -1,0 +1,41 @@
+{# Soil range strip (issue #201): a 0-100 % track with the cluster's widest
+   band shaded, one thin mark per plant (the driest current cleaned reading
+   of its sensors, as the engine judges it, coloured by the plant's own band)
+   and a bold "avg" mark. Cleaned values can differ from the raw latest
+   numbers listed on the card; the text alternative says so.
+
+   The average is display only; the engine decides on the driest plant.
+
+   Required context:
+     soil_strip  services.soil_strip.SoilStrip (band, marks, average), or none.
+#}
+{% if soil_strip -%}
+  {% set band = soil_strip.band -%}
+  {% set avg = soil_strip.average -%}
+  {% set off = soil_strip.marks | rejectattr("position", "equalto", "in band") | list -%}
+  {% set summary -%}
+    Soil moisture{% if avg is not none %}: avg {{ "%.0f" | format(avg) }}%{% endif %}, target {{ "%.0f" | format(band[0]) }}–{{ "%.0f" | format(band[1]) }}%.
+    {%- for m in soil_strip.marks %} {{ m.plant }} {{ "%.0f" | format(m.value) }}% ({{ m.position }}, band {{ "%.0f" | format(m.band[0]) }}–{{ "%.0f" | format(m.band[1]) }}%){{ ";" if not loop.last else "." }}{% endfor %}
+    {%- if not soil_strip.marks %} No current readings.{% else %} Values are cleaned, as the engine judges them, and can differ from the raw latest readings.{% endif %}
+  {%- endset %}
+  <figure class="soil-strip" role="img" aria-label="{{ summary }}" title="{{ summary }}">
+    <div class="soil-strip__track">
+      <span class="soil-strip__band" style="left: {{ band[0] }}%; width: {{ band[1] - band[0] }}%"></span>
+      {# avg first so a plant mark drawn on top keeps its colour where they coincide #}
+      {% if avg is not none %}
+        <span class="soil-strip__avg" style="left: {{ [[avg, 0] | max, 100] | min }}%"></span>
+        <span class="soil-strip__avg-label" style="left: {{ [[avg, 8] | max, 92] | min }}%">avg</span>
+      {% endif %}
+      {% for m in soil_strip.marks %}
+        <span class="soil-strip__plant soil-strip__plant--{{ 'ok' if m.position == 'in band' else 'off' }}"
+              style="left: {{ [[m.value, 0] | max, 100] | min }}%"
+              title="{{ m.plant }} {{ '%.0f' | format(m.value) }}% (cleaned) · {{ m.position }}"></span>
+      {% endfor %}
+    </div>
+    <figcaption class="soil-strip__caption" aria-hidden="true">
+      {% if avg is not none %}<span class="mono">avg {{ "%.0f" | format(avg) }}%</span>{% else %}<span>no current readings</span>{% endif %}
+      <span>target {{ "%.0f" | format(band[0]) }}–{{ "%.0f" | format(band[1]) }}%</span>
+      {% if off %}<span class="soil-strip__off">{{ off | length }} of {{ soil_strip.marks | length }} out of band</span>{% endif %}
+    </figcaption>
+  </figure>
+{% endif %}

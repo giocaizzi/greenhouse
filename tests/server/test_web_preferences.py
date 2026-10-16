@@ -240,3 +240,14 @@ def test_preferences_clearing_dry_run_persists_false(client: TestClient) -> None
     )
     body = client.get("/api/v1/preferences").json()
     assert body["dry_run_global"] is False
+
+
+def test_global_defaults_form_names_builtin_defaults(client: TestClient) -> None:
+    """Blank global fields name the built-in value they fall through to (#200)."""
+    client.put("/api/v1/config/global", json={"quiet_start_hour": None, "quiet_end_hour": None})
+    html = client.get("/preferences").text
+    assert "— built-in default (smart) —" in html
+    assert 'placeholder="built-in default: 2"' in html
+    assert 'placeholder="built-in default: 12"' in html
+    assert "— built-in default (on) —" in html
+    assert [html.count('placeholder="— no cap —"'), html.count('placeholder="built-in default: off"')] == [2, 2]

@@ -13,7 +13,8 @@ from greenhouse_core.models import (
     TriggeredBy,
 )
 
-_GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
+# The built-in layer under the global row: what ``get_effective_config`` reports as ``"default"``.
+GLOBAL_CONFIG_DEFAULTS: dict[str, int | str | bool | None] = {
     "mode": DEFAULT_IRRIGATION_MODE,
     "duration_minutes": DEFAULT_DURATION_MINUTES,
     "interval_hours": DEFAULT_INTERVAL_HOURS,

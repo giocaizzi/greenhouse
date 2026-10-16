@@ -13,7 +13,7 @@ from greenhouse_core.models import (
 )
 from greenhouse_core.repository._base import RepositoryBase
 from greenhouse_core.repository._types import (
-    _GLOBAL_CONFIG_DEFAULTS,
+    GLOBAL_CONFIG_DEFAULTS,
     EffectiveConfig,
     IrrigationConfigPatch,
     IrrigatorExistsError,
@@ -171,7 +171,7 @@ class IrrigatorMixin(RepositoryBase):
             if global_value is not None:
                 out[field] = {"value": global_value, "source": "global"}
                 continue
-            out[field] = {"value": _GLOBAL_CONFIG_DEFAULTS.get(field), "source": "default"}
+            out[field] = {"value": GLOBAL_CONFIG_DEFAULTS.get(field), "source": "default"}
         return out
 
     def list_all_irrigators(

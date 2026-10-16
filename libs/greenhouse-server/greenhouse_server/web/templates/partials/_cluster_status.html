@@ -1,5 +1,6 @@
 {% set decision = status.decision %}
-{% set config = status.config %}
+{% from "partials/_config_source.html" import source_tag %}
+{% set eff = status.effective_config %}
 
 <div class="status-panel">
   {% if decision %}
@@ -102,12 +103,10 @@
     <p class="muted"><small>No sensors linked.</small></p>
   {% endif %}
 
-  {% if config %}
-    <div class="status-panel__config">
-      <span><kbd>{{ config.mode }}</kbd></span>
-      {% if config.interval_hours %}<span>every {{ config.interval_hours }}h</span>{% endif %}
-      {% if config.duration_minutes %}<span>{{ config.duration_minutes | format_minutes }}/run</span>{% endif %}
-      <span class="muted">auto&nbsp;{{ config.auto_run | yesno("on", "off") }}</span>
-    </div>
-  {% endif %}
+  <div class="status-panel__config">
+    <span><kbd>{{ eff.mode.value }}</kbd>{{ source_tag(eff.mode) }}</span>
+    <span>every {{ eff.interval_hours.value }}h{{ source_tag(eff.interval_hours) }}</span>
+    <span>{{ eff.duration_minutes.value | format_minutes }}/run{{ source_tag(eff.duration_minutes) }}</span>
+    <span class="muted">auto-irrigate&nbsp;{{ eff.auto_run.value | yesno("on", "off") }}{{ source_tag(eff.auto_run) }}</span>
+  </div>
 </div>

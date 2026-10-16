@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
+from greenhouse_core.repository import GLOBAL_CONFIG_DEFAULTS
 from greenhouse_server import state
 from greenhouse_server.deps import RepoDep, require_cluster
 from greenhouse_server.scheduler import apply_timezone_preference
@@ -53,6 +54,7 @@ def preferences_page(request: Request, repo: RepoDep) -> Response:
             prefs=prefs,
             clusters=clusters,
             global_config=global_config,
+            builtin_config=GLOBAL_CONFIG_DEFAULTS,
             ntfy_configured=ntfy_configured,
             saved=request.query_params.get("saved"),
         ),

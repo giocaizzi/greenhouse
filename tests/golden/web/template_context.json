@@ -190,6 +190,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "soil_strip",
     "status",
     "theme"
    ]
@@ -209,6 +210,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "soil_strip",
     "status",
     "theme"
    ]
@@ -228,6 +230,7 @@
     "request",
     "scheduler_paused",
     "show_chrome",
+    "soil_strip",
     "status",
     "theme"
    ]
@@ -1992,6 +1995,7 @@
     "active_vacation",
     "app_version",
     "auth_enabled",
+    "builtin_config",
     "clusters",
     "dry_run_global",
     "global_config",
@@ -2014,6 +2018,7 @@
     "active_vacation",
     "app_version",
     "auth_enabled",
+    "builtin_config",
     "clusters",
     "dry_run_global",
     "global_config",
@@ -2036,6 +2041,7 @@
     "active_vacation",
     "app_version",
     "auth_enabled",
+    "builtin_config",
     "clusters",
     "dry_run_global",
     "global_config",

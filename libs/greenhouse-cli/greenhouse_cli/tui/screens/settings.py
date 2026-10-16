@@ -97,7 +97,9 @@ class SettingsScreen(DataScreen):
             resources.config_fields(self.global_config),
             lambda v: lambda c: c.update_global_config(**v),
             "Global config saved",
-            note="Clusters inherit these unless they override a field. Blank = keep current.",
+            note=(
+                "Clusters inherit these unless they override a field. Blank = keep current.\n" + resources.AUTO_RUN_HINT
+            ),
         )
 
     def _selected_vacation(self) -> dict[str, Any] | None:

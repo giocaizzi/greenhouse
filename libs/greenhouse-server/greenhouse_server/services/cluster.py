@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, TypedDict
 from greenhouse_core.constants import HOURS_PER_DAY, STATUS_EVENTS_LOOKBACK_HOURS
 from greenhouse_core.logic import IrrigationDecision, IrrigationLogic
 from greenhouse_core.plant_db import PlantDatabase
-from greenhouse_core.repository import IrrigationRepository
+from greenhouse_core.repository import EffectiveConfig, IrrigationRepository
 from greenhouse_core.utils import format_timestamp
 from greenhouse_server.services.errors import ClusterNotFoundError, PlantNotFoundError
 
@@ -61,6 +61,7 @@ class ClusterStatus(TypedDict):
 
     cluster: Any  # the Cluster row; Any until routes/operations validates it (ClusterResponse) — see CONS-W3
     config: "IrrigationConfig | None"
+    effective_config: EffectiveConfig  # the values in force (cluster → global → built-in), for the web cards
     plants: "list[Plant]"
     sensors: list[SensorStatusRow]
     irrigator: IrrigatorStatus | None
@@ -158,6 +159,7 @@ class ClusterService:
         return {
             "cluster": cluster,
             "config": config,
+            "effective_config": self._repo.get_effective_config(cluster_id),
             "plants": plants,
             "sensors": sensor_data,
             "irrigator": irrigator_data,
