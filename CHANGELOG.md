@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.6.1](https://github.com/giocaizzi/greenhouse/compare/v6.6.0...v6.6.1) (2026-10-16)
+
+
+### Fixed
+
+* **docker:** drop pip and apply debian updates in the runtime image ([#220](https://github.com/giocaizzi/greenhouse/issues/220)) ([a3809b9](https://github.com/giocaizzi/greenhouse/commit/a3809b92218e703a305c6740a36f533cc26d9d97))
+
 ## [6.6.0](https://github.com/giocaizzi/greenhouse/compare/v6.5.0...v6.6.0) (2026-10-16)
 
 
