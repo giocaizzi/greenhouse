@@ -21,6 +21,7 @@ from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, is_mcp_token, require_user
 from greenhouse_server.config import Settings, ignored_legacy_secret_env_names
+from greenhouse_server.mcp_annotations import annotate_tools
 from greenhouse_server.routes import (
     activity,
     alerts,
@@ -317,7 +318,8 @@ def _mount_mcp(app: FastAPI) -> None:
     Streamable HTTP. Web routes are auto-excluded because they set include_in_schema=False.
     Bearer-token auth gates the mount: with no GREENHOUSE_MCP_TOKEN configured the endpoint
     fails closed with 503; with a token configured, MCP clients must send
-    `Authorization: Bearer <token>`. The live instance is kept on ``app.state.mcp``.
+    `Authorization: Bearer <token>`. Each tool gets a title and read-only / destructive hints
+    (`mcp_annotations`). The live instance is kept on ``app.state.mcp``.
     """
     mcp = FastApiMCP(
         app,
@@ -329,6 +331,7 @@ def _mount_mcp(app: FastAPI) -> None:
         ),
         auth_config=AuthConfig(dependencies=[Depends(require_mcp_token)]),
     )
+    annotate_tools(mcp.tools, mcp.operation_map)
     mcp.mount_http()
     app.state.mcp = mcp
 

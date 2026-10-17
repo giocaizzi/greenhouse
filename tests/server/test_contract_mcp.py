@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 # reviewed behavior-change commits (`fix(drift|consistency): …`) or description-only doc-contract
 # commits (`docs(api): …`) that also regenerate the golden.
 PHASE0_MCP_TOOLS_SHA256 = (
-    "7f56fee5f6a97be1450ec7d4c62b53c43dd414374b21f9d36d9adfa80eb89cf7"  # gitleaks:allow — content hash, not a secret
+    "05b1458aecfe398d1a3eb7df9bfa25a5d9e7584dbf895178cce67045047e6efe"  # gitleaks:allow — content hash, not a secret
 )
 
 _TOKEN = TEST_MCP_TOKEN

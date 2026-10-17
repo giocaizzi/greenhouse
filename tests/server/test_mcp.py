@@ -10,7 +10,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from fastapi_mcp.types import HTTPRequestInfo
-from mcp.types import EmbeddedResource, ImageContent, TextContent
+from mcp.types import EmbeddedResource, ImageContent, ListToolsRequest, TextContent
 from sqlalchemy import create_engine
 from sqlalchemy.pool import StaticPool
 from starlette.routing import Mount, Route
@@ -67,6 +67,48 @@ def test_mcp_tool_names_fit_within_64_chars(app: FastAPI) -> None:
     assert not over_limit, "MCP tool names exceed the 64-character Claude.ai limit:\n  " + "\n  ".join(
         f"{name!r} ({len(name)} chars)" for name in over_limit
     )
+
+
+def test_mcp_every_tool_has_a_title_and_a_behaviour_hint(app: FastAPI) -> None:
+    """Every tool in ``tools/list`` carries a title and ``readOnlyHint`` or ``destructiveHint``.
+
+    claude.ai groups connector tools and decides auto-approval from these; a tool
+    without them falls back to the spec defaults (an untitled destructive write).
+    """
+    handler = app.state.mcp.server.request_handlers[ListToolsRequest]
+    tools = asyncio.run(handler(ListToolsRequest(method="tools/list"))).root.tools
+    unannotated = [
+        tool.name
+        for tool in tools
+        if not tool.title
+        or tool.annotations is None
+        or not tool.annotations.title
+        or (tool.annotations.readOnlyHint is None and tool.annotations.destructiveHint is None)
+    ]
+    assert not unannotated, "MCP tools missing a title or behaviour hint:\n  " + "\n  ".join(unannotated)
+
+
+def test_mcp_tool_hints_follow_the_route_method(app: FastAPI) -> None:
+    """GET tools are read-only, DELETE tools destructive, and no write claims to be read-only."""
+    mcp = app.state.mcp
+    for tool in mcp.tools:
+        method = mcp.operation_map[tool.name]["method"]
+        hints = tool.annotations
+        assert hints is not None, tool.name
+        if method == "get":
+            assert hints.readOnlyHint is True, tool.name
+        else:
+            assert hints.readOnlyHint is False, tool.name
+        if method == "delete":
+            assert hints.destructiveHint is True, tool.name
+
+
+@pytest.mark.parametrize("name", ["irrigate", "check_all", "check_single", "start_irrigator", "bulk_stop_all"])
+def test_mcp_actuating_posts_are_destructive(app: FastAPI, name: str) -> None:
+    """POSTs that put water on plants or stop every irrigator always need the user's confirmation."""
+    tool = next(t for t in app.state.mcp.tools if t.name == name)
+    assert tool.annotations is not None
+    assert tool.annotations.destructiveHint is True
 
 
 def test_mcp_every_api_route_has_a_response_model(app: FastAPI) -> None:
