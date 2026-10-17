@@ -17,7 +17,7 @@ The **server** is the only thing that touches the DB and the devices. Four ways 
 | REST API | `/api/v1` | Authoritative entry point. OpenAPI schema and interactive docs at `/docs` — that's the source of truth, not a hand-maintained list. |
 | Web UI | `/` | HTMX + Jinja2, server-rendered. Calls the service layer **in-process** — shares code with the API (services, `deps.require_*` lookups, validators), not a client of it. |
 | CLI (`greenhouse`) | — | Thin `httpx` client against `/api/v1`. Does not import core, has no DB access; useless when the server is down. |
-| MCP | `/mcp` | Every `/api/v1` endpoint auto-published via `fastapi-mcp`. Web routes excluded (they set `include_in_schema=False`). Bearer-token auth, fail-closed. |
+| MCP | `/mcp` | Every `/api/v1` endpoint auto-published via `fastapi-mcp`. Web routes excluded (they set `include_in_schema=False`). Each tool gets a title and read-only / destructive hints from `mcp_annotations.py`. Bearer-token auth, fail-closed. |
 
 Anything new the CLI or an MCP tool should be able to do must first exist as an API endpoint. A rule that both the API and the web UI enforce lives once, in a service (see Conventions), never re-implemented per surface.
 
@@ -70,6 +70,7 @@ Dependency direction is strict and **enforced by import-linter** (`make lint-imp
 | Module | Holds |
 |---|---|
 | `app.py` | `create_app` + `main`: settings, DB init, device/gateway wiring, scheduler start, routers, MCP mount (`require_mcp_token`) |
+| `mcp_annotations.py` | MCP tool `title` + `annotations`: hints follow the HTTP method (`GET` read-only, `DELETE` destructive, `PUT` idempotent), actuating `POST`s are destructive; a new route needs a `TOOL_TITLES` entry |
 | `config.py` | `Settings` (env prefix `IRRIGATION_`; secrets read only as `GREENHOUSE_*`, see Key facts; `host` defaults to `127.0.0.1`) |
 | `state.py` | typed accessors for `app.state` (session factory, settings, plant DB, weather, gateway, registry, health monitor, notifier) and the request providers shared by `deps` and `auth` |
 | `deps.py` | FastAPI providers (`get_repository`, gateway / registry / health monitor / weather / notifier / plant DB, service factories) and the **`require_*` lookups** — `require_{cluster,cluster_irrigator,irrigator,plant,plant_in_cluster,sensor,sensor_in_cluster,window_in_cluster,vacation_window,alert,metric}` — one 404 wording per entity, used by API and web |
