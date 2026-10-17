@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.7.0](https://github.com/giocaizzi/greenhouse/compare/v6.6.1...v6.7.0) (2026-10-17)
+
+
+### Added
+
+* **mcp:** add tool titles and read-only/destructive annotations ([#223](https://github.com/giocaizzi/greenhouse/issues/223)) ([729cde7](https://github.com/giocaizzi/greenhouse/commit/729cde7d3fabc610917b633f779c591509acaa8e))
+
 ## [6.6.1](https://github.com/giocaizzi/greenhouse/compare/v6.6.0...v6.6.1) (2026-10-16)
 
 
