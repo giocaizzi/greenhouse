@@ -4,6 +4,13 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [6.7.1](https://github.com/giocaizzi/greenhouse/compare/v6.7.0...v6.7.1) (2026-10-23)
+
+
+### Fixed
+
+* **deps:** bump certifi to 2026.10.23 ([#233](https://github.com/giocaizzi/greenhouse/issues/233)) ([1b39b19](https://github.com/giocaizzi/greenhouse/commit/1b39b19dcf8789edae64f2b48203077ec1404f09))
+
 ## [6.7.0](https://github.com/giocaizzi/greenhouse/compare/v6.6.1...v6.7.0) (2026-10-17)
 
 
