@@ -42,7 +42,7 @@ constraint-dependencies = ["mcp>=1.28.1,<2"]
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6.100",
+    "hypothesis>=6.170.5",
     "import-linter>=2.15",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
