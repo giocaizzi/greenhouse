@@ -4,6 +4,22 @@ All notable changes to this project are tracked here. Managed automatically by
 [release-please](https://github.com/googleapis/release-please) from
 [Conventional Commits](https://www.conventionalcommits.org/) — do not hand-edit.
 
+## [7.0.0](https://github.com/giocaizzi/greenhouse/compare/v6.7.1...v7.0.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **config:** All `IRRIGATION_*` environment variables are renamed to `GREENHOUSE_*`: `IRRIGATION_DB_URL`, `IRRIGATION_HOST`, `IRRIGATION_PORT`, `IRRIGATION_DEBUG`, `IRRIGATION_PLANT_DB_PATH`, `IRRIGATION_WEATHER_LAT`, `IRRIGATION_WEATHER_LON`, `IRRIGATION_SYNC_INTERVAL_MINUTES`, `IRRIGATION_CHECK_CRON_HOURS`, `IRRIGATION_ENABLE_SCHEDULER`, `IRRIGATION_AUTH_ENABLED`, `IRRIGATION_AUTH_TOKEN_TTL_MINUTES`, `IRRIGATION_AUTH_COOKIE_NAME`, `IRRIGATION_AUTH_COOKIE_SECURE`, `IRRIGATION_PUMP_WATCHER_ENABLED`, `IRRIGATION_PUMP_WATCHER_POLL_SECONDS`, `IRRIGATION_PUMP_WATCHER_WARMUP_SECONDS`, `IRRIGATION_PUMP_WATCHER_MAX_READ_FAILURES`, `IRRIGATION_TZ`, and `IRRIGATION_SERVER_URL` are now `GREENHOUSE_*` (CLI, TUI, and MCP plugin all read `GREENHOUSE_SERVER_URL`). Legacy `IRRIGATION_*` names are ignored with a startup warning.
+
+### Added
+
+* **config:** unify all env vars under GREENHOUSE_ prefix ([#242](https://github.com/giocaizzi/greenhouse/issues/242)) ([18c7c20](https://github.com/giocaizzi/greenhouse/commit/18c7c20454a261e801d02462fc393588e5b640df))
+
+
+### Fixed
+
+* **tui:** default to ansi-dark theme for transparent backgrounds ([#243](https://github.com/giocaizzi/greenhouse/issues/243)) ([6c39326](https://github.com/giocaizzi/greenhouse/commit/6c393263a17f1a582b69d0eb9f1e9909157f1d13))
+
 ## [6.7.1](https://github.com/giocaizzi/greenhouse/compare/v6.7.0...v6.7.1) (2026-10-23)
 
 
