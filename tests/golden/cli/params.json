@@ -11,7 +11,7 @@
     "default": null,
     "envvar": null,
     "expose_value": true,
-    "help": "Server URL (default: $IRRIGATION_SERVER_URL or http://localhost:8000)",
+    "help": "Server URL (default: $GREENHOUSE_SERVER_URL or http://localhost:8000)",
     "hidden": false,
     "hide_input": false,
     "is_eager": false,

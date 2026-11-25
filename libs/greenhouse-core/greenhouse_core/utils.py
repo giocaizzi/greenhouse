@@ -52,7 +52,7 @@ def effective_light_threshold(base_lux: float, month: int | None = None) -> floa
 # startup and whenever the preference changes (see
 # ``greenhouse_server.scheduler`` / the preferences routes) so the stateless
 # Jinja ``format_ts`` filter and other display-only callers stay on one clock
-# without threading prefs through every call site. ``IRRIGATION_TZ`` survives
+# without threading prefs through every call site. ``GREENHOUSE_TZ`` survives
 # only as the startup fallback default, never as a competing live source.
 _display_timezone: str | None = None
 
@@ -61,7 +61,7 @@ def set_display_timezone(tz_name: str | None) -> None:
     """Record the authoritative display timezone (``UserPreferences.timezone``).
 
     Idempotent. A falsy value clears the override, so ``get_display_timezone``
-    falls back to ``IRRIGATION_TZ`` then UTC.
+    falls back to ``GREENHOUSE_TZ`` then UTC.
     """
     # A plain module global on purpose: tests patch ``utils._display_timezone`` directly.
     global _display_timezone  # noqa: PLW0603 — see above
@@ -72,11 +72,11 @@ def get_display_timezone() -> str:
     """Get the timezone to use for displaying timestamps.
 
     Precedence: the recorded ``UserPreferences.timezone`` (via
-    :func:`set_display_timezone`) > the ``IRRIGATION_TZ`` env fallback > UTC.
+    :func:`set_display_timezone`) > the ``GREENHOUSE_TZ`` env fallback > UTC.
     """
     if _display_timezone:
         return _display_timezone
-    return os.getenv("IRRIGATION_TZ", "UTC")
+    return os.getenv("GREENHOUSE_TZ", "UTC")
 
 
 def format_timestamp(timestamp: float, fmt: str = "%Y-%m-%d %H:%M") -> str:

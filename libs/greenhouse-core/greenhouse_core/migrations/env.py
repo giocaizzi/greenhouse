@@ -1,6 +1,6 @@
 """Alembic environment.
 
-Resolves the database URL from ``$IRRIGATION_DB_URL`` (matching the server
+Resolves the database URL from ``$GREENHOUSE_DB_URL`` (matching the server
 default) or falls back to ``sqlite:///data/irrigation.db``. The target
 metadata is the project's :class:`Base.metadata`, so ``alembic
 revision --autogenerate`` can detect ORM drift on every release.
@@ -30,7 +30,7 @@ if config.config_file_name is not None and config.attributes.get("configure_logg
 
 target_metadata = Base.metadata
 
-DB_URL = os.environ.get("IRRIGATION_DB_URL", "sqlite:///data/irrigation.db")
+DB_URL = os.environ.get("GREENHOUSE_DB_URL", "sqlite:///data/irrigation.db")
 config.set_main_option("sqlalchemy.url", DB_URL)
 
 

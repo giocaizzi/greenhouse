@@ -116,23 +116,23 @@ class TestGetDisplayTimezone:
 
     def test_default_timezone(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """With no preference set and no env override, the default is UTC."""
-        monkeypatch.delenv("IRRIGATION_TZ", raising=False)
+        monkeypatch.delenv("GREENHOUSE_TZ", raising=False)
         assert get_display_timezone() == "UTC"
 
     def test_env_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """IRRIGATION_TZ is the fallback when no preference is recorded."""
-        monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        """GREENHOUSE_TZ is the fallback when no preference is recorded."""
+        monkeypatch.setenv("GREENHOUSE_TZ", "America/New_York")
         assert get_display_timezone() == "America/New_York"
 
     def test_preference_wins_over_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A recorded UserPreferences.timezone outranks the env fallback."""
-        monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        monkeypatch.setenv("GREENHOUSE_TZ", "America/New_York")
         set_display_timezone("Asia/Tokyo")
         assert get_display_timezone() == "Asia/Tokyo"
 
     def test_clearing_preference_falls_back(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Clearing the preference re-exposes the env fallback."""
-        monkeypatch.setenv("IRRIGATION_TZ", "America/New_York")
+        monkeypatch.setenv("GREENHOUSE_TZ", "America/New_York")
         set_display_timezone("Asia/Tokyo")
         set_display_timezone(None)
         assert get_display_timezone() == "America/New_York"

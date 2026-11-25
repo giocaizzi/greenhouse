@@ -316,7 +316,7 @@ def test_sensor_stays_online_between_syncs_and_goes_offline_after_a_missed_sync(
 def test_init_health_monitor_sizes_the_sensor_window_from_the_sync_interval(
     world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The startup monitor uses ``IRRIGATION_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
+    """The startup monitor uses ``GREENHOUSE_SYNC_INTERVAL_MINUTES`` + grace, not the default interval."""
     session_factory = lambda: world["repo"].session  # noqa: E731 — the fixture's own session
     monkeypatch.setattr(world["repo"].session, "close", lambda: None)
     app = SimpleNamespace(

@@ -67,7 +67,7 @@ class TestCheckAllCronRegistration:
             engine.dispose()
 
     def test_cron_trigger_honors_custom_hours(self) -> None:
-        """A custom IRRIGATION_CHECK_CRON_HOURS list is wired into the trigger."""
+        """A custom GREENHOUSE_CHECK_CRON_HOURS list is wired into the trigger."""
         engine = _build_app(cron_hours="0,6,12,18")
         try:
             job = bg_scheduler.get_job("check_all")

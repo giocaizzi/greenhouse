@@ -45,8 +45,8 @@ class HelpOnBareGroup(TyperGroup):
 
 
 def server_url(ctx: typer.Context) -> str:
-    """The server URL: ``--server`` (stored on ``ctx.obj``), else $IRRIGATION_SERVER_URL, else the default."""
-    return ctx.obj or os.environ.get("IRRIGATION_SERVER_URL", DEFAULT_SERVER_URL)
+    """The server URL: ``--server`` (stored on ``ctx.obj``), else $GREENHOUSE_SERVER_URL, else the default."""
+    return ctx.obj or os.environ.get("GREENHOUSE_SERVER_URL", DEFAULT_SERVER_URL)
 
 
 def get_client(ctx: typer.Context) -> IrrigationClient:

@@ -2417,7 +2417,7 @@
      "operations"
     ],
     "summary": "Check All",
-    "description": "Run a check across every cluster.\n\nFor each cluster: irrigate (if it has irrigators and `auto_run` is on) or\nmonitor (sensor-only). Collects learning + maintenance alerts per cluster.\n\nSide effects: may actuate physical hardware on any cluster whose decision\nengine says `irrigate` and whose config has `auto_run=True`. This is the\nsame call the background `check_all` job makes on its cron schedule\n(`IRRIGATION_CHECK_CRON_HOURS`, default hourly at :00).\n\nReturns:\n    Per-cluster results plus a `has_alerts` flag that is true if any\n    cluster has alerts, maintenance items, or thirsty plants.",
+    "description": "Run a check across every cluster.\n\nFor each cluster: irrigate (if it has irrigators and `auto_run` is on) or\nmonitor (sensor-only). Collects learning + maintenance alerts per cluster.\n\nSide effects: may actuate physical hardware on any cluster whose decision\nengine says `irrigate` and whose config has `auto_run=True`. This is the\nsame call the background `check_all` job makes on its cron schedule\n(`GREENHOUSE_CHECK_CRON_HOURS`, default hourly at :00).\n\nReturns:\n    Per-cluster results plus a `has_alerts` flag that is true if any\n    cluster has alerts, maintenance items, or thirsty plants.",
     "operationId": "check_all",
     "responses": {
      "200": {
@@ -2492,7 +2492,7 @@
      "operations"
     ],
     "summary": "Sync",
-    "description": "Pull recent sensor readings from the Tuya Cloud into the local SQLite archive.\n\nThis is the same job the background scheduler runs every\n`IRRIGATION_SYNC_INTERVAL_MINUTES` (default 180); call\nthis manually after registering a new sensor or to backfill after an\noutage. No hardware is actuated.\n\nArgs:\n    request: `hours` of look-back to fetch (default 24).\n\nReturns:\n    Counts of total readings synced, new vs. duplicate-skipped, live\n    readings hit, and any per-sensor error messages.",
+    "description": "Pull recent sensor readings from the Tuya Cloud into the local SQLite archive.\n\nThis is the same job the background scheduler runs every\n`GREENHOUSE_SYNC_INTERVAL_MINUTES` (default 180); call\nthis manually after registering a new sensor or to backfill after an\noutage. No hardware is actuated.\n\nArgs:\n    request: `hours` of look-back to fetch (default 24).\n\nReturns:\n    Counts of total readings synced, new vs. duplicate-skipped, live\n    readings hit, and any per-sensor error messages.",
     "operationId": "sync",
     "requestBody": {
      "content": {

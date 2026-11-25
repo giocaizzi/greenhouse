@@ -7,8 +7,8 @@ from greenhouse_server.config import Settings
 from greenhouse_server.scheduler import _resolve_check_cron_hours
 
 _SCHED_ENV = (
-    "IRRIGATION_CHECK_CRON_HOURS",
-    "IRRIGATION_SYNC_INTERVAL_MINUTES",
+    "GREENHOUSE_CHECK_CRON_HOURS",
+    "GREENHOUSE_SYNC_INTERVAL_MINUTES",
 )
 
 
@@ -35,12 +35,12 @@ class TestCronHoursValidation:
         """Invalid expression rejected naming env var."""
         with pytest.raises(ValidationError) as exc:
             _settings(check_cron_hours=value)
-        assert "IRRIGATION_CHECK_CRON_HOURS" in str(exc.value)
+        assert "GREENHOUSE_CHECK_CRON_HOURS" in str(exc.value)
 
     def test_invalid_expression_from_env_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Invalid expression from env rejected."""
-        monkeypatch.setenv("IRRIGATION_CHECK_CRON_HOURS", "every-hour")
-        with pytest.raises(ValidationError, match="IRRIGATION_CHECK_CRON_HOURS"):
+        monkeypatch.setenv("GREENHOUSE_CHECK_CRON_HOURS", "every-hour")
+        with pytest.raises(ValidationError, match="GREENHOUSE_CHECK_CRON_HOURS"):
             _settings()
 
 
@@ -53,7 +53,7 @@ class TestCronHoursResolution:
 
     def test_explicit_value_is_used(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Explicit value is used."""
-        monkeypatch.setenv("IRRIGATION_CHECK_CRON_HOURS", "0,12")
+        monkeypatch.setenv("GREENHOUSE_CHECK_CRON_HOURS", "0,12")
         assert _resolve_check_cron_hours(_settings()) == "0,12"
 
     def test_removed_legacy_interval_has_no_effect(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,7 +68,7 @@ class TestSyncIntervalValidation:
     @pytest.mark.parametrize("value", [0, -1])
     def test_non_positive_rejected_naming_env_var(self, value: int) -> None:
         """Non positive rejected naming env var."""
-        with pytest.raises(ValidationError, match="IRRIGATION_SYNC_INTERVAL_MINUTES"):
+        with pytest.raises(ValidationError, match="GREENHOUSE_SYNC_INTERVAL_MINUTES"):
             _settings(sync_interval_minutes=value)
 
     def test_positive_accepted(self) -> None:

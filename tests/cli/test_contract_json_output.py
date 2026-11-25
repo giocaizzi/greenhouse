@@ -12,7 +12,7 @@ served and the following are pinned in ``tests/golden/cli/requests_and_output.js
 - the exact stdout / stderr text, the exit code, any non-``SystemExit`` exception type,
   and files the command writes (``stats --export``, the login token + its mode).
 
-Also covered: server URL resolution (``--server`` → ``$IRRIGATION_SERVER_URL`` →
+Also covered: server URL resolution (``--server`` → ``$GREENHOUSE_SERVER_URL`` →
 ``http://localhost:8000``), token resolution (``$GREENHOUSE_API_TOKEN`` / token file under
 an isolated ``$XDG_CONFIG_HOME`` / ``~/.config``), ``ServerError`` → exit 1 via
 ``commands/_helpers.py:call()``, ``check`` exit 2 with alerts, ``monitor`` exit 2 when
@@ -278,21 +278,21 @@ CLI_CASES: list[Case] = [
     C("whoami", "whoami", token_file=FAKE_JWT_STORED),
     # ── server URL resolution ──
     C("server.default_localhost", "health"),
-    C("server.env", "health", env={"IRRIGATION_SERVER_URL": "http://env.example:9001"}),
+    C("server.env", "health", env={"GREENHOUSE_SERVER_URL": "http://env.example:9001"}),
     C("server.flag", "--server", "http://192.0.2.10:8000", "health"),
     C(
         "server.flag_wins_over_env",
         "--server",
         "http://flag.example:9002",
         "health",
-        env={"IRRIGATION_SERVER_URL": "http://env.example:9001"},
+        env={"GREENHOUSE_SERVER_URL": "http://env.example:9001"},
     ),
     C(
         "server.empty_flag_falls_back_to_env",
         "--server",
         "",
         "health",
-        env={"IRRIGATION_SERVER_URL": "http://env.example:9001"},
+        env={"GREENHOUSE_SERVER_URL": "http://env.example:9001"},
     ),
     C("server.base_path_prefix", "--server", "http://proxy.example/greenhouse", "health"),
     # ── token resolution ──
@@ -1210,7 +1210,7 @@ def test_exit_code_contract(recorder_slot: dict[str, Recorder], tmp_path: Path) 
 
 def test_real_connection_refused(monkeypatch: pytest.MonkeyPatch) -> None:
     """No mock: a refused TCP connect surfaces as ``Error: Cannot connect to server: …`` and exit 1."""
-    monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("GREENHOUSE_SERVER_URL", "http://127.0.0.1:1")
     result = runner.invoke(app, ["health"], prog_name=PROG)
     assert result.exit_code == 1
     assert result.stdout == ""

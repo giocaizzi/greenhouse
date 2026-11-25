@@ -283,7 +283,7 @@ _PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.js
 
 @functools.cache
 def plant_database() -> PlantDatabase:
-    """The bundled plant DB, loaded from the package path (ignores ``IRRIGATION_PLANT_DB_PATH``).
+    """The bundled plant DB, loaded from the package path (ignores ``GREENHOUSE_PLANT_DB_PATH``).
 
     Loaded once per process and shared.
     """

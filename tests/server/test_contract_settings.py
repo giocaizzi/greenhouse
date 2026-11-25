@@ -4,15 +4,16 @@ What is pinned here (and NOT already pinned by ``test_scheduler_settings.py``, w
 only checks that validation errors *mention* the env var):
 
 - ``Settings.model_json_schema()`` and the per-field table (declaration order,
-  annotation, default, alias choices) — ``contracts/settings_schema.json``;
+  annotation, default) — ``contracts/settings_schema.json``;
 - the env name every field is read from, case-insensitivity, ``.env`` loading,
   precedence (kwargs > env > ``.env`` > default), ``extra="ignore"``;
-- the *exact* startup validation messages for ``IRRIGATION_SYNC_INTERVAL_MINUTES`` and
-  ``IRRIGATION_CHECK_CRON_HOURS`` (``contracts/settings_validation_errors.json``); the
-  removed legacy ``IRRIGATION_CHECK_INTERVAL_HOURS`` (OD3) is ignored like any unknown var;
-- the 8 env vars read outside ``Settings`` (``TUYA_*``, ``IRRIGATION_PLANT_DB_PATH``,
-  ``IRRIGATION_TZ``, ``IRRIGATION_DB_URL`` in the migrations env,
-  ``IRRIGATION_SERVER_URL``, ``GREENHOUSE_API_TOKEN``, plus ``XDG_CONFIG_HOME``): a
+- the *exact* startup validation messages for ``GREENHOUSE_SYNC_INTERVAL_MINUTES`` and
+  ``GREENHOUSE_CHECK_CRON_HOURS`` (``contracts/settings_validation_errors.json``); the
+  removed legacy ``IRRIGATION_CHECK_INTERVAL_HOURS`` (OD3) and other legacy ``IRRIGATION_*``
+  names are ignored like any unknown var;
+- the 8 env vars read outside ``Settings`` (``TUYA_*``, ``GREENHOUSE_PLANT_DB_PATH``,
+  ``GREENHOUSE_TZ``, ``GREENHOUSE_DB_URL`` in the migrations env,
+  ``GREENHOUSE_SERVER_URL``, ``GREENHOUSE_API_TOKEN``, plus ``XDG_CONFIG_HOME``): a
   static golden of every ``os.environ`` / ``os.getenv`` read in ``libs/``
   (``contracts/env_reads.json``) and behavior tests where they are cheap.
 """
@@ -24,13 +25,14 @@ import logging
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 import tinytuya
-from pydantic import AliasChoices, ValidationError
+from pydantic import ValidationError
 
 from golden import assert_golden_json
 from greenhouse_cli.client import _default_token_path, load_stored_token
@@ -63,15 +65,14 @@ def test_settings_schema_and_field_table_match_golden() -> None:
     """Settings schema and field table match golden."""
     fields = []
     for name, info in Settings.model_fields.items():
-        alias = info.validation_alias
-        assert alias is None or isinstance(alias, AliasChoices)
+        assert info.validation_alias is None
         fields.append(
             {
                 "name": name,
                 "annotation": str(info.annotation).replace("<class '", "").replace("'>", ""),
                 "default": info.default,
                 "alias": info.alias,
-                "validation_alias_choices": list(alias.choices) if alias is not None else None,
+                "validation_alias_choices": None,
             }
         )
     assert_golden_json(
@@ -84,11 +85,10 @@ def test_settings_schema_and_field_table_match_golden() -> None:
 def test_settings_model_config_explicit_keys() -> None:
     """Settings model config explicit keys."""
     config = Settings.model_config
-    assert config["env_prefix"] == "IRRIGATION_"
+    assert config["env_prefix"] == "GREENHOUSE_"
     assert config["env_file"] == ".env"
     assert config["case_sensitive"] is False
     assert config["extra"] == "ignore"
-    assert config["populate_by_name"] is False
 
 
 @pytest.mark.usefixtures("clean_env")
@@ -128,31 +128,31 @@ def test_settings_defaults_with_empty_environment() -> None:
 
 # (env var, raw value, field, parsed value) — one row per Settings field.
 ENV_TABLE = [
-    ("IRRIGATION_DB_URL", "sqlite:///x.db", "db_url", "sqlite:///x.db"),
-    ("IRRIGATION_HOST", "0.0.0.0", "host", "0.0.0.0"),  # noqa: S104 — the Docker opt-in value
-    ("IRRIGATION_PORT", "9123", "port", 9123),
-    ("IRRIGATION_DEBUG", "true", "debug", True),
-    ("IRRIGATION_PLANT_DB_PATH", "/srv/plants.json", "plant_db_path", "/srv/plants.json"),
-    ("IRRIGATION_WEATHER_LAT", "1.5", "weather_lat", 1.5),
-    ("IRRIGATION_WEATHER_LON", "-2.25", "weather_lon", -2.25),
-    ("IRRIGATION_SYNC_INTERVAL_MINUTES", "30", "sync_interval_minutes", 30),
-    ("IRRIGATION_CHECK_CRON_HOURS", "0,12", "check_cron_hours", "0,12"),
-    ("IRRIGATION_ENABLE_SCHEDULER", "false", "enable_scheduler", False),
+    ("GREENHOUSE_DB_URL", "sqlite:///x.db", "db_url", "sqlite:///x.db"),
+    ("GREENHOUSE_HOST", "0.0.0.0", "host", "0.0.0.0"),  # noqa: S104 — the Docker opt-in value
+    ("GREENHOUSE_PORT", "9123", "port", 9123),
+    ("GREENHOUSE_DEBUG", "true", "debug", True),
+    ("GREENHOUSE_PLANT_DB_PATH", "/srv/plants.json", "plant_db_path", "/srv/plants.json"),
+    ("GREENHOUSE_WEATHER_LAT", "1.5", "weather_lat", 1.5),
+    ("GREENHOUSE_WEATHER_LON", "-2.25", "weather_lon", -2.25),
+    ("GREENHOUSE_SYNC_INTERVAL_MINUTES", "30", "sync_interval_minutes", 30),
+    ("GREENHOUSE_CHECK_CRON_HOURS", "0,12", "check_cron_hours", "0,12"),
+    ("GREENHOUSE_ENABLE_SCHEDULER", "false", "enable_scheduler", False),
     ("GREENHOUSE_MCP_TOKEN", "mcp-tok", "mcp_token", "mcp-tok"),
     ("GREENHOUSE_NTFY_SERVER_URL", "https://ntfy.invalid", "ntfy_server_url", "https://ntfy.invalid"),
     ("GREENHOUSE_NTFY_TOPIC", "topic", "ntfy_topic", "topic"),
     ("GREENHOUSE_NTFY_TOKEN", "ntfy-tok", "ntfy_token", "ntfy-tok"),
-    ("IRRIGATION_AUTH_ENABLED", "0", "auth_enabled", False),
+    ("GREENHOUSE_AUTH_ENABLED", "0", "auth_enabled", False),
     ("GREENHOUSE_AUTH_SECRET_KEY", "secret", "auth_secret_key", "secret"),
-    ("IRRIGATION_AUTH_TOKEN_TTL_MINUTES", "15", "auth_token_ttl_minutes", 15),
-    ("IRRIGATION_AUTH_COOKIE_NAME", "gh", "auth_cookie_name", "gh"),
-    ("IRRIGATION_AUTH_COOKIE_SECURE", "yes", "auth_cookie_secure", True),
+    ("GREENHOUSE_AUTH_TOKEN_TTL_MINUTES", "15", "auth_token_ttl_minutes", 15),
+    ("GREENHOUSE_AUTH_COOKIE_NAME", "gh", "auth_cookie_name", "gh"),
+    ("GREENHOUSE_AUTH_COOKIE_SECURE", "yes", "auth_cookie_secure", True),
     ("GREENHOUSE_AUTH_ADMIN_USERNAME", "admin", "auth_admin_username", "admin"),
     ("GREENHOUSE_AUTH_ADMIN_PASSWORD", "pw", "auth_admin_password", "pw"),
-    ("IRRIGATION_PUMP_WATCHER_ENABLED", "off", "pump_watcher_enabled", False),
-    ("IRRIGATION_PUMP_WATCHER_POLL_SECONDS", "0.5", "pump_watcher_poll_seconds", 0.5),
-    ("IRRIGATION_PUMP_WATCHER_WARMUP_SECONDS", "7", "pump_watcher_warmup_seconds", 7.0),
-    ("IRRIGATION_PUMP_WATCHER_MAX_READ_FAILURES", "9", "pump_watcher_max_read_failures", 9),
+    ("GREENHOUSE_PUMP_WATCHER_ENABLED", "off", "pump_watcher_enabled", False),
+    ("GREENHOUSE_PUMP_WATCHER_POLL_SECONDS", "0.5", "pump_watcher_poll_seconds", 0.5),
+    ("GREENHOUSE_PUMP_WATCHER_WARMUP_SECONDS", "7", "pump_watcher_warmup_seconds", 7.0),
+    ("GREENHOUSE_PUMP_WATCHER_MAX_READ_FAILURES", "9", "pump_watcher_max_read_failures", 9),
 ]
 
 
@@ -181,58 +181,73 @@ def test_env_names_are_case_insensitive(
     assert getattr(_settings(), field) == expected
 
 
-ALIASED_FIELDS = [
-    ("MCP_TOKEN", "mcp_token"),
-    ("NTFY_SERVER_URL", "ntfy_server_url"),
-    ("NTFY_TOPIC", "ntfy_topic"),
-    ("NTFY_TOKEN", "ntfy_token"),
-    ("AUTH_SECRET_KEY", "auth_secret_key"),
-    ("AUTH_ADMIN_USERNAME", "auth_admin_username"),
-    ("AUTH_ADMIN_PASSWORD", "auth_admin_password"),
+@dataclass(frozen=True)
+class LegacyIsolationCase:
+    """One field tested against legacy ``IRRIGATION_*``, bare, and double-prefixed names."""
+
+    suffix: str
+    field: str
+    default: object
+    raw: str
+    expected: object
+
+
+LEGACY_ISOLATION_CASES: list[LegacyIsolationCase] = [
+    LegacyIsolationCase("MCP_TOKEN", "mcp_token", None, "https://greenhouse.invalid", "https://greenhouse.invalid"),
+    LegacyIsolationCase(
+        "NTFY_SERVER_URL", "ntfy_server_url", None, "https://greenhouse.invalid", "https://greenhouse.invalid"
+    ),
+    LegacyIsolationCase("NTFY_TOPIC", "ntfy_topic", None, "greenhouse-topic", "greenhouse-topic"),
+    LegacyIsolationCase("NTFY_TOKEN", "ntfy_token", None, "ntfy-tok", "ntfy-tok"),
+    LegacyIsolationCase("AUTH_SECRET_KEY", "auth_secret_key", None, "secret-key", "secret-key"),
+    LegacyIsolationCase("AUTH_ADMIN_USERNAME", "auth_admin_username", None, "admin", "admin"),
+    LegacyIsolationCase("AUTH_ADMIN_PASSWORD", "auth_admin_password", None, "pw", "pw"),
+    LegacyIsolationCase("HOST", "host", "127.0.0.1", "192.0.2.1", "192.0.2.1"),
+    LegacyIsolationCase("PORT", "port", DEFAULT_PORT, "9123", 9123),
+    LegacyIsolationCase(
+        "DB_URL", "db_url", "sqlite:///data/irrigation.db", "sqlite:///override.db", "sqlite:///override.db"
+    ),
+    LegacyIsolationCase("ENABLE_SCHEDULER", "enable_scheduler", default=True, raw="false", expected=False),
+    LegacyIsolationCase("AUTH_ENABLED", "auth_enabled", default=True, raw="false", expected=False),
 ]
 
 
 @pytest.mark.usefixtures("clean_env")
-@pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_read_only_the_greenhouse_env_name(
-    monkeypatch: pytest.MonkeyPatch, suffix: str, field: str
-) -> None:
-    """An aliased secret (MCP token, ntfy, auth secret/admin) is read from ``GREENHOUSE_X`` only.
-
-    The bare ``X`` and the prefixed ``IRRIGATION_X`` used to configure it too (owner decision:
-    one documented name per secret, so a stray ``MCP_TOKEN`` in the environment cannot open MCP).
-    """
-    monkeypatch.setenv(f"IRRIGATION_{suffix}", "https://irrigation.invalid")
-    monkeypatch.setenv(suffix, "https://bare.invalid")
-    assert getattr(_settings(), field) is None
-    monkeypatch.setenv(f"GREENHOUSE_{suffix}", "https://greenhouse.invalid")
-    assert getattr(_settings(), field) == "https://greenhouse.invalid"
+@pytest.mark.parametrize("case", LEGACY_ISOLATION_CASES, ids=[c.suffix for c in LEGACY_ISOLATION_CASES])
+def test_fields_read_only_the_greenhouse_env_name(monkeypatch: pytest.MonkeyPatch, case: LegacyIsolationCase) -> None:
+    """Every setting is read from ``GREENHOUSE_X`` only; bare ``X`` and legacy ``IRRIGATION_X`` are ignored."""
+    monkeypatch.setenv(f"IRRIGATION_{case.suffix}", case.raw)
+    monkeypatch.setenv(case.suffix, case.raw)
+    assert getattr(_settings(), case.field) == case.default
+    monkeypatch.setenv(f"GREENHOUSE_{case.suffix}", case.raw)
+    assert getattr(_settings(), case.field) == case.expected
 
 
 @pytest.mark.usefixtures("clean_env")
-@pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_ignore_old_names_in_dotenv(tmp_path: Path, suffix: str, field: str) -> None:
-    """Aliased fields ignore old names in dotenv."""
+@pytest.mark.parametrize("case", LEGACY_ISOLATION_CASES, ids=[c.suffix for c in LEGACY_ISOLATION_CASES])
+def test_fields_ignore_old_names_in_dotenv(tmp_path: Path, case: LegacyIsolationCase) -> None:
+    """Fields ignore bare and ``IRRIGATION_*`` names in dotenv."""
     env_file = tmp_path / ".env"
-    env_file.write_text(f"IRRIGATION_{suffix}=https://a.invalid\n{suffix}=https://b.invalid\n")
-    assert getattr(Settings(_env_file=env_file), field) is None
-    env_file.write_text(f"GREENHOUSE_{suffix}=https://c.invalid\n")
-    assert getattr(Settings(_env_file=env_file), field) == "https://c.invalid"
+    env_file.write_text(f"IRRIGATION_{case.suffix}={case.raw}\n{case.suffix}={case.raw}\n")
+    assert getattr(Settings(_env_file=env_file), case.field) == case.default
+    env_file.write_text(f"GREENHOUSE_{case.suffix}={case.raw}\n")
+    assert getattr(Settings(_env_file=env_file), case.field) == case.expected
 
 
 @pytest.mark.usefixtures("clean_env")
-@pytest.mark.parametrize(("suffix", "field"), ALIASED_FIELDS, ids=[r[0] for r in ALIASED_FIELDS])
-def test_aliased_fields_ignore_double_prefixed_name(monkeypatch: pytest.MonkeyPatch, suffix: str, field: str) -> None:
-    """Aliased fields ignore double prefixed name."""
-    monkeypatch.setenv(f"IRRIGATION_GREENHOUSE_{suffix}", "ignored")
-    assert getattr(_settings(), field) is None
+@pytest.mark.parametrize("case", LEGACY_ISOLATION_CASES, ids=[c.suffix for c in LEGACY_ISOLATION_CASES])
+def test_fields_ignore_double_prefixed_names(monkeypatch: pytest.MonkeyPatch, case: LegacyIsolationCase) -> None:
+    """Fields ignore double-prefixed env names."""
+    monkeypatch.setenv(f"IRRIGATION_GREENHOUSE_{case.suffix}", case.raw)
+    monkeypatch.setenv(f"GREENHOUSE_GREENHOUSE_{case.suffix}", case.raw)
+    assert getattr(_settings(), case.field) == case.default
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_aliased_fields_accept_both_kwarg_spellings() -> None:
-    """Aliased fields accept both kwarg spellings."""
+def test_settings_accept_field_name_kwargs() -> None:
+    """Settings accept field-name keyword arguments."""
     assert _settings(mcp_token=TEST_MCP_TOKEN).mcp_token == TEST_MCP_TOKEN
-    assert _settings(GREENHOUSE_MCP_TOKEN=TEST_MCP_TOKEN).mcp_token == TEST_MCP_TOKEN
+    assert _settings(host="192.0.2.1").host == "192.0.2.1"
 
 
 # --- sources, precedence, extras -------------------------------------------
@@ -242,7 +257,7 @@ def test_aliased_fields_accept_both_kwarg_spellings() -> None:
 def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Dotenv in cwd is loaded and env beats it."""
     (clean_env / ".env").write_text(
-        "IRRIGATION_PORT=9001\nGREENHOUSE_MCP_TOKEN=dotenv-token\nIRRIGATION_CHECK_CRON_HOURS=*\nIRRIGATION_NOT_A_FIELD=1\n"
+        "GREENHOUSE_PORT=9001\nGREENHOUSE_MCP_TOKEN=dotenv-token\nGREENHOUSE_CHECK_CRON_HOURS=*\nGREENHOUSE_NOT_A_FIELD=1\n"
         "UNRELATED=1\n",
         encoding="utf-8",
     )
@@ -250,7 +265,7 @@ def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env: Path, monkeypatch: 
     assert (s.port, s.mcp_token, s.check_cron_hours) == (9001, "dotenv-token", "*")
     assert Settings(_env_file=None).port == DEFAULT_PORT
     env_port, explicit_port = 9002, 9003
-    monkeypatch.setenv("IRRIGATION_PORT", str(env_port))
+    monkeypatch.setenv("GREENHOUSE_PORT", str(env_port))
     assert Settings().port == env_port
     assert Settings(port=explicit_port).port == explicit_port
 
@@ -258,7 +273,7 @@ def test_dotenv_in_cwd_is_loaded_and_env_beats_it(clean_env: Path, monkeypatch: 
 @pytest.mark.usefixtures("clean_env")
 def test_extra_inputs_are_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
     """Extra inputs are ignored."""
-    monkeypatch.setenv("IRRIGATION_NOT_A_FIELD", "1")
+    monkeypatch.setenv("GREENHOUSE_NOT_A_FIELD", "1")
     s = _settings(not_a_field=1)
     assert not hasattr(s, "not_a_field")
 
@@ -269,6 +284,7 @@ def test_removed_check_interval_hours_is_ignored(
 ) -> None:
     """OD3: ``IRRIGATION_CHECK_INTERVAL_HOURS`` is gone — ignored like any unknown var, never validated."""
     monkeypatch.setenv("IRRIGATION_CHECK_INTERVAL_HOURS", "5")  # used to fail startup (5 does not divide 24)
+    monkeypatch.setenv("GREENHOUSE_CHECK_INTERVAL_HOURS", "5")
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.scheduler"):
         s = _settings()
         assert not hasattr(s, "check_interval_hours")
@@ -344,8 +360,8 @@ def test_startup_validation_messages_match_golden() -> None:
 @pytest.mark.parametrize(
     ("env", "raw", "kwarg"),
     [
-        ("IRRIGATION_SYNC_INTERVAL_MINUTES", "0", {"sync_interval_minutes": 0}),
-        ("IRRIGATION_CHECK_CRON_HOURS", "bogus", {"check_cron_hours": "bogus"}),
+        ("GREENHOUSE_SYNC_INTERVAL_MINUTES", "0", {"sync_interval_minutes": 0}),
+        ("GREENHOUSE_CHECK_CRON_HOURS", "bogus", {"check_cron_hours": "bogus"}),
     ],
 )
 def test_env_sourced_values_fail_with_the_same_message_as_kwargs(
@@ -445,7 +461,7 @@ def test_plant_db_path_env_is_read_at_import_time(value: str | None, *, expect_d
     """``plant_db.PLANT_DB_PATH`` is computed when the module is first imported."""
     env = dict(os.environ)
     if value is not None:
-        env["IRRIGATION_PLANT_DB_PATH"] = value
+        env["GREENHOUSE_PLANT_DB_PATH"] = value
     out = subprocess.run(
         [sys.executable, "-c", "import greenhouse_core.plant_db as p; print(p.PLANT_DB_PATH)"],
         env=env,
@@ -460,12 +476,12 @@ def test_plant_db_path_env_is_read_at_import_time(value: str | None, *, expect_d
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_irrigation_tz_is_display_timezone_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Irrigation TZ is display timezone fallback."""
+def test_greenhouse_tz_is_display_timezone_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Greenhouse TZ is display timezone fallback."""
     monkeypatch.setattr(utils, "_display_timezone", None)
-    monkeypatch.delenv("IRRIGATION_TZ", raising=False)
+    monkeypatch.delenv("GREENHOUSE_TZ", raising=False)
     assert utils.get_display_timezone() == "UTC"
-    monkeypatch.setenv("IRRIGATION_TZ", "Europe/Rome")
+    monkeypatch.setenv("GREENHOUSE_TZ", "Europe/Rome")
     assert utils.get_display_timezone() == "Europe/Rome"
     monkeypatch.setattr(utils, "_display_timezone", "Asia/Tokyo")
     assert utils.get_display_timezone() == "Asia/Tokyo"
@@ -477,7 +493,7 @@ def test_cli_server_url_env_and_default(monkeypatch: pytest.MonkeyPatch) -> None
     ctx = cast("typer.Context", SimpleNamespace(obj=None))  # duck-typed: only ctx.obj is read
     assert str(get_client(ctx).http.base_url) == "http://localhost:8000"
     assert str(_login_client(ctx).http.base_url) == "http://localhost:8000"
-    monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://greenhouse.invalid:9")
+    monkeypatch.setenv("GREENHOUSE_SERVER_URL", "http://greenhouse.invalid:9")
     assert str(get_client(ctx).http.base_url) == "http://greenhouse.invalid:9"
     assert str(_login_client(ctx).http.base_url) == "http://greenhouse.invalid:9"
     assert (
@@ -504,10 +520,10 @@ def test_env_read_scan_finds_exactly_the_documented_vars() -> None:
     reads = _scan_env_reads()
     assert {r["var"] for r in reads} == {
         "GREENHOUSE_API_TOKEN",
-        "IRRIGATION_DB_URL",
-        "IRRIGATION_PLANT_DB_PATH",
-        "IRRIGATION_SERVER_URL",
-        "IRRIGATION_TZ",
+        "GREENHOUSE_DB_URL",
+        "GREENHOUSE_PLANT_DB_PATH",
+        "GREENHOUSE_SERVER_URL",
+        "GREENHOUSE_TZ",
         "TUYA_CLIENT_ID",
         "TUYA_CLIENT_SECRET",
         "TUYA_REGION",

@@ -20,7 +20,7 @@ The auth model is single-user with optional multi-user expansion later:
 When `Settings.auth_enabled` is False the dependency short-circuits to a
 synthetic system user. The flag exists so a single-process restart can
 recover from a lost admin password (the operator can set
-IRRIGATION_AUTH_ENABLED=false, log in to the host, change the password, then
+GREENHOUSE_AUTH_ENABLED=false, log in to the host, change the password, then
 re-enable) — not as a permanent state.
 """
 

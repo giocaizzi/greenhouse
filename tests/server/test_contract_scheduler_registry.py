@@ -224,7 +224,7 @@ class _ListHandler(logging.Handler):
 
 @pytest.mark.usefixtures("clean_env", "frozen_clock")
 def test_registry_ignores_the_removed_check_interval_hours() -> None:
-    """OD3: an old ``IRRIGATION_CHECK_INTERVAL_HOURS`` setting no longer becomes ``*/N`` and logs nothing."""
+    """OD3: legacy ``*_CHECK_INTERVAL_HOURS`` settings no longer become ``*/N`` and log nothing."""
     # Attach directly to the module logger: ``init_db`` runs Alembic's ``fileConfig``,
     # which replaces the root handlers (and with them pytest's caplog handler).
     handler = _ListHandler()

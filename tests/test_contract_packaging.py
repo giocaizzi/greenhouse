@@ -124,8 +124,8 @@ def test_server_main_wiring(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_load_dotenv(*args: object, **kwargs: object) -> None:
         calls.append(("load_dotenv", args, kwargs))
         # Settings() must be built *after* load_dotenv populated the environment.
-        monkeypatch.setenv("IRRIGATION_PORT", "8765")
-        monkeypatch.setenv("IRRIGATION_HOST", "127.0.0.9")
+        monkeypatch.setenv("GREENHOUSE_PORT", "8765")
+        monkeypatch.setenv("GREENHOUSE_HOST", "127.0.0.9")
 
     def fake_create_app(*args: object, **kwargs: object) -> object:
         calls.append(("create_app", args, kwargs))

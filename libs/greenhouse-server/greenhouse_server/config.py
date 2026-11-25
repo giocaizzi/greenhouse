@@ -5,7 +5,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 
 from apscheduler.triggers.cron import CronTrigger
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from greenhouse_core.constants import (
@@ -51,41 +51,26 @@ def _redact(url: str) -> str:
 
 
 class Settings(BaseSettings):
-    """Server settings from the environment (``IRRIGATION_*``; secrets only from their ``GREENHOUSE_*`` names)."""
+    """Server settings from the environment (all prefixed ``GREENHOUSE_``)."""
 
     model_config = SettingsConfigDict(
-        env_prefix="IRRIGATION_",
+        env_prefix="GREENHOUSE_",
         env_file=".env",
         case_sensitive=False,
         extra="ignore",
         # Validation errors must not echo raw input: these settings carry secrets.
         hide_input_in_errors=True,
-        # Off on purpose: with it on, pydantic-settings also reads every aliased
-        # secret from ``IRRIGATION_<FIELD>``. Constructor kwargs still accept the
-        # field name — see ``__init__``.
-        populate_by_name=False,
     )
 
     def __init__(self, **values: object) -> None:
-        """Accept the field name as a kwarg for the aliased secrets too.
-
-        The secrets below are read from the environment as ``GREENHOUSE_<NAME>``
-        only (their single validation alias). ``populate_by_name`` stays off so
-        neither the bare ``<NAME>`` nor ``IRRIGATION_<NAME>`` env var configures
-        them, so a kwarg spelled with the field name (``Settings(mcp_token=…)``)
-        is mapped onto the alias here instead.
-        """
-        for name, info in type(self).model_fields.items():
-            alias = info.validation_alias
-            if isinstance(alias, AliasChoices) and name in values:
-                values[str(alias.choices[0])] = values.pop(name)
+        """Forward kwargs to ``BaseSettings`` so ``_env_file`` and dynamic test kwargs type-check."""
         # Field values of any type: pydantic validates them; the base signature types only its own options.
         super().__init__(**cast("dict[str, Any]", values))
 
     db_url: str = "sqlite:///data/irrigation.db"
     # Loopback by default: /mcp and the API grant physical actuation, so a host
     # install must opt in to listening on the network. The Docker image sets
-    # IRRIGATION_HOST=0.0.0.0 (the container must listen for the published port).
+    # GREENHOUSE_HOST=0.0.0.0 (the container must listen for the published port).
     host: str = "127.0.0.1"
     port: int = 8000
     debug: bool = False
@@ -114,7 +99,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_sync_interval(cls, value: int) -> int:
         if value <= 0:
-            msg = f"IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got {value}"
+            msg = f"GREENHOUSE_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got {value}"
             raise ValueError(msg)
         return value
 
@@ -127,19 +112,14 @@ class Settings(BaseSettings):
             CronTrigger(hour=value, minute=0)
         except (ValueError, TypeError) as exc:
             msg = (
-                f"IRRIGATION_CHECK_CRON_HOURS={value!r} is not a valid cron hour expression "
+                f"GREENHOUSE_CHECK_CRON_HOURS={value!r} is not a valid cron hour expression "
                 f"(e.g. '*', '0,6,12,18', '*/3', '6-20/2'): {exc}"
             )
             raise ValueError(msg) from None
         return value
 
     # MCP bearer token (fail-closed: unset -> /mcp returns 503).
-    # Lives outside the IRRIGATION_ prefix to match the public deployment contract:
-    # GREENHOUSE_MCP_TOKEN is the only env name read (as for every aliased secret).
-    mcp_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_MCP_TOKEN"),
-    )
+    mcp_token: str | None = None
 
     @field_validator("mcp_token")
     @classmethod
@@ -152,12 +132,8 @@ class Settings(BaseSettings):
     # Outbound push for manual/emergency/auto irrigations and new alerts.
     # Feature is enabled only when BOTH server_url and topic are set (mirrors
     # the mcp_token fail-closed pattern). Token is optional — public topics
-    # need none. Lives outside the IRRIGATION_ prefix to match the
-    # deployment-secret convention.
-    ntfy_server_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_SERVER_URL"),
-    )
+    # need none.
+    ntfy_server_url: str | None = None
 
     @field_validator("ntfy_server_url")
     @classmethod
@@ -165,14 +141,8 @@ class Settings(BaseSettings):
         # Empty means "not configured" (the notifier stays off), like unset.
         return check_ntfy_server_url(value) if value else value
 
-    ntfy_topic: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOPIC"),
-    )
-    ntfy_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_NTFY_TOKEN"),
-    )
+    ntfy_topic: str | None = None
+    ntfy_token: str | None = None
 
     # ── Authentication ──────────────────────────────────────────────────────
     # When True (default) every /api/v1 route and the web UI require a valid
@@ -181,26 +151,15 @@ class Settings(BaseSettings):
     # and CLI clients, MCP covers agent-driven actuation.
     auth_enabled: bool = True
     # HS256 signing key for the session JWT. REQUIRED when auth_enabled.
-    # Rotate by changing it (all sessions invalidate). Lives outside the
-    # IRRIGATION_ prefix to mirror the deployment-secret convention.
-    auth_secret_key: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_SECRET_KEY"),
-    )
+    # Rotate by changing it (all sessions invalidate).
+    auth_secret_key: str | None = None
     auth_token_ttl_minutes: int = 60 * 24  # 24h
     auth_cookie_name: str = "greenhouse_session"
     auth_cookie_secure: bool = False  # set True behind HTTPS
     # First-run bootstrap: when no user row exists at startup, create one
-    # with these credentials. Outside IRRIGATION_ prefix to match the
-    # deployment-secret convention.
-    auth_admin_username: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_USERNAME"),
-    )
-    auth_admin_password: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("GREENHOUSE_AUTH_ADMIN_PASSWORD"),
-    )
+    # with these credentials.
+    auth_admin_username: str | None = None
+    auth_admin_password: str | None = None
 
     # Pump dry-run watcher. During every active irrigation a background job
     # polls DP 105 (water-shortage alarm) over the local Tuya protocol and
@@ -220,17 +179,31 @@ class Settings(BaseSettings):
     pump_watcher_max_read_failures: int = PUMP_WATCHER_MAX_READ_FAILURES
 
 
-def ignored_legacy_secret_env_names(env_names: Iterable[str]) -> list[str]:
-    """The legacy spellings of the aliased secrets that are set but no longer read.
+_BARE_SECRET_ENV_NAMES = frozenset(
+    {
+        "MCP_TOKEN",
+        "NTFY_SERVER_URL",
+        "NTFY_TOPIC",
+        "NTFY_TOKEN",
+        "AUTH_SECRET_KEY",
+        "AUTH_ADMIN_USERNAME",
+        "AUTH_ADMIN_PASSWORD",
+    }
+)
+_EXTRA_LEGACY_IRRIGATION_ENV_NAMES = frozenset({"IRRIGATION_TZ"})
 
-    Each aliased secret is read from ``GREENHOUSE_<NAME>`` only; the bare ``<NAME>`` and
-    ``IRRIGATION_<NAME>`` used to configure it too. Matching is case-insensitive like the
-    settings themselves. Returns the names as given (never the values), sorted.
+
+def ignored_legacy_env_names(env_names: Iterable[str]) -> list[str]:
+    """Legacy env names that are set in ``env_names`` but no longer read.
+
+    Every setting now reads from ``GREENHOUSE_<NAME>`` only; bare secret
+    spellings (``MCP_TOKEN``, …) and the old ``IRRIGATION_*`` names are
+    ignored. Matching is case-insensitive like ``Settings``. Returns the
+    names as given (never the values), sorted.
     """
-    legacy: set[str] = set()
-    for info in Settings.model_fields.values():
-        alias = info.validation_alias
-        if isinstance(alias, AliasChoices):
-            bare = str(alias.choices[0]).upper().removeprefix("GREENHOUSE_")
-            legacy |= {bare, f"IRRIGATION_{bare}"}
+    legacy = (
+        _BARE_SECRET_ENV_NAMES
+        | _EXTRA_LEGACY_IRRIGATION_ENV_NAMES
+        | {f"IRRIGATION_{name.upper()}" for name in Settings.model_fields}
+    )
     return sorted(name for name in env_names if name.upper() in legacy)
