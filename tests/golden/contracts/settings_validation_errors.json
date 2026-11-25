@@ -4,7 +4,7 @@
    "loc": [
     "check_cron_hours"
    ],
-   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='*/0' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Increment must be higher than 0",
+   "msg": "Value error, GREENHOUSE_CHECK_CRON_HOURS='*/0' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Increment must be higher than 0",
    "type": "value_error"
   }
  ],
@@ -13,7 +13,7 @@
    "loc": [
     "check_cron_hours"
    ],
-   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='0,6,' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
+   "msg": "Value error, GREENHOUSE_CHECK_CRON_HOURS='0,6,' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
    "type": "value_error"
   }
  ],
@@ -22,7 +22,7 @@
    "loc": [
     "check_cron_hours"
    ],
-   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='25' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Error validating expression '25': the last value (25) is higher than the maximum value (23)",
+   "msg": "Value error, GREENHOUSE_CHECK_CRON_HOURS='25' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Error validating expression '25': the last value (25) is higher than the maximum value (23)",
    "type": "value_error"
   }
  ],
@@ -31,7 +31,7 @@
    "loc": [
     "check_cron_hours"
    ],
-   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='bogus' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"bogus\" for field \"hour\"",
+   "msg": "Value error, GREENHOUSE_CHECK_CRON_HOURS='bogus' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"bogus\" for field \"hour\"",
    "type": "value_error"
   }
  ],
@@ -40,14 +40,14 @@
    "loc": [
     "check_cron_hours"
    ],
-   "msg": "Value error, IRRIGATION_CHECK_CRON_HOURS='' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
+   "msg": "Value error, GREENHOUSE_CHECK_CRON_HOURS='' is not a valid cron hour expression (e.g. '*', '0,6,12,18', '*/3', '6-20/2'): Unrecognized expression \"\" for field \"hour\"",
    "type": "value_error"
   }
  ],
  "ntfy=credentials-redacted": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'ftp://***@ntfy.invalid/topic'",
    "type": "value_error"
@@ -56,7 +56,7 @@
  "ntfy=file-scheme": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'file:///etc/passwd'",
    "type": "value_error"
@@ -65,7 +65,7 @@
  "ntfy=ftp-scheme": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'ftp://ntfy.invalid'",
    "type": "value_error"
@@ -74,7 +74,7 @@
  "ntfy=no-host": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'https://'",
    "type": "value_error"
@@ -83,7 +83,7 @@
  "ntfy=no-scheme": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'ntfy.invalid'",
    "type": "value_error"
@@ -92,7 +92,7 @@
  "ntfy=port-only": [
   {
    "loc": [
-    "GREENHOUSE_NTFY_SERVER_URL"
+    "ntfy_server_url"
    ],
    "msg": "Value error, GREENHOUSE_NTFY_SERVER_URL must be an http:// or https:// URL with a host, got 'http://:80'",
    "type": "value_error"
@@ -103,7 +103,7 @@
    "loc": [
     "sync_interval_minutes"
    ],
-   "msg": "Value error, IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got -1",
+   "msg": "Value error, GREENHOUSE_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got -1",
    "type": "value_error"
   }
  ],
@@ -112,7 +112,7 @@
    "loc": [
     "sync_interval_minutes"
    ],
-   "msg": "Value error, IRRIGATION_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got 0",
+   "msg": "Value error, GREENHOUSE_SYNC_INTERVAL_MINUTES must be a positive number of minutes, got 0",
    "type": "value_error"
   }
  ]

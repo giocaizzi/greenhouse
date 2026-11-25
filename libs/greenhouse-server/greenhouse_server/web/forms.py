@@ -54,7 +54,7 @@ def parsed_or_400(
 
 
 def preference_zone() -> tzinfo:
-    """The display timezone (``UserPreferences.timezone``, else ``IRRIGATION_TZ``); UTC if unknown."""
+    """The display timezone (``UserPreferences.timezone``, else ``GREENHOUSE_TZ``); UTC if unknown."""
     try:
         return ZoneInfo(get_display_timezone())
     except (ZoneInfoNotFoundError, ValueError):

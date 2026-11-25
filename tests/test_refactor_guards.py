@@ -285,8 +285,8 @@ def test_cli_token_resolution_is_isolated_from_the_developer(tmp_path_factory: p
 
 def test_settings_ignore_a_developer_dotenv(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Outside tests marked ``dotenv``, a ``.env`` in the working directory is not read by ``Settings``."""
-    (tmp_path / ".env").write_text("IRRIGATION_PORT=9001\n")
+    (tmp_path / ".env").write_text("GREENHOUSE_PORT=9001\n")
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("IRRIGATION_PORT", raising=False)
+    monkeypatch.delenv("GREENHOUSE_PORT", raising=False)
 
     assert Settings().port == DEFAULT_PORT

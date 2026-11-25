@@ -171,7 +171,7 @@ LEAK_CHECK_DELAY_SECONDS = 1800  # run the check 30 min after the start event
 LEAK_CHECK_SETTLE_SECONDS = 1500
 
 # Baseline window BEFORE the start event. Sized well above the sync cadence
-# (IRRIGATION_SYNC_INTERVAL_MINUTES, default 3h) because sensor rows land in
+# (GREENHOUSE_SYNC_INTERVAL_MINUTES, default 3h) because sensor rows land in
 # SQLite at sync time, not at reading time: a 10-minute window is empty on most
 # cycles, and an empty baseline must never be read as "soil was at 0%".
 LEAK_BEFORE_WINDOW_SECONDS = 10800  # 3h — still inside the 6h cooldown
@@ -212,7 +212,7 @@ BATTERY_LOW_PCT = 20
 BATTERY_CRITICAL_PCT = 5
 OFFLINE_AFTER_MINUTES = 30  # irrigators: last_seen comes from a live local read
 # Sensors are judged on their latest *persisted* reading, which only the sync job writes
-# (every IRRIGATION_SYNC_INTERVAL_MINUTES): their offline window is one sync interval plus
+# (every GREENHOUSE_SYNC_INTERVAL_MINUTES): their offline window is one sync interval plus
 # this grace, so a healthy sensor never flaps offline between syncs (B-3). The default
 # interval mirrors Settings.sync_interval_minutes for monitors built without settings.
 DEFAULT_SYNC_INTERVAL_MINUTES = 180

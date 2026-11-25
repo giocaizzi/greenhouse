@@ -151,7 +151,7 @@ def _resolve_zoneinfo(tz_name: str | None) -> ZoneInfo:
 
 
 def _resolve_check_cron_hours(settings: Settings) -> str:
-    """The cron ``hour`` field for ``check_all`` (``IRRIGATION_CHECK_CRON_HOURS``, validated by Settings).
+    """The cron ``hour`` field for ``check_all`` (``GREENHOUSE_CHECK_CRON_HOURS``, validated by Settings).
 
     Kept as the one seam the registration reads (tests patch it by name).
     """

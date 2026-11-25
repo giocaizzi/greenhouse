@@ -75,36 +75,28 @@
    "annotation": "str | None",
    "default": null,
    "name": "mcp_token",
-   "validation_alias_choices": [
-    "GREENHOUSE_MCP_TOKEN"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
    "annotation": "str | None",
    "default": null,
    "name": "ntfy_server_url",
-   "validation_alias_choices": [
-    "GREENHOUSE_NTFY_SERVER_URL"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
    "annotation": "str | None",
    "default": null,
    "name": "ntfy_topic",
-   "validation_alias_choices": [
-    "GREENHOUSE_NTFY_TOPIC"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
    "annotation": "str | None",
    "default": null,
    "name": "ntfy_token",
-   "validation_alias_choices": [
-    "GREENHOUSE_NTFY_TOKEN"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
@@ -118,9 +110,7 @@
    "annotation": "str | None",
    "default": null,
    "name": "auth_secret_key",
-   "validation_alias_choices": [
-    "GREENHOUSE_AUTH_SECRET_KEY"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
@@ -148,18 +138,14 @@
    "annotation": "str | None",
    "default": null,
    "name": "auth_admin_username",
-   "validation_alias_choices": [
-    "GREENHOUSE_AUTH_ADMIN_USERNAME"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
    "annotation": "str | None",
    "default": null,
    "name": "auth_admin_password",
-   "validation_alias_choices": [
-    "GREENHOUSE_AUTH_ADMIN_PASSWORD"
-   ]
+   "validation_alias_choices": null
   },
   {
    "alias": null,
@@ -191,9 +177,9 @@
   }
  ],
  "json_schema": {
-  "description": "Server settings from the environment (``IRRIGATION_*``; secrets only from their ``GREENHOUSE_*`` names).",
+  "description": "Server settings from the environment (all prefixed ``GREENHOUSE_``).",
   "properties": {
-   "GREENHOUSE_AUTH_ADMIN_PASSWORD": {
+   "auth_admin_password": {
     "anyOf": [
      {
       "type": "string"
@@ -203,9 +189,9 @@
      }
     ],
     "default": null,
-    "title": "Greenhouse Auth Admin Password"
+    "title": "Auth Admin Password"
    },
-   "GREENHOUSE_AUTH_ADMIN_USERNAME": {
+   "auth_admin_username": {
     "anyOf": [
      {
       "type": "string"
@@ -215,67 +201,7 @@
      }
     ],
     "default": null,
-    "title": "Greenhouse Auth Admin Username"
-   },
-   "GREENHOUSE_AUTH_SECRET_KEY": {
-    "anyOf": [
-     {
-      "type": "string"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Greenhouse Auth Secret Key"
-   },
-   "GREENHOUSE_MCP_TOKEN": {
-    "anyOf": [
-     {
-      "type": "string"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Greenhouse Mcp Token"
-   },
-   "GREENHOUSE_NTFY_SERVER_URL": {
-    "anyOf": [
-     {
-      "type": "string"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Greenhouse Ntfy Server Url"
-   },
-   "GREENHOUSE_NTFY_TOKEN": {
-    "anyOf": [
-     {
-      "type": "string"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Greenhouse Ntfy Token"
-   },
-   "GREENHOUSE_NTFY_TOPIC": {
-    "anyOf": [
-     {
-      "type": "string"
-     },
-     {
-      "type": "null"
-     }
-    ],
-    "default": null,
-    "title": "Greenhouse Ntfy Topic"
+    "title": "Auth Admin Username"
    },
    "auth_cookie_name": {
     "default": "greenhouse_session",
@@ -291,6 +217,18 @@
     "default": true,
     "title": "Auth Enabled",
     "type": "boolean"
+   },
+   "auth_secret_key": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Auth Secret Key"
    },
    "auth_token_ttl_minutes": {
     "default": 1440,
@@ -321,6 +259,54 @@
     "default": "127.0.0.1",
     "title": "Host",
     "type": "string"
+   },
+   "mcp_token": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Mcp Token"
+   },
+   "ntfy_server_url": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Ntfy Server Url"
+   },
+   "ntfy_token": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Ntfy Token"
+   },
+   "ntfy_topic": {
+    "anyOf": [
+     {
+      "type": "string"
+     },
+     {
+      "type": "null"
+     }
+    ],
+    "default": null,
+    "title": "Ntfy Topic"
    },
    "plant_db_path": {
     "anyOf": [

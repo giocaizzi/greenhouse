@@ -33,14 +33,14 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:${PYTHON_VERSION}-slim AS runtime
 
 # The server binds 127.0.0.1 by default; a container must listen on every
-# interface so the published port reaches it, hence IRRIGATION_HOST=0.0.0.0.
+# interface so the published port reaches it, hence GREENHOUSE_HOST=0.0.0.0.
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/app/.venv/bin:$PATH" \
-    IRRIGATION_DB_URL="sqlite:////app/data/irrigation.db" \
-    IRRIGATION_HOST=0.0.0.0 \
-    IRRIGATION_PORT=8000
+    GREENHOUSE_DB_URL="sqlite:////app/data/irrigation.db" \
+    GREENHOUSE_HOST=0.0.0.0 \
+    GREENHOUSE_PORT=8000
 
 # Pick up Debian security fixes newer than the base image, and drop pip: the
 # app runs from the uv-built venv, and pip's vendored packages (urllib3,

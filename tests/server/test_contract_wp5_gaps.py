@@ -441,8 +441,8 @@ def _memory_engine() -> Engine:
 def test_create_app_without_settings_reads_settings_from_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Create app without settings reads settings from env."""
     db_url = f"sqlite:///{tmp_path}/env.db"
-    monkeypatch.setenv("IRRIGATION_DB_URL", db_url)
-    monkeypatch.setenv("IRRIGATION_ENABLE_SCHEDULER", "false")
+    monkeypatch.setenv("GREENHOUSE_DB_URL", db_url)
+    monkeypatch.setenv("GREENHOUSE_ENABLE_SCHEDULER", "false")
     engine = _memory_engine()
     try:
         application = create_app(engine=engine)

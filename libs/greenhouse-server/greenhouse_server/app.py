@@ -20,7 +20,7 @@ from greenhouse_core.plant_db import PlantDatabase
 from greenhouse_core.repository import IrrigationRepository
 from greenhouse_core.utils import set_display_timezone
 from greenhouse_server.auth import bootstrap_admin, is_mcp_token, require_user
-from greenhouse_server.config import Settings, ignored_legacy_secret_env_names
+from greenhouse_server.config import Settings, ignored_legacy_env_names
 from greenhouse_server.mcp_annotations import annotate_tools
 from greenhouse_server.routes import (
     activity,
@@ -197,7 +197,7 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     """Create and configure the FastAPI application."""
     if settings is None:
         settings = Settings()
-    _warn_ignored_legacy_secret_env_names()
+    _warn_ignored_legacy_env_names()
 
     if engine is None:
         engine = create_db_engine(settings.db_url)
@@ -217,11 +217,11 @@ def create_app(settings: Settings | None = None, engine: Engine | None = None) -
     return app
 
 
-def _warn_ignored_legacy_secret_env_names() -> None:
-    """Name (never print the value of) each legacy secret env var that is set but ignored."""
-    for name in ignored_legacy_secret_env_names(os.environ):
+def _warn_ignored_legacy_env_names() -> None:
+    """Name (never print the value of) each legacy env var that is set but ignored."""
+    for name in ignored_legacy_env_names(os.environ):
         logger.warning(
-            "Environment variable %s is set but ignored: secrets are read from GREENHOUSE_* names only", name
+            "Environment variable %s is set but ignored: settings are read from GREENHOUSE_* names only", name
         )
 
 

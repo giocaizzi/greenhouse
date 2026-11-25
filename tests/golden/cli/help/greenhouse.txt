@@ -4,7 +4,7 @@
  Smart irrigation system CLI
 
 ╭─ Options ────────────────────────────────────────────────────────────────────────────────────────╮
-│ --server                    <str>  Server URL (default: $IRRIGATION_SERVER_URL or                │
+│ --server                    <str>  Server URL (default: $GREENHOUSE_SERVER_URL or                │
 │                                    http://localhost:8000)                                        │
 │ --install-completion               Install completion for the current shell.                     │
 │ --show-completion                  Show completion for the current shell, to copy it or          │

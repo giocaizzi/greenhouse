@@ -5260,7 +5260,7 @@
     }
    ],
    "env": {
-    "IRRIGATION_SERVER_URL": "http://env.example:9001"
+    "GREENHOUSE_SERVER_URL": "http://env.example:9001"
    },
    "exception": null,
    "exit_code": 0,
@@ -5297,7 +5297,7 @@
     }
    ],
    "env": {
-    "IRRIGATION_SERVER_URL": "http://env.example:9001"
+    "GREENHOUSE_SERVER_URL": "http://env.example:9001"
    },
    "exception": null,
    "exit_code": 0,
@@ -5373,7 +5373,7 @@
     }
    ],
    "env": {
-    "IRRIGATION_SERVER_URL": "http://env.example:9001"
+    "GREENHOUSE_SERVER_URL": "http://env.example:9001"
    },
    "exception": null,
    "exit_code": 0,

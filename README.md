@@ -48,7 +48,7 @@ Stop the server and all four go dark. Anything new the CLI or an MCP tool should
 
 ### Authentication
 
-- **API and Web UI**: a single admin user is bootstrapped from `GREENHOUSE_AUTH_ADMIN_USERNAME` / `GREENHOUSE_AUTH_ADMIN_PASSWORD` on first boot. `POST /api/v1/auth/login` returns a JWT signed with `GREENHOUSE_AUTH_SECRET_KEY`; pass it as `Authorization: Bearer …`. The web UI sets a cookie. For local development, set `IRRIGATION_AUTH_ENABLED=false` to disable auth entirely (never do this in production).
+- **API and Web UI**: a single admin user is bootstrapped from `GREENHOUSE_AUTH_ADMIN_USERNAME` / `GREENHOUSE_AUTH_ADMIN_PASSWORD` on first boot. `POST /api/v1/auth/login` returns a JWT signed with `GREENHOUSE_AUTH_SECRET_KEY`; pass it as `Authorization: Bearer …`. The web UI sets a cookie. For local development, set `GREENHOUSE_AUTH_ENABLED=false` to disable auth entirely (never do this in production).
 - **MCP**: gated by a separate static bearer token (`GREENHOUSE_MCP_TOKEN`). Generate with `openssl rand -hex 32`. The MCP layer can actuate physical hardware (`/clusters/{id}/irrigate`, `/irrigators/{id}/start`, bulk emergency stop), so treat the token like a root credential, never commit it, and rotate on suspected compromise.
 
 > **Warning:** Both auth boundaries are mandatory in production. The MCP token is not the API token — they protect different surfaces and must be set independently.
@@ -86,18 +86,18 @@ cp .env.example .env
 | `GREENHOUSE_AUTH_ADMIN_USERNAME` | Yes (prod) | Admin username bootstrapped on first boot. |
 | `GREENHOUSE_AUTH_ADMIN_PASSWORD` | Yes (prod) | Admin password (hashed at rest). |
 | `GREENHOUSE_MCP_TOKEN` | Yes (for MCP) | Static bearer token for `/mcp` (`Authorization: Bearer …` only). Unset, empty or whitespace-only → MCP fails closed with 503. |
-| `IRRIGATION_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
-| `IRRIGATION_HOST` / `IRRIGATION_PORT` | No | Bind address and port (default `127.0.0.1:8000`, loopback only — the API and `/mcp` can switch pumps on). Set `IRRIGATION_HOST=0.0.0.0` to listen on every interface; the Docker image and `docker-compose.yml` already do. |
-| `IRRIGATION_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
-| `IRRIGATION_SERVER_URL` | No | CLI server URL (default: `http://localhost:8000`) |
-| `IRRIGATION_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. (The old `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read — an `.env` that still sets it silently gets hourly checks; write `*/N` here instead.) |
-| `IRRIGATION_SYNC_INTERVAL_MINUTES` | No | Minutes between Tuya Cloud sensor syncs (default: `180`). Must be > 0. |
-| `IRRIGATION_ENABLE_SCHEDULER` | No | Set to `false` to run without background jobs (no automatic checks, syncs or health polls). Default: `true`. |
-| `IRRIGATION_PLANT_DB_PATH` | No | Alternative `plant_database.json` (default: the copy shipped in `greenhouse-core`). |
-| `IRRIGATION_WEATHER_LAT` / `IRRIGATION_WEATHER_LON` | No | Location for Open-Meteo forecasts (default: Milan). |
+| `GREENHOUSE_AUTH_ENABLED` | No | Set to `false` to disable API/Web auth in local dev. Default: `true`. |
+| `GREENHOUSE_HOST` / `GREENHOUSE_PORT` | No | Bind address and port (default `127.0.0.1:8000`, loopback only — the API and `/mcp` can switch pumps on). Set `GREENHOUSE_HOST=0.0.0.0` to listen on every interface; the Docker image and `docker-compose.yml` already do. |
+| `GREENHOUSE_DB_URL` | No | SQLite URL (default: `sqlite:///data/irrigation.db`) |
+| `GREENHOUSE_SERVER_URL` | No | CLI/TUI/MCP client server URL (default for CLI/TUI: `http://localhost:8000`) |
+| `GREENHOUSE_CHECK_CRON_HOURS` | No | Cron `hour` field for the `check_all` job, e.g. `*`, `0,6,12,18`, `*/3`, `6-20/2` (default: `*` = hourly at :00). Validated at startup; an invalid expression stops the server with an error naming the variable. (The old `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read — an `.env` that still sets it silently gets hourly checks; write `*/N` here instead.) |
+| `GREENHOUSE_SYNC_INTERVAL_MINUTES` | No | Minutes between Tuya Cloud sensor syncs (default: `180`). Must be > 0. |
+| `GREENHOUSE_ENABLE_SCHEDULER` | No | Set to `false` to run without background jobs (no automatic checks, syncs or health polls). Default: `true`. |
+| `GREENHOUSE_PLANT_DB_PATH` | No | Alternative `plant_database.json` (default: the copy shipped in `greenhouse-core`). |
+| `GREENHOUSE_WEATHER_LAT` / `GREENHOUSE_WEATHER_LON` | No | Location for Open-Meteo forecasts (default: Milan). |
 | `GREENHOUSE_NTFY_SERVER_URL` / `GREENHOUSE_NTFY_TOPIC` / `GREENHOUSE_NTFY_TOKEN` | No | Push notifications via [ntfy](https://ntfy.sh); unset → no pushes. The server URL must be `http://` or `https://` with a host (otherwise the server refuses to start). Which categories fire is a per-user preference. |
 
-Secrets (`GREENHOUSE_MCP_TOKEN`, `GREENHOUSE_NTFY_*`, `GREENHOUSE_AUTH_*`) are read **only** under their `GREENHOUSE_` names; the bare (`MCP_TOKEN`) and `IRRIGATION_`-prefixed (`IRRIGATION_MCP_TOKEN`) spellings are ignored, and the server logs a startup warning naming each one it finds.
+All settings and secrets are read **only** under their `GREENHOUSE_` names (never bare `MCP_TOKEN` or legacy `IRRIGATION_*` names); the server logs a startup warning naming each ignored legacy variable it finds.
 
 ### Usage
 
@@ -131,7 +131,7 @@ To use it from another machine, install just the client (it has no server depend
 
 ```bash
 uv tool install "greenhouse-cli @ git+https://github.com/giocaizzi/greenhouse#subdirectory=libs/greenhouse-cli"
-export IRRIGATION_SERVER_URL=http://greenhouse.lan:8000
+export GREENHOUSE_SERVER_URL=http://greenhouse.lan:8000
 greenhouse login && greenhouse tui
 ```
 
@@ -161,8 +161,8 @@ See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and test
 
 ## Upgrading an existing deployment
 
-- **Rename legacy secret variables.** Only `GREENHOUSE_MCP_TOKEN`, `GREENHOUSE_NTFY_SERVER_URL` / `_TOPIC` / `_TOKEN` and `GREENHOUSE_AUTH_SECRET_KEY` / `_ADMIN_USERNAME` / `_ADMIN_PASSWORD` are read. An `.env` that still uses `MCP_TOKEN`, `IRRIGATION_MCP_TOKEN`, `NTFY_TOPIC`, `IRRIGATION_AUTH_SECRET_KEY`, … loses that setting (for the MCP token: `/mcp` answers 503). The startup log warns about each ignored name.
-- **Bind address.** A host install now listens on `127.0.0.1` only; set `IRRIGATION_HOST=0.0.0.0` to keep LAN access. Docker deployments are unaffected (the image and `docker-compose.yml` set it).
+- **Rename all `IRRIGATION_*` environment variables to `GREENHOUSE_*`.** Every server, core, Docker, and CLI/TUI variable now uses the `GREENHOUSE_` prefix (`GREENHOUSE_DB_URL`, `GREENHOUSE_HOST`, `GREENHOUSE_PORT`, `GREENHOUSE_DEBUG`, `GREENHOUSE_PLANT_DB_PATH`, `GREENHOUSE_WEATHER_LAT`/`_LON`, `GREENHOUSE_SYNC_INTERVAL_MINUTES`, `GREENHOUSE_CHECK_CRON_HOURS`, `GREENHOUSE_ENABLE_SCHEDULER`, `GREENHOUSE_AUTH_ENABLED`, `GREENHOUSE_AUTH_TOKEN_TTL_MINUTES`, `GREENHOUSE_AUTH_COOKIE_NAME`, `GREENHOUSE_AUTH_COOKIE_SECURE`, `GREENHOUSE_PUMP_WATCHER_*`, `GREENHOUSE_TZ`, and `GREENHOUSE_SERVER_URL`). Legacy `IRRIGATION_*` and bare secret spellings (`MCP_TOKEN`, …) are ignored with a startup warning naming each ignored variable found in the environment.
+- **Bind address.** A host install now listens on `127.0.0.1` only; set `GREENHOUSE_HOST=0.0.0.0` to keep LAN access. Docker deployments are unaffected (the image and `docker-compose.yml` set it).
 - **Database upgrade.** `alembic upgrade head` runs at startup. The data-only revision `a1d3f5b7c902` rewrites leftover legacy device types (`tuya_cloud`, `tuya_local`, `soil_moisture`, `temp_humidity`, `light`, empty) to the model keys `rainpoint.ik10pw` / `tuya.tr301z`. A database created before Alembic (tables but no `alembic_version`) no longer starts: compare it with head and run `alembic stamp head` by hand.
 - **Behavior changes to expect:**
   - `dry_run_global` is now enforced: if it is on, no pump starts (automatic runs log a `dry_run_global` skip, manual starts answer 409).
@@ -170,7 +170,7 @@ See [AGENTS.md](AGENTS.md) for full developer guide, package structure, and test
   - A forced irrigate is recorded as manual, and every real start gets a post-watering leak check.
   - API and MCP responses mask `local_key` as `••••••••` (sending the mask back keeps the stored key).
   - Open `sensor_fault` alerts left by the old water-warning mapping are resolved at startup. Old open `pump_dry_run` alerts must be resolved by hand.
-  - `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read: use `IRRIGATION_CHECK_CRON_HOURS=*/N`.
+  - `IRRIGATION_CHECK_INTERVAL_HOURS` is no longer read: use `GREENHOUSE_CHECK_CRON_HOURS=*/N`.
   - The engine judges each sensor's newest reading against its own plant's moisture band, and ignores a sensor whose newest reading is more than 4 h old. Critical water stress follows the plants' targets (a cactus is no longer dosed as an emergency at 28 %), and emergency runs (device water warning, critical stress, the no-sensor fallback) now obey irrigation windows and vacation budgets.
   - Time edges are exclusive: a start exactly 6 h ago no longer blocks, a leak hold ends exactly 24 h after its alert was last seen, and a vacation is over at its end time.
   - The CLI prints a clean `Error:` line (exit 1) for timeouts and malformed responses, and a bare command group (`greenhouse cluster`) prints its help and exits 0.

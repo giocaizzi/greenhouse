@@ -15,7 +15,7 @@
   "call": "os.environ.get",
   "default": "<expr: DEFAULT_SERVER_URL>",
   "module": "greenhouse_cli.commands._helpers",
-  "var": "IRRIGATION_SERVER_URL"
+  "var": "GREENHOUSE_SERVER_URL"
  },
  {
   "call": "os.environ.get",
@@ -39,24 +39,24 @@
   "call": "os.environ.get",
   "default": "sqlite:///data/irrigation.db",
   "module": "greenhouse_core.migrations.env",
-  "var": "IRRIGATION_DB_URL"
+  "var": "GREENHOUSE_DB_URL"
  },
  {
   "call": "os.environ.get",
   "default": null,
   "module": "greenhouse_core.plant_db",
-  "var": "IRRIGATION_PLANT_DB_PATH"
+  "var": "GREENHOUSE_PLANT_DB_PATH"
  },
  {
   "call": "os.environ[]",
   "default": null,
   "module": "greenhouse_core.plant_db",
-  "var": "IRRIGATION_PLANT_DB_PATH"
+  "var": "GREENHOUSE_PLANT_DB_PATH"
  },
  {
   "call": "os.getenv",
   "default": "UTC",
   "module": "greenhouse_core.utils",
-  "var": "IRRIGATION_TZ"
+  "var": "GREENHOUSE_TZ"
  }
 ]

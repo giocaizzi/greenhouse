@@ -17,10 +17,10 @@ If none of these apply, the MCP tool is the better call.
 The CLI picks the server URL in this order, first match wins:
 
 1. `--server <url>` flag (passed before the subcommand: `greenhouse --server http://10.0.0.5:8000 status 1`)
-2. `IRRIGATION_SERVER_URL` env var
+2. `GREENHOUSE_SERVER_URL` env var
 3. `http://localhost:8000` (hard default)
 
-Note this is **distinct from the plugin's `GREENHOUSE_SERVER_URL`** — that env var feeds the MCP transport in `.mcp.json`. The CLI uses `IRRIGATION_SERVER_URL`. If you're writing a script that uses both, set both.
+CLI, TUI, and the MCP plugin all read `GREENHOUSE_SERVER_URL`.
 
 ## Output and exit codes
 
@@ -236,7 +236,7 @@ This gap is intentional — the CLI prioritizes the high-frequency operational c
 
 ## Troubleshooting CLI failures
 
-- **`Error: Cannot connect to server: …`** (exit 1) — server isn't running or the URL is wrong. Check `IRRIGATION_SERVER_URL` and `curl $url/api/v1/health`.
+- **`Error: Cannot connect to server: …`** (exit 1) — server isn't running or the URL is wrong. Check `GREENHOUSE_SERVER_URL` and `curl $url/api/v1/health`.
 - **`Error: <detail>` on stderr, exit 1** — server returned 4xx/5xx; `<detail>` is the FastAPI error message verbatim. Read it; it's usually accurate (missing field, invalid cluster ID, etc.).
 - **Hangs** — almost always a network issue, not the CLI. The client has no built-in retry and a 30 s request timeout; one slow request = one slow command. A timeout ends as `Error: Server did not respond in time: …`, any other transport failure as `Error: Request to server failed: …`, and an empty or non-JSON 2xx reply as `Error: Empty response from server` / `Error: Invalid JSON response from server: …` — all exit 1, no traceback.
 - **`Error: field: message; …`** (exit 1) — a 422 validation error, one `field: message` per invalid input (e.g. `minutes: Input should be greater than or equal to 1`); an empty detail prints `The server rejected the request without details`.

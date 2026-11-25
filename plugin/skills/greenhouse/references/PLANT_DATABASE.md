@@ -1,6 +1,6 @@
 # Plant database reference
 
-The server's per-plant decisions read care requirements from a curated JSON file shipped inside `greenhouse-core` at `libs/greenhouse-core/greenhouse_core/data/plant_database.json` (a deployment can point `IRRIGATION_PLANT_DB_PATH` at another copy). This file describes the shape of that data so you can help the user read a target, extend the database, or interpret why a plant has the moisture range it does.
+The server's per-plant decisions read care requirements from a curated JSON file shipped inside `greenhouse-core` at `libs/greenhouse-core/greenhouse_core/data/plant_database.json` (a deployment can point `GREENHOUSE_PLANT_DB_PATH` at another copy). This file describes the shape of that data so you can help the user read a target, extend the database, or interpret why a plant has the moisture range it does.
 
 ## Top-level structure
 

@@ -685,9 +685,9 @@ class TestTuiCommand:
         assert seen == {"server": "http://10.0.0.5:8000", "refresh": 10.0, "animations": False}
 
     def test_env_server_fallback(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without --server, the server URL falls back to IRRIGATION_SERVER_URL."""
+        """Without --server, the server URL falls back to GREENHOUSE_SERVER_URL."""
         seen: dict[str, object] = {}
-        monkeypatch.setenv("IRRIGATION_SERVER_URL", "http://192.0.2.10:8000")
+        monkeypatch.setenv("GREENHOUSE_SERVER_URL", "http://192.0.2.10:8000")
         monkeypatch.setattr("greenhouse_cli.tui.run", lambda server, **_kw: seen.update(server=server))
         result = CliRunner().invoke(cli_app, ["tui"])
         assert result.exit_code == 0, result.output

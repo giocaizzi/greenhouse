@@ -119,24 +119,29 @@ def test_now_text_falls_back_to_utc_for_an_unknown_zone(monkeypatch: pytest.Monk
 
 
 @pytest.mark.usefixtures("clean_env")
-def test_ignored_legacy_secret_env_names_are_warned_by_name_only(
+def test_ignored_legacy_env_names_are_warned_by_name_only(
     caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A legacy secret env name (bare / IRRIGATION_) that is set is named in a WARNING; its value never is."""
+    """A legacy env name (bare secret / IRRIGATION_*) that is set is named in a WARNING; its value never is."""
     monkeypatch.setenv("MCP_TOKEN", "s3cr3t-value")
     monkeypatch.setenv("irrigation_auth_secret_key", "other-s3cr3t")
+    monkeypatch.setenv("IRRIGATION_HOST", "192.0.2.1")
+    monkeypatch.setenv("IRRIGATION_TZ", "Europe/Rome")
     monkeypatch.setenv("GREENHOUSE_MCP_TOKEN", "fine")
+    monkeypatch.setenv("GREENHOUSE_HOST", "127.0.0.1")
     with caplog.at_level(logging.WARNING, logger="greenhouse_server.app"):
-        app_module._warn_ignored_legacy_secret_env_names()  # noqa: SLF001 — helper driven directly (module docstring)
+        app_module._warn_ignored_legacy_env_names()  # noqa: SLF001 — helper driven directly (module docstring)
     messages = [r.getMessage() for r in caplog.records]
     assert messages == [
-        "Environment variable MCP_TOKEN is set but ignored: secrets are read from GREENHOUSE_* names only",
+        "Environment variable IRRIGATION_HOST is set but ignored: settings are read from GREENHOUSE_* names only",
+        "Environment variable IRRIGATION_TZ is set but ignored: settings are read from GREENHOUSE_* names only",
+        "Environment variable MCP_TOKEN is set but ignored: settings are read from GREENHOUSE_* names only",
         (
             "Environment variable irrigation_auth_secret_key is set but ignored: "
-            "secrets are read from GREENHOUSE_* names only"
+            "settings are read from GREENHOUSE_* names only"
         ),
     ]
-    assert not any("s3cr3t" in m for m in messages)
+    assert not any("s3cr3t" in m or "Europe/Rome" in m or "192.0.2.1" in m for m in messages)
 
 
 def _app_state() -> FastAPI:

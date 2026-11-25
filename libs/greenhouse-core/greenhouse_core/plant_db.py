@@ -20,13 +20,13 @@ logger = logging.getLogger(__name__)
 # One plant-database entry (species, category or mapping row) as decoded from JSON.
 CareData = dict[str, Any]
 
-# IRRIGATION_PLANT_DB_PATH is read once at import: the fallback for direct core users
+# GREENHOUSE_PLANT_DB_PATH is read once at import: the fallback for direct core users
 # (tests, scripts, PlantDatabase() without a path). The server resolves the same
 # variable through Settings.plant_db_path and builds its PlantDatabase from that.
 _DEFAULT_PLANT_DB_PATH = Path(str(files("greenhouse_core") / "data" / "plant_database.json"))
 PLANT_DB_PATH = (
-    Path(os.environ["IRRIGATION_PLANT_DB_PATH"])
-    if os.environ.get("IRRIGATION_PLANT_DB_PATH")
+    Path(os.environ["GREENHOUSE_PLANT_DB_PATH"])
+    if os.environ.get("GREENHOUSE_PLANT_DB_PATH")
     else _DEFAULT_PLANT_DB_PATH
 )
 
