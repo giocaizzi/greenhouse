@@ -1,9 +1,5 @@
 /* greenhouse TUI — layout + palette. Colours lean on the active Textual theme. */
 
-Screen {
-    background: $background;
-}
-
 .hint {
     color: $text-muted;
     padding: 0 1;
@@ -144,7 +140,6 @@ Banner {
 
 ModalScreen {
     align: center middle;
-    background: $background 60%;
 }
 
 .dialog {

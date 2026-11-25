@@ -23,7 +23,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Never, Protocol, cast
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from rich.color import ColorType
 from rich.console import Console
+from rich.text import Text
 from textual.app import App
 from textual.geometry import Region
 from textual.widgets import Checkbox, DataTable, Input, Static, TabbedContent
@@ -1875,3 +1877,71 @@ def test_global_config_rows_name_builtin_defaults() -> None:
         "quiet_start_hour": "off (default)",
         "interval_hours": "6",
     }
+
+
+def test_app_defaults_to_ansi_dark_with_transparent_background(greenhouse: tuple[TestClient, FakeDeviceWiring]) -> None:
+    """The TUI starts on ``ansi-dark`` so terminal opacity and palette show through."""
+    http, _ = greenhouse
+
+    async def scenario() -> None:
+        tui = _app(http)
+        async with tui.run_test(size=SIZE) as pilot:
+            await _settle(pilot, tui)
+            assert tui.theme == "ansi-dark"
+            assert tui.current_theme.ansi is True
+            assert tui.theme_variables["background"] == "ansi_default"
+            bgs = {
+                seg.style.bgcolor
+                for seg in tui.screen.render_line(0)
+                if seg.style is not None and seg.style.bgcolor is not None
+            }
+            assert bgs
+            assert all(bg.type is ColorType.DEFAULT for bg in bgs)
+
+    _run(scenario())
+
+
+class _ChartHost(App[None]):
+    def __init__(self) -> None:
+        super().__init__()
+        self.theme = "ansi-dark"
+
+    def compose(self) -> ComposeResult:
+        yield MetricChart(id="chart")
+
+
+def _chart_bg_types(chart: MetricChart) -> set[ColorType]:
+    rendered = chart.render()
+    assert isinstance(rendered, Text)
+    segments = Console(width=60).render(rendered)
+    return {seg.style.bgcolor.type for seg in segments if seg.style is not None and seg.style.bgcolor is not None}
+
+
+def _current_chart_theme(app: _ChartHost) -> str:
+    return app.query_one("#chart", MetricChart).theme
+
+
+def test_metric_chart_uses_clear_theme_under_ansi_and_auto_otherwise() -> None:
+    """``MetricChart`` uses plotext ``clear`` under ANSI themes and switches back to ``auto`` otherwise."""
+
+    async def scenario() -> None:
+        host = _ChartHost()
+        async with host.run_test(size=(60, 16)) as pilot:
+            await pilot.pause()
+            chart = host.query_one("#chart", MetricChart)
+            chart.show_payload({"datasets": [], "threshold": {}, "events": []})
+            await pilot.pause()
+            assert _current_chart_theme(host) == "clear"
+            assert _chart_bg_types(chart) == set()
+
+            host.theme = "textual-dark"
+            await pilot.pause()
+            assert _current_chart_theme(host) == "auto"
+            assert ColorType.TRUECOLOR in _chart_bg_types(chart)
+
+            host.theme = "ansi-dark"
+            await pilot.pause()
+            assert _current_chart_theme(host) == "clear"
+            assert _chart_bg_types(chart) == set()
+
+    _run(scenario())

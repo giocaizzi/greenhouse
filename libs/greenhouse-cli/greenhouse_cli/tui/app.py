@@ -68,6 +68,9 @@ class GreenhouseApp(App[None]):
     ) -> None:
         """Point the app at ``server_url``; tests inject ``client_factory`` to avoid the network."""
         super().__init__()
+        # Default to Textual's ANSI palette so ``$background`` / ``$surface`` resolve to ``ansi_default``
+        # (preserving terminal opacity, blur and color scheme) while remaining switchable via ``ctrl+p``.
+        self.theme = "ansi-dark"
         self.server_url = server_url
         self.client_factory: ClientFactory = client_factory or (
             lambda token: IrrigationClient(base_url=server_url, token=token)

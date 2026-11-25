@@ -703,7 +703,9 @@
     "textual_plotext.plotext_plot.PlotextPlot"
    ],
    "can_focus": false,
-   "handlers": []
+   "handlers": [
+    "on_mount"
+   ]
   },
   "greenhouse_cli.tui.widgets:PlantTile": {
    "bases": [
