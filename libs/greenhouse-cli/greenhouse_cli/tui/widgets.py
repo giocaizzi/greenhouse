@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Unpack
 
@@ -12,19 +12,24 @@ from rich.text import Text
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
 from textual.widgets import Sparkline, Static
-from textual.widgets.data_table import RowDoesNotExist
 from textual_plotext import PlotextPlot
 
 from greenhouse_cli.constants import DEFAULT_CHART_RANGE_HOURS, HOURS_PER_DAY, SECONDS_PER_HOUR
 from greenhouse_cli.tui import formatting as fmt
 from greenhouse_cli.tui.sprites import MOOD_COLORS, MOOD_LABELS, Mood, logo_sprite, plant_sprite
+from greenhouse_cli.tui.table import (
+    refill as refill,  # noqa: PLC0414 — explicit re-export; unaliased, F401 fires
+)
+from greenhouse_cli.tui.table import (
+    selected_key as selected_key,  # noqa: PLC0414 — explicit re-export; unaliased, F401 fires
+)
 
 if TYPE_CHECKING:
     from textual.app import ComposeResult
     from textual.binding import BindingType
+    from textual.theme import Theme
 
     from greenhouse_cli.tui.model import ClusterSummary, PlantView
-    from greenhouse_cli.tui.table import DataTable
     from greenhouse_cli.tui.widget_options import CardOptions, TileOptions, WidgetOptions
 
 ANIMATION_INTERVAL = 0.7
@@ -219,6 +224,16 @@ SERIES_COLORS = ["green+", "cyan+", "magenta+", "yellow+", "blue+", "red+", "whi
 class MetricChart(PlotextPlot):
     """A plotext line chart fed by a ``chart-data`` / ``health-timeline`` payload."""
 
+    def on_mount(self) -> None:
+        """Use plotext's transparent ``clear`` theme under ANSI Textual themes."""
+        self._sync_plot_theme(self.app.current_theme)
+        self.app.theme_changed_signal.subscribe(self, self._sync_plot_theme)
+        super().on_mount()
+
+    def _sync_plot_theme(self, theme: Theme) -> None:
+        """Keep chart backgrounds transparent under ANSI themes and auto-matched otherwise."""
+        self.theme = "clear" if theme.ansi else "auto"
+
     def show_payload(
         self,
         payload: dict[str, Any] | None,
@@ -363,35 +378,3 @@ class KeyValue(Static):
             self.update(Group(Text(title, style="bold"), table))
         else:
             self.update(table)
-
-
-def selected_key(table: DataTable[Any]) -> str | None:
-    """Row key under the cursor, or ``None`` for an empty table."""
-    if not table.row_count:
-        return None
-    row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
-    return row_key.value
-
-
-def refill(table: DataTable[Any], rows: Iterable[tuple[str | None, Sequence[RenderableType | str]]]) -> None:
-    """Replace a table's rows while keeping the cursor on the same record.
-
-    Auto-refresh reloads every table; without this the cursor would snap back
-    to row 0 and a following edit / delete would target the wrong record.
-
-    Args:
-        table: The table to repopulate.
-        rows: ``(key, cells)`` pairs; keys must be unique (``None`` = unkeyed).
-    """
-    previous_key = selected_key(table)
-    previous_row = table.cursor_row
-    table.clear()
-    for key, cells in rows:
-        table.add_row(*cells, key=key)
-    if not table.row_count:
-        return
-    try:
-        target = table.get_row_index(previous_key) if previous_key is not None else previous_row
-    except RowDoesNotExist:  # the record went away — stay at the same position
-        target = previous_row
-    table.move_cursor(row=min(max(target, 0), table.row_count - 1))

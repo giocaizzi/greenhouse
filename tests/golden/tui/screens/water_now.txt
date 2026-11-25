@@ -22,9 +22,9 @@
 │ ▀▀▀▀▀▀▀▀▀▀▀▀▀▀            █  ▊  minutes                                               ▎  █ 32.6%                     │
 │   ▀▀▀▀▀▀▀▀▀               █  ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎  █ drainage_slope (40%)      │
 │                           █                                                              █ Nephrolepis exaltata will │
-│ Living Room pump          █                           ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔  █ hit its 60% min in ~0.0h  │
-│ idle                      █                                Start            Cancel       █ based on -1.1%/h          │
-│ last start 8h00m ago · 3m █                           ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁ ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁  █ drainage.                 │
+│ Living Room pump          █                           ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎ ▊▔▔▔▔▔▔▔▔▔▔▔▔▔▔▎  █ hit its 60% min in ~0.0h  │
+│ idle                      █                           ▊    Start     ▎ ▊    Cancel    ▎  █ based on -1.1%/h          │
+│ last start 8h00m ago · 3m █                           ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎ ▊▁▁▁▁▁▁▁▁▁▁▁▁▁▁▎  █ drainage.                 │
 │ by auto                   █                                                              █───────────────────────────╯
 │ u edit · del detach       █▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█
 ╰────────────────────────────────╯
